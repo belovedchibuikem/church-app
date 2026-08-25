@@ -1,0 +1,300 @@
+{
+  "source": "c:\\wamp64\\www\\church\\mobile\\artifacts\\sheets\\sheet_f.jpg",
+  "size": [
+    1024,
+    491
+  ],
+  "notes": "SHEET F contact sheet: 13 phones numbered 14-26 (7 top, 6 bottom). Inner refs exclude 3.5% bezel. Unique crops: book_kingdom_leadership, grace_home_church, abuja_crusade, pastor_john_avatar.",
+  "screens": [
+    {
+      "name": "f_01",
+      "label": "press_library",
+      "box": [
+        4,
+        4,
+        136,
+        244
+      ],
+      "inner": [
+        8,
+        12,
+        132,
+        236
+      ]
+    },
+    {
+      "name": "f_02",
+      "label": "give",
+      "box": [
+        144,
+        4,
+        276,
+        244
+      ],
+      "inner": [
+        148,
+        12,
+        272,
+        236
+      ]
+    },
+    {
+      "name": "f_03",
+      "label": "prayer",
+      "box": [
+        280,
+        4,
+        404,
+        244
+      ],
+      "inner": [
+        284,
+        12,
+        400,
+        236
+      ]
+    },
+    {
+      "name": "f_04",
+      "label": "events",
+      "box": [
+        408,
+        4,
+        544,
+        244
+      ],
+      "inner": [
+        412,
+        12,
+        540,
+        236
+      ]
+    },
+    {
+      "name": "f_05",
+      "label": "messages",
+      "box": [
+        548,
+        4,
+        684,
+        244
+      ],
+      "inner": [
+        552,
+        12,
+        680,
+        236
+      ]
+    },
+    {
+      "name": "f_06",
+      "label": "my_home_church",
+      "box": [
+        688,
+        4,
+        820,
+        244
+      ],
+      "inner": [
+        692,
+        12,
+        816,
+        236
+      ]
+    },
+    {
+      "name": "f_07",
+      "label": "start_church_progress",
+      "box": [
+        824,
+        4,
+        1020,
+        244
+      ],
+      "inner": [
+        830,
+        12,
+        1014,
+        236
+      ]
+    },
+    {
+      "name": "f_08",
+      "label": "crusade_detail_abuja",
+      "box": [
+        4,
+        260,
+        148,
+        472
+      ],
+      "inner": [
+        9,
+        267,
+        143,
+        465
+      ]
+    },
+    {
+      "name": "f_09",
+      "label": "souls_followup",
+      "box": [
+        152,
+        260,
+        296,
+        472
+      ],
+      "inner": [
+        157,
+        267,
+        291,
+        465
+      ]
+    },
+    {
+      "name": "f_10",
+      "label": "kca_leadership_module_8",
+      "box": [
+        300,
+        260,
+        444,
+        472
+      ],
+      "inner": [
+        305,
+        267,
+        439,
+        465
+      ]
+    },
+    {
+      "name": "f_11",
+      "label": "my_assignments",
+      "box": [
+        448,
+        260,
+        604,
+        472
+      ],
+      "inner": [
+        453,
+        267,
+        599,
+        465
+      ]
+    },
+    {
+      "name": "f_12",
+      "label": "mentor_chat_pastor_john",
+      "box": [
+        608,
+        260,
+        816,
+        472
+      ],
+      "inner": [
+        615,
+        267,
+        809,
+        465
+      ]
+    },
+    {
+      "name": "f_13",
+      "label": "notifications",
+      "box": [
+        820,
+        260,
+        1020,
+        472
+      ],
+      "inner": [
+        827,
+        267,
+        1013,
+        465
+      ]
+    }
+  ],
+  "assets": {
+    "book_kingdom_leadership.png": {
+      "screen": "f_01",
+      "rel": [
+        0.56,
+        0.195,
+        0.98,
+        0.455
+      ],
+      "box": [
+        77,
+        55,
+        129,
+        113
+      ],
+      "size": [
+        52,
+        58
+      ],
+      "path": "c:\\wamp64\\www\\church\\mobile\\assets\\images\\book_kingdom_leadership.png"
+    },
+    "grace_home_church.png": {
+      "screen": "f_06",
+      "rel": [
+        0.035,
+        0.105,
+        0.3,
+        0.265
+      ],
+      "box": [
+        696,
+        35,
+        729,
+        71
+      ],
+      "size": [
+        33,
+        36
+      ],
+      "path": "c:\\wamp64\\www\\church\\mobile\\assets\\images\\grace_home_church.png"
+    },
+    "abuja_crusade.png": {
+      "screen": "f_08",
+      "rel": [
+        0.03,
+        0.085,
+        0.97,
+        0.295
+      ],
+      "box": [
+        13,
+        283,
+        138,
+        325
+      ],
+      "size": [
+        125,
+        42
+      ],
+      "path": "c:\\wamp64\\www\\church\\mobile\\assets\\images\\abuja_crusade.png"
+    },
+    "pastor_john_avatar.png": {
+      "screen": "f_12",
+      "rel": [
+        0.105,
+        0.038,
+        0.215,
+        0.158
+      ],
+      "box": [
+        635,
+        274,
+        656,
+        298
+      ],
+      "size": [
+        21,
+        24
+      ],
+      "path": "c:\\wamp64\\www\\church\\mobile\\assets\\images\\pastor_john_avatar.png"
+    }
+  }
+}

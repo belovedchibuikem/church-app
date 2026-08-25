@@ -1,0 +1,592 @@
+{
+  "source": "c:\\wamp64\\www\\church\\mobile\\artifacts\\sheets\\sheet_d.jpg",
+  "size": [
+    1024,
+    682
+  ],
+  "notes": "SHEET D contact sheet: 13 phones (7 top, 6 bottom). Inner refs exclude 3.5% bezel. Unique photo crops use new names and do not overwrite splash/onboarding assets. Give, Start Church Progress, Assignments, and Notifications have no unique photographs.",
+  "screens": [
+    {
+      "name": "d_01",
+      "label": "press_library",
+      "box": [
+        4,
+        4,
+        144,
+        316
+      ],
+      "inner": [
+        8,
+        14,
+        140,
+        306
+      ],
+      "size": [
+        132,
+        292
+      ]
+    },
+    {
+      "name": "d_02",
+      "label": "give",
+      "box": [
+        148,
+        4,
+        284,
+        316
+      ],
+      "inner": [
+        152,
+        14,
+        280,
+        306
+      ],
+      "size": [
+        128,
+        292
+      ]
+    },
+    {
+      "name": "d_03",
+      "label": "prayer",
+      "box": [
+        288,
+        4,
+        428,
+        316
+      ],
+      "inner": [
+        292,
+        14,
+        424,
+        306
+      ],
+      "size": [
+        132,
+        292
+      ]
+    },
+    {
+      "name": "d_04",
+      "label": "events",
+      "box": [
+        432,
+        4,
+        576,
+        316
+      ],
+      "inner": [
+        437,
+        14,
+        571,
+        306
+      ],
+      "size": [
+        134,
+        292
+      ]
+    },
+    {
+      "name": "d_05",
+      "label": "messages",
+      "box": [
+        580,
+        4,
+        720,
+        316
+      ],
+      "inner": [
+        584,
+        14,
+        716,
+        306
+      ],
+      "size": [
+        132,
+        292
+      ]
+    },
+    {
+      "name": "d_06",
+      "label": "my_home_church",
+      "box": [
+        724,
+        4,
+        864,
+        316
+      ],
+      "inner": [
+        728,
+        14,
+        860,
+        306
+      ],
+      "size": [
+        132,
+        292
+      ]
+    },
+    {
+      "name": "d_07",
+      "label": "start_church_progress",
+      "box": [
+        868,
+        4,
+        1016,
+        316
+      ],
+      "inner": [
+        873,
+        14,
+        1011,
+        306
+      ],
+      "size": [
+        138,
+        292
+      ]
+    },
+    {
+      "name": "d_08",
+      "label": "crusade_detail",
+      "box": [
+        4,
+        340,
+        152,
+        652
+      ],
+      "inner": [
+        9,
+        350,
+        147,
+        642
+      ],
+      "size": [
+        138,
+        292
+      ]
+    },
+    {
+      "name": "d_09",
+      "label": "souls_followup",
+      "box": [
+        156,
+        344,
+        304,
+        652
+      ],
+      "inner": [
+        161,
+        354,
+        299,
+        642
+      ],
+      "size": [
+        138,
+        288
+      ]
+    },
+    {
+      "name": "d_10",
+      "label": "kca_module_content",
+      "box": [
+        308,
+        344,
+        464,
+        652
+      ],
+      "inner": [
+        313,
+        354,
+        459,
+        642
+      ],
+      "size": [
+        146,
+        288
+      ]
+    },
+    {
+      "name": "d_11",
+      "label": "my_assignments",
+      "box": [
+        468,
+        344,
+        620,
+        652
+      ],
+      "inner": [
+        473,
+        354,
+        615,
+        642
+      ],
+      "size": [
+        142,
+        288
+      ]
+    },
+    {
+      "name": "d_12",
+      "label": "mentor_chat",
+      "box": [
+        624,
+        344,
+        816,
+        652
+      ],
+      "inner": [
+        630,
+        354,
+        810,
+        642
+      ],
+      "size": [
+        180,
+        288
+      ]
+    },
+    {
+      "name": "d_13",
+      "label": "notifications",
+      "box": [
+        820,
+        344,
+        1016,
+        652
+      ],
+      "inner": [
+        826,
+        354,
+        1010,
+        642
+      ],
+      "size": [
+        184,
+        288
+      ]
+    }
+  ],
+  "assets": {
+    "press_kingdom_leadership.png": {
+      "screen": "d_01",
+      "rel": [
+        0.58,
+        0.21,
+        0.96,
+        0.455
+      ],
+      "box": [
+        84,
+        75,
+        134,
+        146
+      ],
+      "size": [
+        50,
+        71
+      ],
+      "path": "c:\\wamp64\\www\\church\\mobile\\assets\\images\\press_kingdom_leadership.png"
+    },
+    "prayer_hero.png": {
+      "screen": "d_03",
+      "rel": [
+        0.05,
+        0.205,
+        0.95,
+        0.395
+      ],
+      "box": [
+        298,
+        73,
+        417,
+        129
+      ],
+      "size": [
+        119,
+        56
+      ],
+      "path": "c:\\wamp64\\www\\church\\mobile\\assets\\images\\prayer_hero.png"
+    },
+    "prayer_answered_avatar.png": {
+      "screen": "d_03",
+      "rel": [
+        0.08,
+        0.825,
+        0.24,
+        0.9
+      ],
+      "box": [
+        302,
+        254,
+        323,
+        276
+      ],
+      "size": [
+        21,
+        22
+      ],
+      "path": "c:\\wamp64\\www\\church\\mobile\\assets\\images\\prayer_answered_avatar.png"
+    },
+    "convention_crowd.png": {
+      "screen": "d_04",
+      "rel": [
+        0.04,
+        0.2,
+        0.96,
+        0.4
+      ],
+      "box": [
+        442,
+        72,
+        565,
+        130
+      ],
+      "size": [
+        123,
+        58
+      ],
+      "path": "c:\\wamp64\\www\\church\\mobile\\assets\\images\\convention_crowd.png"
+    },
+    "event_kca_training.png": {
+      "screen": "d_04",
+      "rel": [
+        0.04,
+        0.575,
+        0.22,
+        0.655
+      ],
+      "box": [
+        442,
+        181,
+        466,
+        205
+      ],
+      "size": [
+        24,
+        24
+      ],
+      "path": "c:\\wamp64\\www\\church\\mobile\\assets\\images\\event_kca_training.png"
+    },
+    "event_youth_thumb.png": {
+      "screen": "d_04",
+      "rel": [
+        0.04,
+        0.695,
+        0.22,
+        0.775
+      ],
+      "box": [
+        442,
+        216,
+        466,
+        240
+      ],
+      "size": [
+        24,
+        24
+      ],
+      "path": "c:\\wamp64\\www\\church\\mobile\\assets\\images\\event_youth_thumb.png"
+    },
+    "event_prayer_thumb.png": {
+      "screen": "d_04",
+      "rel": [
+        0.04,
+        0.8,
+        0.22,
+        0.87
+      ],
+      "box": [
+        442,
+        247,
+        466,
+        268
+      ],
+      "size": [
+        24,
+        21
+      ],
+      "path": "c:\\wamp64\\www\\church\\mobile\\assets\\images\\event_prayer_thumb.png"
+    },
+    "message_avatars.png": {
+      "screen": "d_05",
+      "rel": [
+        0.04,
+        0.22,
+        0.22,
+        0.79
+      ],
+      "box": [
+        589,
+        78,
+        613,
+        244
+      ],
+      "size": [
+        24,
+        166
+      ],
+      "path": "c:\\wamp64\\www\\church\\mobile\\assets\\images\\message_avatars.png"
+    },
+    "mentor_john.png": {
+      "screen": "d_05",
+      "rel": [
+        0.05,
+        0.225,
+        0.21,
+        0.305
+      ],
+      "box": [
+        590,
+        79,
+        611,
+        103
+      ],
+      "size": [
+        21,
+        24
+      ],
+      "path": "c:\\wamp64\\www\\church\\mobile\\assets\\images\\mentor_john.png"
+    },
+    "message_group.png": {
+      "screen": "d_05",
+      "rel": [
+        0.05,
+        0.345,
+        0.21,
+        0.425
+      ],
+      "box": [
+        590,
+        114,
+        611,
+        138
+      ],
+      "size": [
+        21,
+        24
+      ],
+      "path": "c:\\wamp64\\www\\church\\mobile\\assets\\images\\message_group.png"
+    },
+    "mission_team_avatar.png": {
+      "screen": "d_05",
+      "rel": [
+        0.05,
+        0.585,
+        0.21,
+        0.665
+      ],
+      "box": [
+        590,
+        184,
+        611,
+        208
+      ],
+      "size": [
+        21,
+        24
+      ],
+      "path": "c:\\wamp64\\www\\church\\mobile\\assets\\images\\mission_team_avatar.png"
+    },
+    "home_church_grace.png": {
+      "screen": "d_06",
+      "rel": [
+        0.07,
+        0.135,
+        0.28,
+        0.23
+      ],
+      "box": [
+        737,
+        53,
+        764,
+        81
+      ],
+      "size": [
+        27,
+        28
+      ],
+      "path": "c:\\wamp64\\www\\church\\mobile\\assets\\images\\home_church_grace.png"
+    },
+    "home_church_meeting.png": {
+      "screen": "d_06",
+      "rel": [
+        0.05,
+        0.845,
+        0.2,
+        0.905
+      ],
+      "box": [
+        734,
+        260,
+        754,
+        278
+      ],
+      "size": [
+        20,
+        18
+      ],
+      "path": "c:\\wamp64\\www\\church\\mobile\\assets\\images\\home_church_meeting.png"
+    },
+    "crusade_crowd.png": {
+      "screen": "d_08",
+      "rel": [
+        0.03,
+        0.11,
+        0.97,
+        0.255
+      ],
+      "box": [
+        13,
+        382,
+        142,
+        424
+      ],
+      "size": [
+        129,
+        42
+      ],
+      "path": "c:\\wamp64\\www\\church\\mobile\\assets\\images\\crusade_crowd.png"
+    },
+    "souls_avatar.png": {
+      "screen": "d_09",
+      "rel": [
+        0.05,
+        0.155,
+        0.2,
+        0.27
+      ],
+      "box": [
+        167,
+        398,
+        188,
+        431
+      ],
+      "size": [
+        21,
+        33
+      ],
+      "path": "c:\\wamp64\\www\\church\\mobile\\assets\\images\\souls_avatar.png"
+    },
+    "kca_teacher.png": {
+      "screen": "d_10",
+      "rel": [
+        0.04,
+        0.185,
+        0.96,
+        0.425
+      ],
+      "box": [
+        318,
+        407,
+        453,
+        476
+      ],
+      "size": [
+        135,
+        69
+      ],
+      "path": "c:\\wamp64\\www\\church\\mobile\\assets\\images\\kca_teacher.png"
+    }
+  }
+}

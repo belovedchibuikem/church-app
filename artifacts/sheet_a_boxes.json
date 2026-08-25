@@ -1,0 +1,510 @@
+{
+  "source": "c:\\wamp64\\www\\church\\mobile\\artifacts\\sheets\\sheet_a.jpg",
+  "size": [
+    1024,
+    682
+  ],
+  "notes": "SHEET A: 7 phones on top, 6 below. Inner refs exclude ~3.8 percent bezel. Protected splash/onboarding assets were not overwritten.",
+  "screens": [
+    {
+      "file": "a_01.png",
+      "name": "church_detail",
+      "box": [
+        6,
+        4,
+        144,
+        318
+      ],
+      "inner": [
+        11,
+        15,
+        139,
+        307
+      ],
+      "size": [
+        128,
+        292
+      ]
+    },
+    {
+      "file": "a_02.png",
+      "name": "start_home_1",
+      "box": [
+        152,
+        4,
+        282,
+        318
+      ],
+      "inner": [
+        156,
+        15,
+        278,
+        307
+      ],
+      "size": [
+        122,
+        292
+      ]
+    },
+    {
+      "file": "a_03.png",
+      "name": "start_home_2",
+      "box": [
+        290,
+        4,
+        428,
+        318
+      ],
+      "inner": [
+        295,
+        15,
+        423,
+        307
+      ],
+      "size": [
+        128,
+        292
+      ]
+    },
+    {
+      "file": "a_04.png",
+      "name": "start_home_3",
+      "box": [
+        436,
+        4,
+        578,
+        318
+      ],
+      "inner": [
+        441,
+        15,
+        573,
+        307
+      ],
+      "size": [
+        132,
+        292
+      ]
+    },
+    {
+      "file": "a_05.png",
+      "name": "start_home_4",
+      "box": [
+        584,
+        4,
+        726,
+        318
+      ],
+      "inner": [
+        589,
+        15,
+        721,
+        307
+      ],
+      "size": [
+        132,
+        292
+      ]
+    },
+    {
+      "file": "a_06.png",
+      "name": "applications",
+      "box": [
+        734,
+        4,
+        870,
+        318
+      ],
+      "inner": [
+        739,
+        15,
+        865,
+        307
+      ],
+      "size": [
+        126,
+        292
+      ]
+    },
+    {
+      "file": "a_07.png",
+      "name": "events",
+      "box": [
+        876,
+        4,
+        1018,
+        318
+      ],
+      "inner": [
+        881,
+        15,
+        1013,
+        307
+      ],
+      "size": [
+        132,
+        292
+      ]
+    },
+    {
+      "file": "a_08.png",
+      "name": "prayer",
+      "box": [
+        6,
+        342,
+        152,
+        656
+      ],
+      "inner": [
+        11,
+        353,
+        147,
+        645
+      ],
+      "size": [
+        136,
+        292
+      ]
+    },
+    {
+      "file": "a_09.png",
+      "name": "give",
+      "box": [
+        160,
+        342,
+        310,
+        656
+      ],
+      "inner": [
+        165,
+        353,
+        305,
+        645
+      ],
+      "size": [
+        140,
+        292
+      ]
+    },
+    {
+      "file": "a_10.png",
+      "name": "kca_dashboard",
+      "box": [
+        318,
+        344,
+        470,
+        656
+      ],
+      "inner": [
+        323,
+        355,
+        465,
+        645
+      ],
+      "size": [
+        142,
+        290
+      ]
+    },
+    {
+      "file": "a_11.png",
+      "name": "kca_modules",
+      "box": [
+        476,
+        342,
+        662,
+        656
+      ],
+      "inner": [
+        483,
+        353,
+        655,
+        645
+      ],
+      "size": [
+        172,
+        292
+      ]
+    },
+    {
+      "file": "a_12.png",
+      "name": "press",
+      "box": [
+        670,
+        344,
+        854,
+        656
+      ],
+      "inner": [
+        676,
+        355,
+        848,
+        645
+      ],
+      "size": [
+        172,
+        290
+      ]
+    },
+    {
+      "file": "a_13.png",
+      "name": "profile",
+      "box": [
+        862,
+        344,
+        1018,
+        656
+      ],
+      "inner": [
+        867,
+        355,
+        1013,
+        645
+      ],
+      "size": [
+        146,
+        290
+      ]
+    }
+  ],
+  "assets": {
+    "church_hero.png": {
+      "screen": "church_detail",
+      "box": [
+        0,
+        26,
+        128,
+        84
+      ],
+      "size": [
+        128,
+        58
+      ],
+      "bytes": 15334
+    },
+    "home_church_living.png": {
+      "screen": "start_home_1",
+      "box": [
+        3,
+        64,
+        119,
+        116
+      ],
+      "size": [
+        116,
+        52
+      ],
+      "bytes": 13467
+    },
+    "event_convention.png": {
+      "screen": "events",
+      "box": [
+        6,
+        54,
+        126,
+        124
+      ],
+      "size": [
+        120,
+        70
+      ],
+      "bytes": 18931
+    },
+    "event_kca_graduation.png": {
+      "screen": "events",
+      "box": [
+        8,
+        172,
+        36,
+        200
+      ],
+      "size": [
+        28,
+        28
+      ],
+      "bytes": 2189
+    },
+    "event_youth_summit.png": {
+      "screen": "events",
+      "box": [
+        8,
+        208,
+        36,
+        236
+      ],
+      "size": [
+        28,
+        28
+      ],
+      "bytes": 2133
+    },
+    "event_prayer_conference.png": {
+      "screen": "events",
+      "box": [
+        8,
+        232,
+        36,
+        260
+      ],
+      "size": [
+        28,
+        28
+      ],
+      "bytes": 2071
+    },
+    "give_plant.png": {
+      "screen": "give",
+      "box": [
+        68,
+        44,
+        134,
+        100
+      ],
+      "size": [
+        56,
+        56
+      ],
+      "bytes": 6400
+    },
+    "give_impact_banner.png": {
+      "screen": "give",
+      "box": [
+        6,
+        44,
+        134,
+        100
+      ],
+      "size": [
+        128,
+        56
+      ],
+      "bytes": 12798
+    },
+    "press_book_cover.png": {
+      "screen": "press",
+      "box": [
+        84,
+        56,
+        166,
+        142
+      ],
+      "size": [
+        68,
+        86
+      ],
+      "bytes": 10278
+    },
+    "press_new_release_banner.png": {
+      "screen": "press",
+      "box": [
+        6,
+        56,
+        166,
+        142
+      ],
+      "size": [
+        160,
+        86
+      ],
+      "bytes": 23228
+    },
+    "press_power_of_prayer.png": {
+      "screen": "press",
+      "box": [
+        8,
+        214,
+        84,
+        264
+      ],
+      "size": [
+        76,
+        50
+      ],
+      "bytes": 6736
+    },
+    "press_winning_the_soul.png": {
+      "screen": "press",
+      "box": [
+        88,
+        214,
+        164,
+        264
+      ],
+      "size": [
+        76,
+        50
+      ],
+      "bytes": 7376
+    },
+    "profile_avatar.png": {
+      "screen": "profile",
+      "box": [
+        52,
+        16,
+        94,
+        56
+      ],
+      "size": [
+        34,
+        36
+      ],
+      "bytes": 3286
+    },
+    "kca_avatar.png": {
+      "screen": "kca_dashboard",
+      "box": [
+        5,
+        29,
+        29,
+        54
+      ],
+      "size": [
+        24,
+        25
+      ],
+      "bytes": 1868
+    },
+    "kca_lesson_book.png": {
+      "screen": "kca_dashboard",
+      "box": [
+        98,
+        210,
+        136,
+        248
+      ],
+      "size": [
+        38,
+        38
+      ],
+      "bytes": 2354
+    },
+    "prayer_avatar.png": {
+      "screen": "prayer",
+      "box": [
+        7,
+        242,
+        19,
+        253
+      ],
+      "size": [
+        18,
+        22
+      ],
+      "bytes": 1138
+    },
+    "prayer_answered_church.png": {
+      "screen": "prayer",
+      "box": [
+        86,
+        228,
+        130,
+        262
+      ],
+      "size": [
+        44,
+        34
+      ],
+      "bytes": 2827
+    }
+  }
+}

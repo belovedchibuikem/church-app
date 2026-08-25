@@ -1,0 +1,415 @@
+{
+  "source": "c:\\wamp64\\www\\church\\mobile\\artifacts\\sheets\\sheet_c.jpg",
+  "size": [
+    1024,
+    682
+  ],
+  "notes": "SHEET C contact sheet: 13 phones (7 top, 6 bottom). Inner refs exclude 3.5% bezel. Unique crops: map_preview, kca_shield, lesson_video, book_covers.",
+  "screens": [
+    {
+      "name": "c_01",
+      "box": [
+        4,
+        4,
+        144,
+        320
+      ],
+      "inner": [
+        8,
+        15,
+        140,
+        309
+      ]
+    },
+    {
+      "name": "c_02",
+      "box": [
+        148,
+        4,
+        284,
+        320
+      ],
+      "inner": [
+        152,
+        15,
+        280,
+        309
+      ]
+    },
+    {
+      "name": "c_03",
+      "box": [
+        288,
+        4,
+        424,
+        320
+      ],
+      "inner": [
+        292,
+        15,
+        420,
+        309
+      ]
+    },
+    {
+      "name": "c_04",
+      "box": [
+        428,
+        4,
+        568,
+        324
+      ],
+      "inner": [
+        432,
+        15,
+        564,
+        313
+      ]
+    },
+    {
+      "name": "c_05",
+      "box": [
+        572,
+        4,
+        716,
+        324
+      ],
+      "inner": [
+        577,
+        15,
+        711,
+        313
+      ]
+    },
+    {
+      "name": "c_06",
+      "box": [
+        720,
+        4,
+        860,
+        324
+      ],
+      "inner": [
+        724,
+        15,
+        856,
+        313
+      ]
+    },
+    {
+      "name": "c_07",
+      "box": [
+        864,
+        4,
+        1016,
+        324
+      ],
+      "inner": [
+        869,
+        15,
+        1011,
+        313
+      ]
+    },
+    {
+      "name": "c_08",
+      "box": [
+        4,
+        344,
+        144,
+        648
+      ],
+      "inner": [
+        8,
+        354,
+        140,
+        638
+      ]
+    },
+    {
+      "name": "c_09",
+      "box": [
+        152,
+        344,
+        292,
+        648
+      ],
+      "inner": [
+        156,
+        354,
+        288,
+        638
+      ]
+    },
+    {
+      "name": "c_10",
+      "box": [
+        300,
+        344,
+        464,
+        648
+      ],
+      "inner": [
+        305,
+        354,
+        459,
+        638
+      ]
+    },
+    {
+      "name": "c_11",
+      "box": [
+        468,
+        344,
+        632,
+        648
+      ],
+      "inner": [
+        473,
+        354,
+        627,
+        638
+      ]
+    },
+    {
+      "name": "c_12",
+      "box": [
+        640,
+        344,
+        820,
+        648
+      ],
+      "inner": [
+        646,
+        354,
+        814,
+        638
+      ]
+    },
+    {
+      "name": "c_13",
+      "box": [
+        824,
+        344,
+        1016,
+        648
+      ],
+      "inner": [
+        830,
+        354,
+        1010,
+        638
+      ]
+    }
+  ],
+  "assets": {
+    "map_preview.png": {
+      "screen": "c_01",
+      "rel": [
+        0.02,
+        0.168,
+        0.98,
+        0.408
+      ],
+      "box": [
+        10,
+        64,
+        137,
+        134
+      ],
+      "size": [
+        127,
+        70
+      ],
+      "path": "c:\\wamp64\\www\\church\\mobile\\assets\\images\\map_preview.png"
+    },
+    "church_house.png": {
+      "screen": "c_02",
+      "rel": [
+        0.0,
+        0.0,
+        1.0,
+        0.3
+      ],
+      "box": [
+        152,
+        15,
+        280,
+        103
+      ],
+      "size": [
+        128,
+        88
+      ],
+      "path": "c:\\wamp64\\www\\church\\mobile\\assets\\images\\church_house.png"
+    },
+    "mission_banner.png": {
+      "screen": "c_04",
+      "rel": [
+        0.04,
+        0.1,
+        0.96,
+        0.28
+      ],
+      "box": [
+        437,
+        44,
+        558,
+        98
+      ],
+      "size": [
+        121,
+        54
+      ],
+      "path": "c:\\wamp64\\www\\church\\mobile\\assets\\images\\mission_banner.png"
+    },
+    "kca_shield.png": {
+      "screen": "c_06",
+      "rel": [
+        0.3,
+        0.105,
+        0.7,
+        0.245
+      ],
+      "box": [
+        763,
+        46,
+        816,
+        88
+      ],
+      "size": [
+        53,
+        42
+      ],
+      "path": "c:\\wamp64\\www\\church\\mobile\\assets\\images\\kca_shield.png"
+    },
+    "lesson_video.png": {
+      "screen": "c_07",
+      "rel": [
+        0.04,
+        0.228,
+        0.96,
+        0.448
+      ],
+      "box": [
+        874,
+        82,
+        1005,
+        148
+      ],
+      "size": [
+        131,
+        66
+      ],
+      "path": "c:\\wamp64\\www\\church\\mobile\\assets\\images\\lesson_video.png"
+    },
+    "book_covers.png": {
+      "screen": "c_10",
+      "rel": [
+        0.03,
+        0.3,
+        0.97,
+        0.545
+      ],
+      "box": [
+        309,
+        439,
+        454,
+        508
+      ],
+      "size": [
+        145,
+        69
+      ],
+      "path": "c:\\wamp64\\www\\church\\mobile\\assets\\images\\book_covers.png"
+    },
+    "mentor_avatar.png": {
+      "screen": "c_09",
+      "rel": [
+        0.04,
+        0.1,
+        0.22,
+        0.22
+      ],
+      "box": [
+        161,
+        382,
+        185,
+        416
+      ],
+      "size": [
+        24,
+        34
+      ],
+      "path": "c:\\wamp64\\www\\church\\mobile\\assets\\images\\mentor_avatar.png"
+    },
+    "settings_avatar.png": {
+      "screen": "c_13",
+      "rel": [
+        0.06,
+        0.1,
+        0.28,
+        0.24
+      ],
+      "box": [
+        840,
+        382,
+        880,
+        422
+      ],
+      "size": [
+        40,
+        40
+      ],
+      "path": "c:\\wamp64\\www\\church\\mobile\\assets\\images\\settings_avatar.png"
+    },
+    "book_covers/book_purpose_driven.png": {
+      "screen": "c_10",
+      "size": [
+        39,
+        69
+      ],
+      "path": "c:\\wamp64\\www\\church\\mobile\\assets\\images\\book_covers\\book_purpose_driven.png"
+    },
+    "book_covers/book_walking_purpose.png": {
+      "screen": "c_10",
+      "size": [
+        39,
+        69
+      ],
+      "path": "c:\\wamp64\\www\\church\\mobile\\assets\\images\\book_covers\\book_walking_purpose.png"
+    },
+    "book_covers/book_winning_soul.png": {
+      "screen": "c_10",
+      "size": [
+        39,
+        69
+      ],
+      "path": "c:\\wamp64\\www\\church\\mobile\\assets\\images\\book_covers\\book_winning_soul.png"
+    },
+    "book_covers/book_power_of_prayer.png": {
+      "screen": "c_10",
+      "size": [
+        29,
+        24
+      ],
+      "path": "c:\\wamp64\\www\\church\\mobile\\assets\\images\\book_covers\\book_power_of_prayer.png"
+    },
+    "book_covers/book_grace_for_today.png": {
+      "screen": "c_10",
+      "size": [
+        29,
+        24
+      ],
+      "path": "c:\\wamp64\\www\\church\\mobile\\assets\\images\\book_covers\\book_grace_for_today.png"
+    },
+    "book_covers/book_kingdom_leadership.png": {
+      "screen": "c_10",
+      "size": [
+        29,
+        24
+      ],
+      "path": "c:\\wamp64\\www\\church\\mobile\\assets\\images\\book_covers\\book_kingdom_leadership.png"
+    }
+  }
+}

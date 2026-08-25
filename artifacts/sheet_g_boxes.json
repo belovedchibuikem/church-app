@@ -1,0 +1,388 @@
+{
+  "source": "c:\\wamp64\\www\\church\\mobile\\artifacts\\sheets\\sheet_g.jpg",
+  "size": [
+    1024,
+    682
+  ],
+  "notes": "SHEET G contact sheet: 13 phones (7 top, 6 bottom) church ops. Inner refs exclude 3.5% bezel. Unique crops: live_worship, convention_hero, member_photos. Ministry icons skipped (illustrated, not photographic).",
+  "screens": [
+    {
+      "name": "g_01",
+      "label": "church_dashboard",
+      "box": [
+        4,
+        4,
+        140,
+        304
+      ],
+      "inner": [
+        8,
+        14,
+        136,
+        294
+      ]
+    },
+    {
+      "name": "g_02",
+      "label": "module_selector",
+      "box": [
+        144,
+        4,
+        284,
+        304
+      ],
+      "inner": [
+        148,
+        14,
+        280,
+        294
+      ]
+    },
+    {
+      "name": "g_03",
+      "label": "church_module_home",
+      "box": [
+        288,
+        4,
+        428,
+        304
+      ],
+      "inner": [
+        292,
+        14,
+        424,
+        294
+      ]
+    },
+    {
+      "name": "g_04",
+      "label": "members_list",
+      "box": [
+        432,
+        4,
+        572,
+        304
+      ],
+      "inner": [
+        436,
+        14,
+        568,
+        294
+      ]
+    },
+    {
+      "name": "g_05",
+      "label": "small_groups",
+      "box": [
+        576,
+        4,
+        716,
+        304
+      ],
+      "inner": [
+        580,
+        14,
+        712,
+        294
+      ]
+    },
+    {
+      "name": "g_06",
+      "label": "event_details_convention",
+      "box": [
+        720,
+        4,
+        860,
+        304
+      ],
+      "inner": [
+        724,
+        14,
+        856,
+        294
+      ]
+    },
+    {
+      "name": "g_07",
+      "label": "announcements",
+      "box": [
+        864,
+        4,
+        1012,
+        304
+      ],
+      "inner": [
+        869,
+        14,
+        1007,
+        294
+      ]
+    },
+    {
+      "name": "g_08",
+      "label": "live_service",
+      "box": [
+        4,
+        332,
+        152,
+        632
+      ],
+      "inner": [
+        9,
+        342,
+        147,
+        622
+      ]
+    },
+    {
+      "name": "g_09",
+      "label": "give",
+      "box": [
+        156,
+        332,
+        312,
+        632
+      ],
+      "inner": [
+        161,
+        342,
+        307,
+        622
+      ]
+    },
+    {
+      "name": "g_10",
+      "label": "prayer",
+      "box": [
+        316,
+        332,
+        452,
+        632
+      ],
+      "inner": [
+        320,
+        342,
+        448,
+        622
+      ]
+    },
+    {
+      "name": "g_11",
+      "label": "ministries",
+      "box": [
+        456,
+        332,
+        612,
+        644
+      ],
+      "inner": [
+        461,
+        342,
+        607,
+        634
+      ]
+    },
+    {
+      "name": "g_12",
+      "label": "documents",
+      "box": [
+        616,
+        332,
+        768,
+        632
+      ],
+      "inner": [
+        621,
+        342,
+        763,
+        622
+      ]
+    },
+    {
+      "name": "g_13",
+      "label": "church_settings",
+      "box": [
+        772,
+        332,
+        932,
+        632
+      ],
+      "inner": [
+        777,
+        342,
+        927,
+        622
+      ]
+    }
+  ],
+  "assets": {
+    "live_worship.png": {
+      "screen": "g_08",
+      "rel": [
+        0.03,
+        0.125,
+        0.97,
+        0.355
+      ],
+      "box": [
+        13,
+        377,
+        142,
+        441
+      ],
+      "size": [
+        129,
+        64
+      ],
+      "path": "c:\\wamp64\\www\\church\\mobile\\assets\\images\\live_worship.png",
+      "action": "write"
+    },
+    "convention_hero.png": {
+      "screen": "g_06",
+      "rel": [
+        0.04,
+        0.128,
+        0.96,
+        0.348
+      ],
+      "box": [
+        729,
+        49,
+        850,
+        111
+      ],
+      "size": [
+        121,
+        62
+      ],
+      "path": "c:\\wamp64\\www\\church\\mobile\\assets\\images\\convention_hero.png",
+      "action": "write"
+    },
+    "member_photos.png": {
+      "screen": "g_04",
+      "rel": [
+        0.07,
+        0.3,
+        0.215,
+        0.804
+      ],
+      "box": [
+        445,
+        98,
+        464,
+        239
+      ],
+      "size": [
+        19,
+        141
+      ],
+      "path": "c:\\wamp64\\www\\church\\mobile\\assets\\images\\member_photos.png",
+      "action": "write"
+    },
+    "member_photos/member_john_david.png": {
+      "screen": "g_04",
+      "rel": [
+        0.07,
+        0.304,
+        0.215,
+        0.375
+      ],
+      "box": [
+        445,
+        99,
+        464,
+        119
+      ],
+      "size": [
+        19,
+        20
+      ],
+      "path": "c:\\wamp64\\www\\church\\mobile\\assets\\images\\member_photos\\member_john_david.png"
+    },
+    "member_photos/member_sarah_okafor.png": {
+      "screen": "g_04",
+      "rel": [
+        0.07,
+        0.407,
+        0.215,
+        0.479
+      ],
+      "box": [
+        445,
+        127,
+        464,
+        148
+      ],
+      "size": [
+        19,
+        21
+      ],
+      "path": "c:\\wamp64\\www\\church\\mobile\\assets\\images\\member_photos\\member_sarah_okafor.png"
+    },
+    "member_photos/member_michael_johnson.png": {
+      "screen": "g_04",
+      "rel": [
+        0.07,
+        0.514,
+        0.215,
+        0.586
+      ],
+      "box": [
+        445,
+        157,
+        464,
+        178
+      ],
+      "size": [
+        19,
+        21
+      ],
+      "path": "c:\\wamp64\\www\\church\\mobile\\assets\\images\\member_photos\\member_michael_johnson.png"
+    },
+    "member_photos/member_blessing_uche.png": {
+      "screen": "g_04",
+      "rel": [
+        0.07,
+        0.621,
+        0.215,
+        0.693
+      ],
+      "box": [
+        445,
+        187,
+        464,
+        208
+      ],
+      "size": [
+        19,
+        21
+      ],
+      "path": "c:\\wamp64\\www\\church\\mobile\\assets\\images\\member_photos\\member_blessing_uche.png"
+    },
+    "member_photos/member_emeka_onyema.png": {
+      "screen": "g_04",
+      "rel": [
+        0.07,
+        0.732,
+        0.215,
+        0.804
+      ],
+      "box": [
+        445,
+        218,
+        464,
+        239
+      ],
+      "size": [
+        19,
+        21
+      ],
+      "path": "c:\\wamp64\\www\\church\\mobile\\assets\\images\\member_photos\\member_emeka_onyema.png"
+    },
+    "ministry_icons": {
+      "screen": "g_11",
+      "skipped": true,
+      "reason": "circular illustrated glyphs, not photographic"
+    }
+  }
+}

@@ -1,0 +1,424 @@
+{
+  "source": "c:\\wamp64\\www\\church\\mobile\\artifacts\\sheets\\sheet_e.jpg",
+  "size": [
+    1024,
+    682
+  ],
+  "notes": "SHEET E contact sheet: 13 phones (7 top, 6 bottom). Inner refs exclude 3.5% bezel. Unique crops: discover_hero_globe, church_grace_hero, live_pastor, sermon_faith_mountains, group_avatars, bible_votd, giving_summary; profile_chibuikem only if not already good. Does not overwrite splash_map, fhc_logo, multiply_home, discover_globe, nigeria_flag.",
+  "screens": [
+    {
+      "name": "e_01",
+      "label": "discover_churches",
+      "box": [
+        0,
+        0,
+        150,
+        336
+      ],
+      "inner": [
+        5,
+        11,
+        145,
+        325
+      ]
+    },
+    {
+      "name": "e_02",
+      "label": "church_detail",
+      "box": [
+        146,
+        0,
+        294,
+        336
+      ],
+      "inner": [
+        151,
+        11,
+        289,
+        325
+      ]
+    },
+    {
+      "name": "e_03",
+      "label": "live_service",
+      "box": [
+        290,
+        0,
+        444,
+        336
+      ],
+      "inner": [
+        295,
+        11,
+        439,
+        325
+      ]
+    },
+    {
+      "name": "e_04",
+      "label": "give",
+      "box": [
+        440,
+        0,
+        588,
+        336
+      ],
+      "inner": [
+        445,
+        11,
+        583,
+        325
+      ]
+    },
+    {
+      "name": "e_05",
+      "label": "sermons_library",
+      "box": [
+        584,
+        0,
+        734,
+        336
+      ],
+      "inner": [
+        589,
+        11,
+        729,
+        325
+      ]
+    },
+    {
+      "name": "e_06",
+      "label": "prayer",
+      "box": [
+        730,
+        0,
+        880,
+        336
+      ],
+      "inner": [
+        735,
+        11,
+        875,
+        325
+      ]
+    },
+    {
+      "name": "e_07",
+      "label": "groups",
+      "box": [
+        874,
+        0,
+        1024,
+        336
+      ],
+      "inner": [
+        879,
+        11,
+        1019,
+        325
+      ]
+    },
+    {
+      "name": "e_08",
+      "label": "events",
+      "box": [
+        0,
+        336,
+        172,
+        664
+      ],
+      "inner": [
+        6,
+        347,
+        166,
+        653
+      ]
+    },
+    {
+      "name": "e_09",
+      "label": "notifications",
+      "box": [
+        162,
+        336,
+        342,
+        664
+      ],
+      "inner": [
+        168,
+        347,
+        336,
+        653
+      ]
+    },
+    {
+      "name": "e_10",
+      "label": "profile",
+      "box": [
+        332,
+        336,
+        514,
+        664
+      ],
+      "inner": [
+        338,
+        347,
+        508,
+        653
+      ]
+    },
+    {
+      "name": "e_11",
+      "label": "bible",
+      "box": [
+        504,
+        336,
+        684,
+        664
+      ],
+      "inner": [
+        510,
+        347,
+        678,
+        653
+      ]
+    },
+    {
+      "name": "e_12",
+      "label": "giving_history",
+      "box": [
+        676,
+        336,
+        856,
+        664
+      ],
+      "inner": [
+        682,
+        347,
+        850,
+        653
+      ]
+    },
+    {
+      "name": "e_13",
+      "label": "settings",
+      "box": [
+        848,
+        336,
+        1024,
+        664
+      ],
+      "inner": [
+        854,
+        347,
+        1018,
+        653
+      ]
+    }
+  ],
+  "assets": {
+    "discover_hero_globe.png": {
+      "screen": "e_01",
+      "rel": [
+        0.62,
+        0.162,
+        0.98,
+        0.358
+      ],
+      "box": [
+        91,
+        61,
+        142,
+        123
+      ],
+      "size": [
+        51,
+        62
+      ],
+      "path": "c:\\wamp64\\www\\church\\mobile\\assets\\images\\discover_hero_globe.png",
+      "action": "write"
+    },
+    "church_grace_hero.png": {
+      "screen": "e_02",
+      "rel": [
+        0.03,
+        0.085,
+        0.97,
+        0.305
+      ],
+      "box": [
+        155,
+        37,
+        284,
+        106
+      ],
+      "size": [
+        129,
+        69
+      ],
+      "path": "c:\\wamp64\\www\\church\\mobile\\assets\\images\\church_grace_hero.png",
+      "action": "write"
+    },
+    "live_pastor.png": {
+      "screen": "e_03",
+      "rel": [
+        0.0,
+        0.04,
+        1.0,
+        0.4
+      ],
+      "box": [
+        295,
+        23,
+        439,
+        136
+      ],
+      "size": [
+        144,
+        113
+      ],
+      "path": "c:\\wamp64\\www\\church\\mobile\\assets\\images\\live_pastor.png",
+      "action": "write"
+    },
+    "sermon_faith_mountains.png": {
+      "screen": "e_05",
+      "rel": [
+        0.03,
+        0.228,
+        0.97,
+        0.475
+      ],
+      "box": [
+        593,
+        82,
+        724,
+        160
+      ],
+      "size": [
+        131,
+        78
+      ],
+      "path": "c:\\wamp64\\www\\church\\mobile\\assets\\images\\sermon_faith_mountains.png",
+      "action": "write"
+    },
+    "bible_votd.png": {
+      "screen": "e_11",
+      "rel": [
+        0.03,
+        0.175,
+        0.97,
+        0.42
+      ],
+      "box": [
+        515,
+        400,
+        672,
+        475
+      ],
+      "size": [
+        157,
+        75
+      ],
+      "path": "c:\\wamp64\\www\\church\\mobile\\assets\\images\\bible_votd.png",
+      "action": "write"
+    },
+    "giving_summary.png": {
+      "screen": "e_12",
+      "rel": [
+        0.03,
+        0.115,
+        0.97,
+        0.285
+      ],
+      "box": [
+        687,
+        382,
+        844,
+        434
+      ],
+      "size": [
+        157,
+        52
+      ],
+      "path": "c:\\wamp64\\www\\church\\mobile\\assets\\images\\giving_summary.png",
+      "action": "write"
+    },
+    "profile_chibuikem.png": {
+      "screen": "e_10",
+      "rel": [
+        0.385,
+        0.148,
+        0.615,
+        0.265
+      ],
+      "box": [
+        403,
+        392,
+        442,
+        428
+      ],
+      "size": [
+        39,
+        36
+      ],
+      "path": "c:\\wamp64\\www\\church\\mobile\\assets\\images\\profile_chibuikem.png",
+      "action": "write"
+    },
+    "group_avatars.png": {
+      "screen": "e_07",
+      "rel": [
+        0.035,
+        0.175,
+        0.28,
+        0.82
+      ],
+      "box": [
+        883,
+        65,
+        918,
+        268
+      ],
+      "size": [
+        35,
+        203
+      ],
+      "path": "c:\\wamp64\\www\\church\\mobile\\assets\\images\\group_avatars.png",
+      "action": "write"
+    },
+    "group_avatar_young_adults.png": {
+      "screen": "e_07",
+      "size": [
+        35,
+        35
+      ],
+      "path": "c:\\wamp64\\www\\church\\mobile\\assets\\images\\group_avatar_young_adults.png",
+      "action": "write"
+    },
+    "group_avatar_women_of_grace.png": {
+      "screen": "e_07",
+      "size": [
+        35,
+        35
+      ],
+      "path": "c:\\wamp64\\www\\church\\mobile\\assets\\images\\group_avatar_women_of_grace.png",
+      "action": "write"
+    },
+    "group_avatar_men_of_valor.png": {
+      "screen": "e_07",
+      "size": [
+        35,
+        35
+      ],
+      "path": "c:\\wamp64\\www\\church\\mobile\\assets\\images\\group_avatar_men_of_valor.png",
+      "action": "write"
+    },
+    "group_avatar_bible_study.png": {
+      "screen": "e_07",
+      "size": [
+        35,
+        35
+      ],
+      "path": "c:\\wamp64\\www\\church\\mobile\\assets\\images\\group_avatar_bible_study.png",
+      "action": "write"
+    }
+  }
+}
