@@ -2,9 +2,9 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../../../core/api/api_transport.dart';
 import '../../../core/api/app_failure.dart';
 import '../../../core/api/fhc_api_config.dart';
-import '../../../core/auth/session_token_store.dart';
 import '../../../core/contracts/mobile_repository_contracts.dart';
 import '../../account/data/profile_repository.dart';
 import '../../account/data/user_api_client.dart';

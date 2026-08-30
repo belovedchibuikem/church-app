@@ -94,16 +94,19 @@ class _LiveFellowshipScreenState extends State<LiveFellowshipScreen> {
     if (id == null || id.isEmpty) return;
     final result = await _repo.listComments(id);
     if (!mounted) return;
-    if (result case AppSuccess(:final value)) {
-      setState(() => _comments = value);
-    } else if (!silent && result case AppError(:final failure)) {
-      // Chat may require sign-in; keep player usable.
-      if (failure is! UnauthorizedFailure &&
-          failure is! IntegrationUnavailableFailure) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(failure.message)),
-        );
-      }
+    switch (result) {
+      case AppSuccess(:final value):
+        setState(() => _comments = value);
+      case AppError(:final failure) when !silent:
+        // Chat may require sign-in; keep player usable.
+        if (failure is! UnauthorizedFailure &&
+            failure is! IntegrationUnavailableFailure) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(failure.message)),
+          );
+        }
+      case AppError():
+        break;
     }
   }
 
