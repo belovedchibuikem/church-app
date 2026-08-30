@@ -36,6 +36,19 @@ dependencies:
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
+  http: ^1.2.2
+  flutter_map: ^7.0.2
+  latlong2: ^0.9.1
+  geolocator: ^13.0.2
+  url_launcher: ^6.3.1
+  webview_flutter: ^4.10.0
+  flutter_map_cancellable_tile_provider: ^3.0.2
+  shared_preferences: ^2.5.3
+  # Generated public + protected clients (host base = FHC_PUBLIC_API_BASE_URL).
+  family_house_connect_public_api:
+    path: ../api/clients/dart
+  flutter_secure_storage: ^10.3.1
+  file_picker: ^11.0.3
 
 dev_dependencies:
   flutter_test:
@@ -61,6 +74,8 @@ flutter:
 
   assets:
     - assets/images/
+    - assets/images/member_photos/
+    - assets/images/book_covers/
 
   fonts:
     - family: FhcRoboto

@@ -1,65 +1,161 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/design_system/fhc_tokens.dart';
+import '../../../../core/l10n/locale_scope.dart';
 import '../../../../shared/widgets/fhc_components.dart';
 import '../../../foundation/presentation/fhc_nav.dart';
 
 class ChurchModuleHomeScreen extends StatelessWidget {
   const ChurchModuleHomeScreen({super.key});
 
-  static const _items = <_MenuSpec>[
+  static List<_MenuSpec> _overviewOf(BuildContext context) => [
     _MenuSpec(
       icon: Icons.church_outlined,
-      title: 'Church Dashboard',
-      subtitle: 'Overview & Status',
-      route: FhcRoutes.church,
+      title: fhcT(context, 'member.myChurch', fallback: 'My Church'),
+      subtitle: fhcT(
+        context,
+        'member.myChurchCopy',
+        fallback: 'Churches and home churches you belong to',
+      ),
+      route: FhcRoutes.myChurch,
+    ),
+    _MenuSpec(
+      icon: Icons.explore_outlined,
+      title: fhcT(context, 'member.findChurches', fallback: 'Find Churches'),
+      subtitle: fhcT(
+        context,
+        'member.findChurchesCopy',
+        fallback: 'Discover Family House churches',
+      ),
+      route: FhcRoutes.discover,
+    ),
+    _MenuSpec(
+      icon: Icons.home_work_outlined,
+      title: fhcT(context, 'member.homeChurch', fallback: 'Home Church'),
+      subtitle: fhcT(
+        context,
+        'member.homeChurchManageCopy',
+        fallback: 'Open your home church or start one',
+      ),
+      route: FhcRoutes.homeChurch,
+    ),
+  ];
+
+  static List<_MenuSpec> _mediaOf(BuildContext context) => [
+    _MenuSpec(
+      icon: Icons.play_circle_outline,
+      title: fhcT(context, 'member.media', fallback: 'Media'),
+      subtitle: fhcT(
+        context,
+        'member.mediaCopy',
+        fallback: 'Watch, listen, and read',
+      ),
+      route: FhcRoutes.media,
+    ),
+    _MenuSpec(
+      icon: Icons.menu_book_outlined,
+      title: fhcT(context, 'online.sermons', fallback: 'Sermons'),
+      subtitle: fhcT(
+        context,
+        'online.sermonsCopy',
+        fallback: 'Messages and teaching',
+      ),
+      route: FhcRoutes.sermons,
+    ),
+    _MenuSpec(
+      icon: Icons.live_tv_outlined,
+      title: fhcT(context, 'member.liveFellowship', fallback: 'Live Fellowship'),
+      subtitle: fhcT(
+        context,
+        'member.liveFellowshipCopy',
+        fallback: 'Join the live service',
+      ),
+      route: FhcRoutes.live,
+    ),
+  ];
+
+  static List<_MenuSpec> _communityOf(BuildContext context) => [
+    _MenuSpec(
+      icon: Icons.event_outlined,
+      title: fhcT(context, 'member.events', fallback: 'Events'),
+      subtitle: fhcT(
+        context,
+        'member.eventsCopy',
+        fallback: 'Upcoming gatherings',
+      ),
+      route: FhcRoutes.events,
     ),
     _MenuSpec(
       icon: Icons.groups_outlined,
-      title: 'Members',
-      subtitle: 'Manage church members',
+      title: fhcT(context, 'member.groups', fallback: 'Groups'),
+      subtitle: fhcT(
+        context,
+        'member.groupsCopy',
+        fallback: 'Fellowship groups',
+      ),
+      route: FhcRoutes.groups,
+    ),
+    _MenuSpec(
+      icon: Icons.favorite_border,
+      title: fhcT(context, 'nav.give', fallback: 'Give'),
+      subtitle: fhcT(
+        context,
+        'member.giveCopy',
+        fallback: 'Support the work',
+      ),
+      route: FhcRoutes.give,
+    ),
+    _MenuSpec(
+      icon: Icons.volunteer_activism_outlined,
+      title: fhcT(context, 'nav.prayer', fallback: 'Prayer'),
+      subtitle: fhcT(
+        context,
+        'member.prayerCopy',
+        fallback: 'Share and join prayer',
+      ),
+      route: FhcRoutes.prayer,
+    ),
+  ];
+
+  static List<_MenuSpec> _opsOf(BuildContext context) => [
+    _MenuSpec(
+      icon: Icons.groups_outlined,
+      title: fhcT(context, 'member.members', fallback: 'Members'),
+      subtitle: fhcT(
+        context,
+        'member.membersCopy',
+        fallback: 'Manage church members',
+      ),
       route: FhcRoutes.churchMembers,
     ),
     _MenuSpec(
       icon: Icons.workspaces_outlined,
-      title: 'Small Groups',
-      subtitle: 'Fellowship in small groups',
+      title: fhcT(context, 'member.smallGroupsTitle', fallback: 'Small Groups'),
+      subtitle: fhcT(
+        context,
+        'member.smallGroupsCopy',
+        fallback: 'Fellowship in small groups',
+      ),
       route: FhcRoutes.churchGroups,
     ),
     _MenuSpec(
-      icon: Icons.record_voice_over_outlined,
-      title: 'Ministries',
-      subtitle: 'Manage church ministries',
-      route: FhcRoutes.churchMinistries,
-    ),
-    _MenuSpec(
-      icon: Icons.calendar_today_outlined,
-      title: 'Events',
-      subtitle: 'Plan & manage events',
-      route: FhcRoutes.events,
-    ),
-    _MenuSpec(
-      icon: Icons.fact_check_outlined,
-      title: 'Attendance',
-      subtitle: 'Track attendance',
-      route: FhcRoutes.homeChurch,
-    ),
-    _MenuSpec(
       icon: Icons.campaign_outlined,
-      title: 'Announcements',
-      subtitle: 'Church announcements',
+      title: fhcT(context, 'member.announcements', fallback: 'Announcements'),
+      subtitle: fhcT(
+        context,
+        'member.announcementsCopy',
+        fallback: 'Church announcements',
+      ),
       route: FhcRoutes.churchAnnouncements,
     ),
     _MenuSpec(
-      icon: Icons.insert_drive_file_outlined,
-      title: 'Documents',
-      subtitle: 'Church documents',
-      route: FhcRoutes.churchDocuments,
-    ),
-    _MenuSpec(
       icon: Icons.settings_outlined,
-      title: 'Settings',
-      subtitle: 'Church module settings',
+      title: fhcT(context, 'common.settings', fallback: 'Settings'),
+      subtitle: fhcT(
+        context,
+        'member.churchSettingsCopy',
+        fallback: 'Church module settings',
+      ),
       route: FhcRoutes.churchSettings,
     ),
   ];
@@ -72,37 +168,82 @@ class ChurchModuleHomeScreen extends StatelessWidget {
     }
   }
 
+  static List<Widget> _tiles(BuildContext context, List<_MenuSpec> items) {
+    return [
+      for (var i = 0; i < items.length; i++)
+        FhcMenuTile(
+          icon: items[i].icon,
+          title: items[i].title,
+          subtitle: items[i].subtitle,
+          showDivider: i < items.length - 1,
+          onTap: () => fhcPush(context, items[i].route),
+        ),
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
     return FhcDevicePage(
-      backgroundColor: FhcColors.white,
+      backgroundColor: FhcColors.canvas,
       child: Column(
         children: [
           FhcTopBar(
-            title: 'CHURCH',
+            title: fhcT(context, 'nav.church', fallback: 'Church'),
             onBack: () => _goBack(context),
-            trailing: IconButton(
-              onPressed: () => fhcPush(context, FhcRoutes.notifications),
-              padding: EdgeInsets.zero,
-              icon: const _BellBadge(),
-              color: FhcColors.ink,
-              tooltip: 'Notifications',
+            trailing: FhcNotificationBell(
+              count: 0,
+              onTap: () => fhcPush(context, FhcRoutes.notifications),
             ),
           ),
           Expanded(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 16, 4),
-              child: Column(
-                children: [
-                  for (final item in _items)
-                    Expanded(
-                      child: _MenuRow(
-                        item: item,
-                        onTap: () => fhcPush(context, item.route),
-                      ),
-                    ),
-                ],
-              ),
+            child: ListView(
+              physics: const ClampingScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 20),
+              children: [
+                Text(
+                  fhcT(
+                    context,
+                    'member.churchHomeCopy',
+                    fallback:
+                        'Find churches, media, events, and your home church.',
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    height: 1.35,
+                    color: FhcColors.muted,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                FhcMenuGroup(
+                  title: fhcT(context, 'common.overview', fallback: 'Overview'),
+                  children: _tiles(context, _overviewOf(context)),
+                ),
+                const SizedBox(height: 14),
+                FhcMenuGroup(
+                  title: fhcT(context, 'member.media', fallback: 'Media'),
+                  children: _tiles(context, _mediaOf(context)),
+                ),
+                const SizedBox(height: 14),
+                FhcMenuGroup(
+                  title: fhcT(
+                    context,
+                    'member.community',
+                    fallback: 'Community',
+                  ),
+                  children: _tiles(context, _communityOf(context)),
+                ),
+                const SizedBox(height: 14),
+                FhcMenuGroup(
+                  title: fhcT(
+                    context,
+                    'member.operations',
+                    fallback: 'Operations',
+                  ),
+                  children: _tiles(context, _opsOf(context)),
+                ),
+              ],
             ),
           ),
           const FhcBottomNavigation(selected: 1),
@@ -124,111 +265,4 @@ class _MenuSpec {
   final String title;
   final String subtitle;
   final String route;
-}
-
-class _MenuRow extends StatelessWidget {
-  const _MenuRow({required this.item, required this.onTap});
-
-  final _MenuSpec item;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      button: true,
-      label: '${item.title}. ${item.subtitle}',
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: FhcSizes.minTap),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Row(
-                children: [
-                  SizedBox(
-                    width: 28,
-                    child: Icon(item.icon, size: 24, color: FhcColors.green),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          item.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w700,
-                            height: 1.2,
-                            color: FhcColors.ink,
-                          ),
-                        ),
-                        const SizedBox(height: 3),
-                        Text(
-                          item.subtitle,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            height: 1.25,
-                            color: FhcColors.muted,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _BellBadge extends StatelessWidget {
-  const _BellBadge();
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 28,
-      height: 28,
-      child: Stack(
-        clipBehavior: Clip.none,
-        alignment: Alignment.center,
-        children: [
-          const Icon(Icons.notifications_none, size: 22, color: FhcColors.ink),
-          Positioned(
-            right: -2,
-            top: 0,
-            child: Container(
-              width: 14,
-              height: 14,
-              alignment: Alignment.center,
-              decoration: const BoxDecoration(
-                color: FhcColors.red,
-                shape: BoxShape.circle,
-              ),
-              child: const Text(
-                '2',
-                style: TextStyle(
-                  color: FhcColors.white,
-                  fontSize: 8,
-                  fontWeight: FontWeight.w700,
-                  height: 1,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }

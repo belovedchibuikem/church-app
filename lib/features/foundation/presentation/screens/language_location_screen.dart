@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 
 import '../../../../core/design_system/fhc_tokens.dart';
+import '../../../../core/l10n/locale_scope.dart';
+import '../../../../core/l10n/supported_locales.dart';
+import '../../../../core/launch/app_launch_scope.dart';
+import '../../../../shared/widgets/fhc_brand_logo.dart';
 import '../../../../shared/widgets/fhc_components.dart';
 import '../fhc_nav.dart';
 
@@ -11,19 +16,124 @@ class LanguageLocationScreen extends StatefulWidget {
   State<LanguageLocationScreen> createState() => _LanguageLocationScreenState();
 }
 
-class _LanguageLocationScreenState extends State<LanguageLocationScreen> {
-  String _selected = 'English';
+class _LanguageOption {
+  const _LanguageOption(this.code, this.label);
 
-  static const _languages = <String>[
-    'English',
-    'Yoruba',
-    'Igbo',
-    'Hausa',
-    'Français (French)',
-    'العربية (Arabic)',
-    '中文 (Chinese)',
-    'Kiswahili (Swahili)',
+  final String code;
+  final String label;
+}
+
+class _LanguageLocationScreenState extends State<LanguageLocationScreen> {
+  List<_LanguageOption> get _languages => [
+    for (final code in kFhcSupportedLocales)
+      _LanguageOption(code, kFhcLocaleMeta[code]!.endonym),
   ];
+
+  bool _started = false;
+  String _selectedCode = 'en';
+  String _locationLabel = '';
+  bool _locating = true;
+  bool _saving = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_started) return;
+    _started = true;
+    final stored = AppLaunchScope.maybeOf(context);
+    if (stored != null) {
+      _selectedCode = stored.languageCode;
+      final existing = stored.locationLabel;
+      if (existing != null && existing.isNotEmpty) {
+        _locationLabel = existing;
+        _locating = false;
+        return;
+      }
+    }
+    _detectLocation();
+  }
+
+  Future<void> _selectLanguage(_LanguageOption option) async {
+    setState(() => _selectedCode = option.code);
+    final store = AppLaunchScope.maybeOf(context);
+    await store?.setLanguage(
+      languageCode: option.code,
+      languageLabel: option.label,
+    );
+  }
+
+  Future<void> _detectLocation() async {
+    if (WidgetsBinding.instance.runtimeType.toString().contains('Test')) {
+      setState(() {
+        _locating = false;
+        _locationLabel = fhcT(context, 'onboarding.locationOnDevice');
+      });
+      return;
+    }
+    setState(() {
+      _locating = true;
+      _locationLabel = fhcT(context, 'onboarding.detectingLocation');
+    });
+    try {
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        if (!mounted) return;
+        setState(() {
+          _locating = false;
+          _locationLabel = fhcT(context, 'onboarding.locationServicesOff');
+        });
+        return;
+      }
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        if (!mounted) return;
+        setState(() {
+          _locating = false;
+          _locationLabel = fhcT(context, 'onboarding.locationPermission');
+        });
+        return;
+      }
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.medium,
+          timeLimit: Duration(seconds: 8),
+        ),
+      );
+      if (!mounted) return;
+      setState(() {
+        _locating = false;
+        _locationLabel =
+            '${position.latitude.toStringAsFixed(3)}, ${position.longitude.toStringAsFixed(3)}';
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _locating = false;
+        _locationLabel = fhcT(context, 'onboarding.locationUnavailable');
+      });
+    }
+  }
+
+  Future<void> _continue() async {
+    if (_saving) return;
+    setState(() => _saving = true);
+    final selected = _languages.firstWhere(
+      (item) => item.code == _selectedCode,
+      orElse: () => _languages.first,
+    );
+    final store = AppLaunchScope.maybeOf(context);
+    await store?.completeSetup(
+      languageCode: selected.code,
+      languageLabel: selected.label,
+      locationLabel: _locationLabel,
+    );
+    if (!mounted) return;
+    fhcGo(context, '/sign-in');
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -31,15 +141,17 @@ class _LanguageLocationScreenState extends State<LanguageLocationScreen> {
       child: Column(
         children: [
           FhcTopBar(
-            title: 'Language & Location',
+            title: fhcT(context, 'onboarding.languageLocation'),
             onBack: () => fhcGo(context, '/onboarding/multiply'),
           ),
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 36),
+          const FhcBrandLogo(size: 64),
+          const SizedBox(height: 10),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 36),
             child: Text(
-              'Choose your preferred language\nand location to continue.',
+              fhcT(context, 'onboarding.chooseLanguageAndLocation'),
               textAlign: TextAlign.center,
-              style: TextStyle(
+              style: const TextStyle(
                 fontSize: 13,
                 height: 1.4,
                 color: FhcColors.muted,
@@ -52,9 +164,9 @@ class _LanguageLocationScreenState extends State<LanguageLocationScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Choose Language',
-                    style: TextStyle(
+                  Text(
+                    fhcT(context, 'onboarding.chooseLanguage'),
+                    style: const TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w700,
                       color: FhcColors.ink,
@@ -66,19 +178,75 @@ class _LanguageLocationScreenState extends State<LanguageLocationScreen> {
                       padding: EdgeInsets.zero,
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(FhcRadius.md),
-                        child: Column(
+                        child: ListView.separated(
+                          itemCount: _languages.length,
+                          separatorBuilder:
+                              (_, __) => const Divider(height: 1),
+                          itemBuilder: (context, i) {
+                            final option = _languages[i];
+                            return _LanguageRow(
+                              label: option.label,
+                              selected: _selectedCode == option.code,
+                              onTap: () => _selectLanguage(option),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    fhcT(context, 'onboarding.yourLocation'),
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: FhcColors.ink,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  InkWell(
+                    onTap: _locating ? null : _detectLocation,
+                    borderRadius: BorderRadius.circular(FhcRadius.card),
+                    child: FhcSurfaceCard(
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      child: SizedBox(
+                        height: 48,
+                        child: Row(
                           children: [
-                            for (var i = 0; i < _languages.length; i++)
-                              Expanded(
-                                child: _LanguageRow(
-                                  label: _languages[i],
-                                  selected: _selected == _languages[i],
-                                  showDivider: i != _languages.length - 1,
-                                  onTap:
-                                      () => setState(
-                                        () => _selected = _languages[i],
-                                      ),
+                            Icon(
+                              Icons.my_location,
+                              size: 20,
+                              color:
+                                  _locating
+                                      ? FhcColors.muted
+                                      : FhcColors.green,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                _locationLabel,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: FhcColors.ink,
                                 ),
+                              ),
+                            ),
+                            if (_locating)
+                              const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            else
+                              const Icon(
+                                Icons.refresh,
+                                size: 20,
+                                color: FhcColors.muted,
                               ),
                           ],
                         ),
@@ -86,25 +254,12 @@ class _LanguageLocationScreenState extends State<LanguageLocationScreen> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  const Text(
-                    'Your Location',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: FhcColors.ink,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  const _LocationRow(leading: _NigeriaFlag(), label: 'Nigeria'),
-                  const SizedBox(height: 8),
-                  const _LocationRow(
-                    leading: Icon(Icons.search, size: 20, color: FhcColors.ink),
-                    label: 'Lagos, Nigeria',
-                  ),
-                  const SizedBox(height: 16),
                   FhcPrimaryButton(
-                    label: 'Continue',
-                    onPressed: () => fhcGo(context, '/sign-in'),
+                    label:
+                        _saving
+                            ? fhcT(context, 'onboarding.saving')
+                            : fhcT(context, 'onboarding.continue'),
+                    onPressed: _saving ? null : _continue,
                   ),
                 ],
               ),
@@ -120,72 +275,21 @@ class _LanguageRow extends StatelessWidget {
   const _LanguageRow({
     required this.label,
     required this.selected,
-    required this.showDivider,
     required this.onTap,
   });
 
   final String label;
   final bool selected;
-  final bool showDivider;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          border:
-              showDivider
-                  ? const Border(bottom: BorderSide(color: FhcColors.border))
-                  : null,
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    height: 1.2,
-                    fontWeight: FontWeight.w600,
-                    color: FhcColors.ink,
-                  ),
-                ),
-              ),
-              Icon(
-                selected ? Icons.check_circle : Icons.circle_outlined,
-                size: 22,
-                color: selected ? FhcColors.green : const Color(0xFFC5CBC8),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _LocationRow extends StatelessWidget {
-  const _LocationRow({required this.leading, required this.label});
-
-  final Widget leading;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return FhcSurfaceCard(
-      padding: const EdgeInsets.symmetric(horizontal: 14),
-      child: SizedBox(
-        height: 48,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         child: Row(
           children: [
-            leading,
-            const SizedBox(width: 12),
             Expanded(
               child: Text(
                 label,
@@ -193,45 +297,18 @@ class _LocationRow extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                   fontSize: 14,
+                  height: 1.2,
                   fontWeight: FontWeight.w600,
                   color: FhcColors.ink,
                 ),
               ),
             ),
-            const Icon(
-              Icons.keyboard_arrow_down,
+            Icon(
+              selected ? Icons.check_circle : Icons.circle_outlined,
               size: 22,
-              color: FhcColors.muted,
+              color: selected ? FhcColors.green : const Color(0xFFC5CBC8),
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _NigeriaFlag extends StatelessWidget {
-  const _NigeriaFlag();
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(2),
-      child: SizedBox(
-        width: 28,
-        height: 18,
-        child: Image.asset(
-          'assets/images/nigeria_flag.png',
-          fit: BoxFit.cover,
-          errorBuilder: (context, error, stackTrace) {
-            return const Row(
-              children: [
-                Expanded(child: ColoredBox(color: Color(0xFF008751))),
-                Expanded(child: ColoredBox(color: Colors.white)),
-                Expanded(child: ColoredBox(color: Color(0xFF008751))),
-              ],
-            );
-          },
         ),
       ),
     );

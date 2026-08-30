@@ -1,11 +1,18 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/api/app_failure.dart';
+import '../../../../core/contracts/mobile_repository_contracts.dart';
 import '../../../../core/design_system/fhc_tokens.dart';
+import '../../../../core/di/app_services_scope.dart';
+import '../../../../core/l10n/locale_scope.dart';
+import '../../../../shared/widgets/async_state.dart';
 import '../../../../shared/widgets/fhc_components.dart';
 import '../../../foundation/presentation/fhc_nav.dart';
 
 class GroupsScreen extends StatefulWidget {
-  const GroupsScreen({super.key});
+  const GroupsScreen({super.key, this.repository});
+
+  final ChurchRepository? repository;
 
   @override
   State<GroupsScreen> createState() => _GroupsScreenState();
@@ -13,114 +20,296 @@ class GroupsScreen extends StatefulWidget {
 
 class _GroupsScreenState extends State<GroupsScreen> {
   int _tab = 0;
+  FhcAsyncValue<List<JsonObject>> _state = const FhcAsyncValue.loading();
+  String? _busyId;
 
-  static const _tabs = <String>['All Groups', 'My Groups'];
+  ChurchRepository? get _repository =>
+      widget.repository ??
+      AppServicesScope.maybeOf(context)?.churchRepository;
 
-  static const _all = <_GroupItem>[
-    _GroupItem(
-      name: 'Young Adults Fellowship',
-      description: 'A community for young believers to grow together.',
-      members: 24,
-      asset: 'assets/images/group_avatar_young_adults.png',
-      fallback: 'assets/images/member_avatar.png',
-    ),
-    _GroupItem(
-      name: 'Women of Grace',
-      description: 'Empowering women to fulfill their purpose.',
-      members: 38,
-      asset: 'assets/images/group_avatar_women_of_grace.png',
-      fallback: 'assets/images/profile_chibuikem.png',
-    ),
-    _GroupItem(
-      name: 'Men of Valor',
-      description: 'Raising godly men of integrity and purpose.',
-      members: 38,
-      asset: 'assets/images/group_avatar_men_of_valor.png',
-      fallback: 'assets/images/kca_avatar.png',
-    ),
-    _GroupItem(
-      name: 'Bible Study Group',
-      description: 'Weekly Bible study and discussions.',
-      members: 18,
-      asset: 'assets/images/member_avatar.png',
-      fallback: 'assets/images/kca_avatar.png',
-    ),
-  ];
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_state is FhcAsyncLoading) _load();
+  }
 
-  static const _mine = <_GroupItem>[
-    _GroupItem(
-      name: 'Young Adults Fellowship',
-      description: 'A community for young believers to grow together.',
-      members: 24,
-      asset: 'assets/images/group_avatar_young_adults.png',
-      fallback: 'assets/images/member_avatar.png',
-      joined: true,
-    ),
-  ];
-
-  List<_GroupItem> get _items => _tab == 1 ? _mine : _all;
-
-  void _goBack() {
-    if (Navigator.of(context).canPop()) {
-      Navigator.of(context).pop();
-    } else {
-      fhcGo(context, FhcRoutes.hub);
+  Future<void> _load() async {
+    final repository = _repository;
+    if (repository == null) {
+      setState(() {
+        _state = FhcAsyncValue.unavailable(
+          message: fhcT(
+            context,
+            'online.groupsRequireApi',
+            fallback:
+                'Groups require the authenticated groups API. '
+                'No fixture list is shown.',
+          ),
+        );
+      });
+      return;
+    }
+    setState(() => _state = const FhcAsyncValue.loading());
+    final result = await repository.listGroups();
+    if (!mounted) return;
+    switch (result) {
+      case AppSuccess(:final value):
+        setState(() {
+          _state = value.isEmpty
+              ? FhcAsyncValue.empty(
+                  message: fhcT(
+                    context,
+                    'online.noGroupsYet',
+                    fallback: 'No groups are available yet.',
+                  ),
+                )
+              : FhcAsyncValue.data(value);
+        });
+      case AppError(:final failure):
+        setState(() => _state = FhcAsyncValue.error(failure));
     }
   }
 
-  void _join() => fhcPush(context, FhcRoutes.messages);
+  bool _isMember(JsonObject group) =>
+      group['is_member'] == true ||
+      group['joined'] == true ||
+      '${group['membership_status'] ?? ''}'.toLowerCase() == 'active';
+
+  String _id(JsonObject group) => '${group['id'] ?? ''}'.trim();
+
+  String _name(JsonObject group) =>
+      '${group['name'] ?? group['title'] ?? 'Group'}'.trim();
+
+  String _description(JsonObject group) =>
+      '${group['description'] ?? group['summary'] ?? ''}'.trim();
+
+  String _memberLabel(JsonObject group) {
+    final raw =
+        group['member_count'] ?? group['members_count'] ?? group['members'];
+    final count = raw is num ? raw.toInt() : int.tryParse('$raw') ?? 0;
+    return fhcT(
+      context,
+      'member.memberCount',
+      fallback: '$count Members',
+      args: {'count': '$count'},
+    );
+  }
+
+  List<JsonObject> _visible(List<JsonObject> groups) {
+    if (_tab == 1) return groups.where(_isMember).toList();
+    return groups;
+  }
+
+  Future<void> _toggleJoin(JsonObject group) async {
+    final repository = _repository;
+    final id = _id(group);
+    if (repository == null || id.isEmpty || _busyId != null) return;
+
+    setState(() => _busyId = id);
+    final result = _isMember(group)
+        ? await repository.leaveGroup(id)
+        : await repository.joinGroup(id);
+    if (!mounted) return;
+    setState(() => _busyId = null);
+
+    switch (result) {
+      case AppSuccess():
+        await _load();
+      case AppError(:final failure):
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(failure.message)),
+        );
+    }
+  }
+
+  void _back() {
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+    } else {
+      fhcGo(context, FhcRoutes.discover);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final items = _items;
-
     return FhcDevicePage(
       backgroundColor: FhcColors.white,
       child: Column(
         children: [
-          FhcTopBar(title: 'Groups', onBack: _goBack),
+          FhcTopBar(
+            title: fhcT(context, 'online.groups', fallback: 'Groups'),
+            onBack: _back,
+            backTooltip: fhcT(context, 'common.back', fallback: 'Back'),
+          ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-            child: DecoratedBox(
+            padding: const EdgeInsets.fromLTRB(16, 2, 16, 10),
+            child: Container(
+              height: 38,
               decoration: BoxDecoration(
-                color: FhcColors.canvas,
-                borderRadius: BorderRadius.circular(22),
+                color: const Color(0xFFF2F4F3),
+                borderRadius: BorderRadius.circular(8),
               ),
-              child: Padding(
-                padding: const EdgeInsets.all(3),
-                child: Row(
-                  children: [
-                    for (var i = 0; i < _tabs.length; i++) ...[
-                      if (i > 0) const SizedBox(width: 4),
-                      Expanded(
-                        child: _GroupsTab(
-                          label: _tabs[i],
-                          active: i == _tab,
-                          onTap: () => setState(() => _tab = i),
-                        ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _Segment(
+                      label: fhcT(
+                        context,
+                        'online.allGroups',
+                        fallback: 'All Groups',
                       ),
-                    ],
-                  ],
-                ),
+                      active: _tab == 0,
+                      onTap: () => setState(() => _tab = 0),
+                    ),
+                  ),
+                  Expanded(
+                    child: _Segment(
+                      label: fhcT(
+                        context,
+                        'online.myGroups',
+                        fallback: 'My Groups',
+                      ),
+                      active: _tab == 1,
+                      onTap: () => setState(() => _tab = 1),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
           Expanded(
-            child:
-                items.isEmpty
-                    ? const _EmptyGroups()
-                    : ListView.separated(
-                      padding: const EdgeInsets.fromLTRB(16, 6, 16, 18),
-                      itemCount: items.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 6),
-                      itemBuilder: (context, index) {
-                        final item = items[index];
-                        return _GroupRow(
-                          item: item,
-                          onJoin: item.joined ? null : _join,
-                        );
-                      },
+            child: FhcAsyncBody<List<JsonObject>>(
+              value: _state,
+              onRetry: _load,
+              emptyTitle: fhcT(
+                context,
+                'online.noGroups',
+                fallback: 'No groups',
+              ),
+              unavailableTitle: fhcT(
+                context,
+                'online.groupsUnavailable',
+                fallback: 'Groups unavailable',
+              ),
+              builder: (context, groups) {
+                final visible = _visible(groups);
+                if (visible.isEmpty) {
+                  return Center(
+                    child: Text(
+                      fhcT(
+                        context,
+                        'online.noGroupsInTab',
+                        fallback: 'No groups in this tab.',
+                      ),
+                      style: FhcTypography.caption,
                     ),
+                  );
+                }
+                return RefreshIndicator(
+                  onRefresh: _load,
+                  child: ListView.separated(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                    itemCount: visible.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 9),
+                    itemBuilder: (context, index) {
+                      final group = visible[index];
+                      final joined = _isMember(group);
+                      final busy = _busyId == _id(group);
+                      return Container(
+                        padding: const EdgeInsets.fromLTRB(12, 11, 10, 10),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(FhcRadius.card),
+                          border: Border.all(color: FhcColors.border),
+                          boxShadow: FhcElevation.card,
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const CircleAvatar(
+                              radius: 28,
+                              backgroundColor: FhcColors.mint,
+                              child: Icon(
+                                Icons.groups_outlined,
+                                color: FhcColors.green,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    _name(group),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 5),
+                                  Text(
+                                    _description(group).isEmpty
+                                        ? '—'
+                                        : _description(group),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontSize: 10.5,
+                                      height: 1.35,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    _memberLabel(group),
+                                    style: FhcTypography.caption,
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            OutlinedButton(
+                              onPressed:
+                                  busy ? null : () => _toggleJoin(group),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: FhcColors.green,
+                                side: const BorderSide(color: FhcColors.border),
+                                minimumSize: const Size(48, 34),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                ),
+                                shape: const StadiumBorder(),
+                              ),
+                              child: Text(
+                                busy
+                                    ? '…'
+                                    : joined
+                                    ? fhcT(
+                                      context,
+                                      'online.leave',
+                                      fallback: 'Leave',
+                                    )
+                                    : fhcT(
+                                      context,
+                                      'online.join',
+                                      fallback: 'Join',
+                                    ),
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                );
+              },
+            ),
           ),
           const FhcBottomNavigation(selected: 1),
         ],
@@ -129,31 +318,12 @@ class _GroupsScreenState extends State<GroupsScreen> {
   }
 }
 
-class _GroupItem {
-  const _GroupItem({
-    required this.name,
-    required this.description,
-    required this.members,
-    required this.asset,
-    required this.fallback,
-    this.joined = false,
-  });
-
-  final String name;
-  final String description;
-  final int members;
-  final String asset;
-  final String fallback;
-  final bool joined;
-}
-
-class _GroupsTab extends StatelessWidget {
-  const _GroupsTab({
+class _Segment extends StatelessWidget {
+  const _Segment({
     required this.label,
     required this.active,
     required this.onTap,
   });
-
   final String label;
   final bool active;
   final VoidCallback onTap;
@@ -163,232 +333,25 @@ class _GroupsTab extends StatelessWidget {
     return Semantics(
       button: true,
       selected: active,
-      label: label,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
-        child: Ink(
-          height: 36,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          height: 38,
+          alignment: Alignment.center,
           decoration: BoxDecoration(
             color: active ? FhcColors.green : Colors.transparent,
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(8),
           ),
-          child: Center(
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: active ? FontWeight.w700 : FontWeight.w500,
-                height: 1.1,
-                color: active ? FhcColors.white : FhcColors.muted,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _GroupRow extends StatelessWidget {
-  const _GroupRow({required this.item, required this.onJoin});
-
-  final _GroupItem item;
-  final VoidCallback? onJoin;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          _GroupAvatar(asset: item.asset, fallback: item.fallback),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  item.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: FhcColors.ink,
-                    height: 1.2,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  item.description,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 11,
-                    color: FhcColors.muted,
-                    height: 1.3,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  '${item.members} Members',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 10,
-                    color: FhcColors.hint,
-                    height: 1.2,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          if (item.joined)
-            const _JoinedLabel()
-          else
-            _JoinButton(onPressed: onJoin),
-        ],
-      ),
-    );
-  }
-}
-
-class _GroupAvatar extends StatelessWidget {
-  const _GroupAvatar({required this.asset, required this.fallback});
-
-  final String asset;
-  final String fallback;
-
-  static const _size = 48.0;
-  static const _fallbacks = <String>[
-    'assets/images/member_avatar.png',
-    'assets/images/profile_chibuikem.png',
-    'assets/images/kca_avatar.png',
-  ];
-
-  Widget _leaf() {
-    return const ColoredBox(
-      color: FhcColors.mint,
-      child: Icon(Icons.groups_outlined, size: 22, color: FhcColors.green),
-    );
-  }
-
-  Widget _chain(List<String> paths) {
-    if (paths.isEmpty) return _leaf();
-    final first = paths.first;
-    final rest = paths.skip(1).toList();
-    return Image.asset(
-      first,
-      width: _size,
-      height: _size,
-      fit: BoxFit.cover,
-      errorBuilder: (context, error, stackTrace) => _chain(rest),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final paths = <String>[asset, fallback];
-    for (final path in _fallbacks) {
-      if (!paths.contains(path)) paths.add(path);
-    }
-    return ClipOval(
-      child: SizedBox(width: _size, height: _size, child: _chain(paths)),
-    );
-  }
-}
-
-class _JoinButton extends StatelessWidget {
-  const _JoinButton({required this.onPressed});
-
-  final VoidCallback? onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 32,
-      child: OutlinedButton(
-        onPressed: onPressed,
-        style: OutlinedButton.styleFrom(
-          foregroundColor: FhcColors.green,
-          backgroundColor: FhcColors.white,
-          side: const BorderSide(color: FhcColors.green),
-          minimumSize: Size.zero,
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          visualDensity: VisualDensity.compact,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(FhcRadius.button),
-          ),
-        ),
-        child: const Text(
-          'Join',
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w700,
-            height: 1.1,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _JoinedLabel extends StatelessWidget {
-  const _JoinedLabel();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: FhcColors.mint,
-        borderRadius: BorderRadius.circular(FhcRadius.button),
-      ),
-      child: const Text(
-        'Joined',
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w700,
-          color: FhcColors.green,
-          height: 1.1,
-        ),
-      ),
-    );
-  }
-}
-
-class _EmptyGroups extends StatelessWidget {
-  const _EmptyGroups();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.symmetric(vertical: 48),
-      child: Column(
-        children: [
-          FhcCircleIcon(icon: Icons.groups_outlined, size: 48),
-          SizedBox(height: 12),
-          Text(
-            'No groups yet',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
+          child: Text(
+            label,
             style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              color: FhcColors.ink,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: active ? Colors.white : FhcColors.ink,
             ),
           ),
-        ],
+        ),
       ),
     );
   }

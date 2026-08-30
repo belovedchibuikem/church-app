@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/design_system/fhc_tokens.dart';
+import '../../../../core/di/app_services_scope.dart';
+import '../../../../core/l10n/locale_scope.dart';
+import '../../../../shared/widgets/async_state.dart';
 import '../../../../shared/widgets/fhc_components.dart';
 import '../../../foundation/presentation/fhc_nav.dart';
+import '../../data/home_church_repository.dart';
 
 class HomeChurchApplicationsScreen extends StatefulWidget {
   const HomeChurchApplicationsScreen({super.key});
@@ -16,8 +20,6 @@ class _HomeChurchApplicationsScreenState
     extends State<HomeChurchApplicationsScreen> {
   int _tab = 0;
 
-  static const _tabs = <String>['Home Church', 'Other Requests'];
-
   void _goBack() {
     if (Navigator.of(context).canPop()) {
       Navigator.of(context).pop();
@@ -28,19 +30,36 @@ class _HomeChurchApplicationsScreenState
 
   @override
   Widget build(BuildContext context) {
+    final draft = HomeChurchApplicationSession.draft;
+    final hasLocalSubmission =
+        draft.lastApplicationId != null && draft.lastApplicationId!.isNotEmpty;
+    final showFixtures =
+        AppServicesScope.maybeOf(context)?.showUnboundFixtures ?? false;
+    final tabs = <String>[
+      fhcT(context, 'homeChurch.tabHomeChurch', fallback: 'Home Church'),
+      fhcT(context, 'homeChurch.tabOtherRequests', fallback: 'Other Requests'),
+    ];
+
     return FhcDevicePage(
       backgroundColor: FhcColors.canvas,
       child: Column(
         children: [
-          FhcTopBar(title: 'My Applications', onBack: _goBack),
+          FhcTopBar(
+            title: fhcT(
+              context,
+              'homeChurch.myApplications',
+              fallback: 'My Applications',
+            ),
+            onBack: _goBack,
+          ),
           ColoredBox(
             color: FhcColors.white,
             child: Row(
               children: [
-                for (var i = 0; i < _tabs.length; i++)
+                for (var i = 0; i < tabs.length; i++)
                   Expanded(
                     child: _AppTab(
-                      label: _tabs[i],
+                      label: tabs[i],
                       active: i == _tab,
                       onTap: () => setState(() => _tab = i),
                     ),
@@ -49,8 +68,14 @@ class _HomeChurchApplicationsScreenState
             ),
           ),
           Expanded(
-            child:
-                _tab == 0 ? const _HomeChurchTab() : const _OtherRequestsTab(),
+            child: _tab == 0
+                ? _HomeChurchTab(
+                    applicationId: draft.lastApplicationId,
+                    status: draft.lastStatus,
+                    hasLocalSubmission: hasLocalSubmission,
+                    showFixtures: showFixtures,
+                  )
+                : _OtherRequestsTab(showFixtures: showFixtures),
           ),
           FhcBottomNavigation(
             selected: 0,
@@ -110,22 +135,109 @@ class _AppTab extends StatelessWidget {
 }
 
 class _HomeChurchTab extends StatelessWidget {
-  const _HomeChurchTab();
+  const _HomeChurchTab({
+    required this.hasLocalSubmission,
+    required this.showFixtures,
+    this.applicationId,
+    this.status,
+  });
+
+  final bool hasLocalSubmission;
+  final bool showFixtures;
+  final String? applicationId;
+  final String? status;
 
   @override
   Widget build(BuildContext context) {
+    if (!hasLocalSubmission) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 36),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              FhcUnavailableState(
+                title: fhcT(
+                  context,
+                  'homeChurch.noApplicationsToList',
+                  fallback: 'No applications to list',
+                ),
+                message: fhcT(
+                  context,
+                  'homeChurch.noApplicationsMessage',
+                  fallback:
+                      'There is no public or /user list API for home-church '
+                      'applications. Only the latest submit receipt stored on '
+                      'this device can be shown after you apply.',
+                ),
+              ),
+              const SizedBox(height: 18),
+              SizedBox(
+                width: double.infinity,
+                height: 40,
+                child: FilledButton(
+                  onPressed: () => fhcPush(context, FhcRoutes.homeChurchStart),
+                  child: Text(
+                    fhcT(
+                      context,
+                      'homeChurch.startApplication',
+                      fallback: 'Start application',
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 18),
-      children: const [_ApplicationCard()],
+      children: [
+        _ApplicationCard(
+          applicationId: applicationId!,
+          status: status ?? 'draft',
+        ),
+        if (!showFixtures) ...[
+          const SizedBox(height: 12),
+          Text(
+            fhcT(
+              context,
+              'homeChurch.historyNotAvailable',
+              fallback:
+                  'Server-side application history is not available yet. '
+                  'This card is the latest public submit receipt on this device.',
+            ),
+            style: const TextStyle(
+              fontSize: 11,
+              height: 1.35,
+              color: FhcColors.muted,
+            ),
+          ),
+        ],
+      ],
     );
   }
 }
 
 class _ApplicationCard extends StatelessWidget {
-  const _ApplicationCard();
+  const _ApplicationCard({
+    required this.applicationId,
+    required this.status,
+  });
+
+  final String applicationId;
+  final String status;
 
   @override
   Widget build(BuildContext context) {
+    final statusLabel = fhcT(
+      context,
+      'homeChurch.status.$status',
+      fallback: status.replaceAll('_', ' '),
+    );
+
     return FhcSurfaceCard(
       padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
       child: Column(
@@ -135,27 +247,31 @@ class _ApplicationCard extends StatelessWidget {
             children: [
               const FhcCircleIcon(icon: Icons.home_work_outlined, size: 40),
               const SizedBox(width: 10),
-              const Expanded(
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Application',
+                      fhcT(
+                        context,
+                        'homeChurch.applicationLabel',
+                        fallback: 'Application',
+                      ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
+                      style: const TextStyle(
                         fontSize: 11,
                         color: FhcColors.muted,
                         height: 1.2,
                       ),
                     ),
-                    SizedBox(height: 3),
+                    const SizedBox(height: 3),
                     Text(
-                      '#HC-2025-0456',
+                      applicationId,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 15,
+                      style: const TextStyle(
+                        fontSize: 13,
                         fontWeight: FontWeight.w700,
                         color: FhcColors.ink,
                         height: 1.2,
@@ -171,9 +287,9 @@ class _ApplicationCard extends StatelessWidget {
                   color: FhcColors.gold.withValues(alpha: 0.16),
                   borderRadius: BorderRadius.circular(20),
                 ),
-                child: const Text(
-                  'Under Review',
-                  style: TextStyle(
+                child: Text(
+                  statusLabel,
+                  style: const TextStyle(
                     fontSize: 10,
                     fontWeight: FontWeight.w700,
                     color: FhcColors.ink,
@@ -184,32 +300,40 @@ class _ApplicationCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 14),
-          const Text(
-            'Next step',
+          Text(
+            fhcT(
+              context,
+              'homeChurch.latestServerResponse',
+              fallback: 'Latest server response',
+            ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(fontSize: 10, color: FhcColors.muted, height: 1.2),
-          ),
-          const SizedBox(height: 3),
-          const Text(
-            'Interview',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              color: FhcColors.ink,
+            style: const TextStyle(
+              fontSize: 10,
+              color: FhcColors.muted,
               height: 1.2,
             ),
           ),
-          const SizedBox(height: 16),
-          const _ProgressTimeline(),
+          const SizedBox(height: 3),
+          Text(
+            fhcT(
+              context,
+              'homeChurch.storedFromSubmit',
+              fallback:
+                  'Stored from the most recent public submit on this device. A list API is not available.',
+            ),
+            style: const TextStyle(
+              fontSize: 12,
+              height: 1.35,
+              color: FhcColors.ink,
+            ),
+          ),
           const SizedBox(height: 16),
           SizedBox(
             width: double.infinity,
             height: 40,
             child: FilledButton(
-              onPressed: () {},
+              onPressed: () => fhcPush(context, FhcRoutes.homeChurchProgress),
               style: FilledButton.styleFrom(
                 backgroundColor: FhcColors.green,
                 foregroundColor: FhcColors.white,
@@ -221,9 +345,28 @@ class _ApplicationCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(FhcRadius.button),
                 ),
               ),
-              child: const Text(
-                'View Details',
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+              child: Text(
+                fhcT(
+                  context,
+                  'homeChurch.viewDetails',
+                  fallback: 'View Details',
+                ),
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            height: 40,
+            child: OutlinedButton(
+              onPressed: () => fhcPush(context, FhcRoutes.homeChurchStart),
+              child: Text(
+                fhcT(
+                  context,
+                  'homeChurch.startAnother',
+                  fallback: 'Start another application',
+                ),
               ),
             ),
           ),
@@ -233,149 +376,65 @@ class _ApplicationCard extends StatelessWidget {
   }
 }
 
-class _ProgressTimeline extends StatelessWidget {
-  const _ProgressTimeline();
+class _OtherRequestsTab extends StatelessWidget {
+  const _OtherRequestsTab({required this.showFixtures});
 
-  static const _steps = <(String, _StepState)>[
-    ('Submitted', _StepState.done),
-    ('Under Review', _StepState.current),
-    ('Interview', _StepState.upcoming),
-  ];
+  final bool showFixtures;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        SizedBox(
-          height: 22,
-          child: Row(
-            children: [
-              for (var i = 0; i < _steps.length; i++) ...[
-                _StepDot(state: _steps[i].$2),
-                if (i < _steps.length - 1)
-                  Expanded(
-                    child: Container(
-                      height: 2,
-                      margin: const EdgeInsets.symmetric(horizontal: 4),
-                      color:
-                          _steps[i].$2 == _StepState.done
-                              ? FhcColors.green
-                              : FhcColors.border,
-                    ),
-                  ),
-              ],
-            ],
+    if (!showFixtures) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: FhcUnavailableState(
+          title: fhcT(
+            context,
+            'homeChurch.otherRequestsUnavailable',
+            fallback: 'Other requests unavailable',
+          ),
+          message: fhcT(
+            context,
+            'homeChurch.otherRequestsUnavailableMessage',
+            fallback:
+                'Membership and ministry request lists have no public or '
+                '/user Laravel endpoints yet. Fixture rows are hidden.',
           ),
         ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            for (var i = 0; i < _steps.length; i++)
-              Expanded(
-                child: Text(
-                  _steps[i].$1,
-                  textAlign:
-                      i == 0
-                          ? TextAlign.left
-                          : i == _steps.length - 1
-                          ? TextAlign.right
-                          : TextAlign.center,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight:
-                        _steps[i].$2 == _StepState.upcoming
-                            ? FontWeight.w500
-                            : FontWeight.w700,
-                    color: switch (_steps[i].$2) {
-                      _StepState.done => FhcColors.green,
-                      _StepState.current => FhcColors.ink,
-                      _StepState.upcoming => FhcColors.muted,
-                    },
-                    height: 1.2,
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ],
-    );
-  }
-}
+      );
+    }
 
-enum _StepState { done, current, upcoming }
-
-class _StepDot extends StatelessWidget {
-  const _StepDot({required this.state});
-
-  final _StepState state;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = switch (state) {
-      _StepState.done => FhcColors.green,
-      _StepState.current => FhcColors.gold,
-      _StepState.upcoming => FhcColors.border,
-    };
-
-    return Container(
-      width: 18,
-      height: 18,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: state == _StepState.upcoming ? FhcColors.white : color,
-        shape: BoxShape.circle,
-        border: Border.all(
-          color: color,
-          width: state == _StepState.upcoming ? 2 : 0,
-        ),
-      ),
-      child:
-          state == _StepState.done
-              ? const Icon(Icons.check, size: 11, color: FhcColors.white)
-              : state == _StepState.current
-              ? Container(
-                width: 8,
-                height: 8,
-                decoration: const BoxDecoration(
-                  color: FhcColors.white,
-                  shape: BoxShape.circle,
-                ),
-              )
-              : null,
-    );
-  }
-}
-
-class _OtherRequestsTab extends StatelessWidget {
-  const _OtherRequestsTab();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Center(
+    return Center(
       child: Padding(
-        padding: EdgeInsets.symmetric(horizontal: 36),
+        padding: const EdgeInsets.symmetric(horizontal: 36),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            FhcCircleIcon(icon: Icons.inbox_outlined, size: 56),
-            SizedBox(height: 14),
+            const FhcCircleIcon(icon: Icons.inbox_outlined, size: 56),
+            const SizedBox(height: 14),
             Text(
-              'No other requests',
+              fhcT(
+                context,
+                'homeChurch.noOtherRequests',
+                fallback: 'No other requests',
+              ),
               textAlign: TextAlign.center,
-              style: TextStyle(
+              style: const TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w700,
                 color: FhcColors.ink,
                 height: 1.2,
               ),
             ),
-            SizedBox(height: 6),
+            const SizedBox(height: 6),
             Text(
-              'Membership and ministry requests will appear here.',
+              fhcT(
+                context,
+                'homeChurch.noOtherRequestsCopy',
+                fallback:
+                    'Membership and ministry requests will appear here when those APIs are available.',
+              ),
               textAlign: TextAlign.center,
-              style: TextStyle(
+              style: const TextStyle(
                 fontSize: 12,
                 height: 1.4,
                 color: FhcColors.muted,

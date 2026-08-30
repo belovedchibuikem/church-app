@@ -1,4 +1,5 @@
 import 'package:family_house_connect_mobile/app/app.dart';
+import 'package:family_house_connect_mobile/core/auth/authorization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -7,7 +8,12 @@ void main() {
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
-    await tester.pumpWidget(FamilyHouseConnectApp(initialRoute: route));
+    await tester.pumpWidget(
+      FamilyHouseConnectApp(
+        initialRoute: route,
+        authorizationGateway: const VisualReviewAuthorizationGateway(),
+      ),
+    );
     try {
       await tester.pumpAndSettle(
         const Duration(milliseconds: 100),
@@ -32,17 +38,26 @@ void main() {
 
   testWidgets('/events shows Events', (tester) async {
     await pumpRoute(tester, '/events');
-    expect(find.textContaining(RegExp(r'Events', caseSensitive: false)), findsWidgets);
+    expect(
+      find.textContaining(RegExp(r'Events', caseSensitive: false)),
+      findsWidgets,
+    );
   });
 
   testWidgets('/prayer shows Prayer', (tester) async {
     await pumpRoute(tester, '/prayer');
-    expect(find.textContaining(RegExp(r'Prayer', caseSensitive: false)), findsWidgets);
+    expect(
+      find.textContaining(RegExp(r'Prayer', caseSensitive: false)),
+      findsWidgets,
+    );
   });
 
   testWidgets('/give shows Give', (tester) async {
     await pumpRoute(tester, '/give');
-    expect(find.textContaining(RegExp(r'Give', caseSensitive: false)), findsWidgets);
+    expect(
+      find.textContaining(RegExp(r'Give', caseSensitive: false)),
+      findsWidgets,
+    );
   });
 
   testWidgets('/profile still shows Profile|Chibuikem', (tester) async {
@@ -94,9 +109,16 @@ void main() {
     expect(find.textContaining(RegExp(r'Members|Add Member')), findsWidgets);
   });
 
-  testWidgets('/events/detail shows Convention or Register', (tester) async {
+  testWidgets('/events/detail shows live event copy or an honest empty state', (
+    tester,
+  ) async {
     await pumpRoute(tester, '/events/detail');
-    expect(find.textContaining(RegExp(r'Convention|Register')), findsWidgets);
+    expect(
+      find.textContaining(
+        RegExp(r'Convention|Register|catalogue|Event', caseSensitive: false),
+      ),
+      findsWidgets,
+    );
   });
 
   testWidgets('/mission/souls shows Soul or Follow-up', (tester) async {

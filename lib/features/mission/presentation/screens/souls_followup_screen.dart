@@ -1,11 +1,20 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/api/app_failure.dart';
+import '../../../../core/contracts/mobile_repository_contracts.dart';
 import '../../../../core/design_system/fhc_tokens.dart';
+import '../../../../core/di/app_services_scope.dart';
+import '../../../../core/l10n/locale_scope.dart';
 import '../../../../shared/widgets/fhc_components.dart';
 import '../../../foundation/presentation/fhc_nav.dart';
+import '../../data/mission_repository.dart';
+import 'mission_workflow_screens.dart';
 
+/// Soul follow-up list bound to GET /admin/mission/souls when transport is live.
 class SoulsFollowupScreen extends StatefulWidget {
-  const SoulsFollowupScreen({super.key});
+  const SoulsFollowupScreen({super.key, this.repository});
+
+  final MissionRepository? repository;
 
   @override
   State<SoulsFollowupScreen> createState() => _SoulsFollowupScreenState();
@@ -13,64 +22,61 @@ class SoulsFollowupScreen extends StatefulWidget {
 
 class _SoulsFollowupScreenState extends State<SoulsFollowupScreen> {
   int _tab = 0;
+  bool _loading = true;
+  String? _error;
+  List<JsonObject> _souls = const [];
+  JsonObject? _selected;
 
-  static const _tabs = <(String, int)>[('New Souls', 124), ('Follow-up', 56)];
+  MissionRepository? get _missionRepo =>
+      widget.repository ??
+      AppServicesScope.maybeOf(context)?.missionRepository;
 
-  static const _followUpBlue = Color(0xFF2E90C7);
+  HttpMissionRepository? get _httpRepo {
+    final injected = widget.repository;
+    if (injected is HttpMissionRepository) return injected;
+    final fromScope = AppServicesScope.maybeOf(context)?.missionRepository;
+    if (fromScope is HttpMissionRepository) return fromScope;
+    return null;
+  }
 
-  static const _souls = <_Soul>[
-    _Soul(
-      name: 'Emeka Onyema',
-      date: 'May 20, 2025',
-      photo: 'assets/images/profile_chibuikem.png',
-      isNew: true,
-    ),
-    _Soul(
-      name: 'Sarah Ibrahim',
-      date: 'May 20, 2025',
-      photo: 'assets/images/member_avatar.png',
-      isNew: true,
-    ),
-    _Soul(
-      name: 'John Musa',
-      date: 'May 18, 2025',
-      photo: 'assets/images/mentor_avatar.png',
-      isNew: false,
-    ),
-    _Soul(
-      name: 'Blessing Uche',
-      date: 'May 17, 2025',
-      photo: 'assets/images/member_avatar.png',
-      isNew: false,
-    ),
-    _Soul(
-      name: 'David Okafor',
-      date: 'May 16, 2025',
-      photo: 'assets/images/member_avatar.png',
-      isNew: true,
-    ),
-    _Soul(
-      name: 'Joy Naro',
-      date: 'May 15, 2025',
-      photo: 'assets/images/mentor_avatar.png',
-      isNew: false,
-    ),
-    _Soul(
-      name: 'Daniel Dandeli',
-      date: 'May 14, 2025',
-      photo: 'assets/images/profile_chibuikem.png',
-      isNew: false,
-    ),
-    _Soul(
-      name: 'Tunde Adeboyo',
-      date: 'May 13, 2025',
-      photo: 'assets/images/member_avatar.png',
-      isNew: true,
-    ),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+  }
 
-  List<_Soul> get _visible =>
-      _tab == 0 ? _souls : _souls.where((soul) => !soul.isNew).toList();
+  Future<void> _load() async {
+    final repo = _httpRepo;
+    if (repo == null || !repo.adminOpsBound) {
+      setState(() {
+        _loading = false;
+        _souls = const [];
+        _error = null;
+      });
+      return;
+    }
+
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+
+    final result = await repo.listSouls(const {'per_page': '50'});
+    if (!mounted) return;
+    switch (result) {
+      case AppSuccess(:final value):
+        setState(() {
+          _souls = value;
+          _loading = false;
+        });
+      case AppError(:final failure):
+        setState(() {
+          _souls = const [];
+          _error = failure.message;
+          _loading = false;
+        });
+    }
+  }
 
   void _onBack() {
     if (Navigator.of(context).canPop()) {
@@ -80,25 +86,66 @@ class _SoulsFollowupScreenState extends State<SoulsFollowupScreen> {
     }
   }
 
-  void _openFollowup() => fhcPush(context, FhcRoutes.messages);
+  void _openAddSoul() => fhcPush(context, FhcRoutes.soulAdd);
+
+  void _openSoul(String id) {
+    fhcPush(context, '/mission/soul/$id');
+  }
+
+  void _selectSoul(JsonObject soul) {
+    setState(() => _selected = soul);
+    final id = (soul['id'] as String?)?.trim() ?? '';
+    if (_tab == 0 && id.isNotEmpty) {
+      _openSoul(id);
+    }
+  }
+
+  List<JsonObject> get _filtered {
+    if (_tab == 0) {
+      return [
+        for (final soul in _souls)
+          if ((soul['status'] as String?) == 'new' ||
+              soul['follow_up_completed_at'] == null)
+            soul,
+      ];
+    }
+    return [
+      for (final soul in _souls)
+        if (soul['last_follow_up_at'] != null ||
+            soul['mentor_assignment_id'] != null)
+          soul,
+    ];
+  }
 
   @override
   Widget build(BuildContext context) {
-    final visible = _visible;
+    final repo = _httpRepo;
+    final bound = repo?.adminOpsBound == true;
+    final tabs = [
+      fhcT(context, 'mission.newSouls', fallback: 'New Souls'),
+      fhcT(context, 'mission.followUp', fallback: 'Follow-up'),
+    ];
 
     return FhcDevicePage(
       backgroundColor: FhcColors.canvas,
       child: Column(
         children: [
-          FhcTopBar(title: 'Soul Follow-up', onBack: _onBack),
+          FhcTopBar(
+            title: fhcT(
+              context,
+              'mission.soulFollowUp',
+              fallback: 'Soul Follow-up',
+            ),
+            onBack: _onBack,
+          ),
           ColoredBox(
             color: FhcColors.white,
             child: Row(
               children: [
-                for (var i = 0; i < _tabs.length; i++)
+                for (var i = 0; i < tabs.length; i++)
                   Expanded(
                     child: _SoulsTab(
-                      label: '${_tabs[i].$1} (${_tabs[i].$2})',
+                      label: tabs[i],
                       active: _tab == i,
                       onTap: () => setState(() => _tab = i),
                     ),
@@ -106,52 +153,168 @@ class _SoulsFollowupScreenState extends State<SoulsFollowupScreen> {
               ],
             ),
           ),
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-              children: [
-                FhcSurfaceCard(
-                  padding: EdgeInsets.zero,
-                  child: Column(
-                    children: [
-                      for (var i = 0; i < visible.length; i++) ...[
-                        if (i > 0)
-                          const Divider(height: 1, color: FhcColors.border),
-                        _SoulRow(
-                          soul: visible[i],
-                          followUpBlue: _followUpBlue,
-                          onFollowUp: _openFollowup,
-                        ),
-                      ],
-                    ],
-                  ),
+          Expanded(child: _body(bound: bound)),
+          if (_tab == 1 &&
+              _selected != null &&
+              looksLikeMissionUlid('${_selected!['id'] ?? ''}'))
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: SoulFollowUpForm(
+                  key: ValueKey(_selected!['id']),
+                  soulId: '${_selected!['id']}',
+                  mentorAssignmentId:
+                      (_selected!['mentor_assignment_id'] as String?)?.trim(),
+                  repository: _missionRepo,
                 ),
-              ],
+              ),
             ),
-          ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-            child: FhcPrimaryButton(label: 'Add New Soul', onPressed: () {}),
+            child: FhcPrimaryButton(
+              label: fhcT(
+                context,
+                'mission.addNewSoul',
+                fallback: 'Add New Soul',
+              ),
+              onPressed: _openAddSoul,
+            ),
           ),
           const FhcBottomNavigation(selected: 1),
         ],
       ),
     );
   }
-}
 
-class _Soul {
-  const _Soul({
-    required this.name,
-    required this.date,
-    required this.photo,
-    required this.isNew,
-  });
-
-  final String name;
-  final String date;
-  final String photo;
-  final bool isNew;
+  Widget _body({required bool bound}) {
+    if (!bound) {
+      return FhcEmptyState(
+        icon: Icons.lock_outline,
+        title: fhcT(
+          context,
+          'mission.soulListNeedsAdmin',
+          fallback: 'Soul list needs admin transport',
+        ),
+        message: fhcT(
+          context,
+          'mission.soulListNeedsAdminCopy',
+          fallback:
+              'GET /admin/mission/souls requires bearer token, device binding, '
+              'X-Scope-Type/X-Scope-ID, and recent MFA. Capture still needs a '
+              'crusade ULID via Add Soul.',
+        ),
+        actionLabel: fhcT(
+          context,
+          'mission.addNewSoul',
+          fallback: 'Add New Soul',
+        ),
+        onAction: _openAddSoul,
+      );
+    }
+    if (_loading) {
+      return const Center(child: CircularProgressIndicator.adaptive());
+    }
+    if (_error != null) {
+      return FhcErrorState(
+        title: fhcT(
+          context,
+          'mission.unableToLoadSouls',
+          fallback: 'Unable to load souls',
+        ),
+        message: _error!,
+        onRetry: _load,
+      );
+    }
+    final rows = _filtered;
+    if (rows.isEmpty) {
+      return FhcEmptyState(
+        icon: Icons.favorite_outline,
+        title: _tab == 0
+            ? fhcT(context, 'mission.noNewSouls', fallback: 'No new souls yet')
+            : fhcT(
+                context,
+                'mission.noFollowUpRows',
+                fallback: 'No follow-up rows yet',
+              ),
+        message: fhcT(
+          context,
+          'mission.soulsAppearAfterRefresh',
+          fallback:
+              'Captured soul journeys from POST /admin/mission/crusades/{id}/souls '
+              'appear here after list refresh.',
+        ),
+        actionLabel: fhcT(
+          context,
+          'mission.addNewSoul',
+          fallback: 'Add New Soul',
+        ),
+        onAction: _openAddSoul,
+      );
+    }
+    return ListView.separated(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 18),
+      itemCount: rows.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 8),
+      itemBuilder: (context, index) {
+        final soul = rows[index];
+        final id = (soul['id'] as String?)?.trim() ?? '';
+        final status = (soul['status'] as String?)?.trim() ?? 'unknown';
+        final crusadeId = (soul['crusade_id'] as String?)?.trim() ?? '—';
+        return FhcSurfaceCard(
+          child: InkWell(
+            onTap: id.isEmpty ? null : () => _selectSoul(soul),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                children: [
+                  const Icon(Icons.person_outline, color: FhcColors.green),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          id.isEmpty
+                              ? fhcT(
+                                  context,
+                                  'mission.soulJourney',
+                                  fallback: 'Soul journey',
+                                )
+                              : id,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            fontFamily: 'monospace',
+                          ),
+                        ),
+                        Text(
+                          fhcT(
+                            context,
+                            'mission.soulStatusLine',
+                            fallback: 'Status: {status} · Crusade: {crusadeId}',
+                            args: {'status': status, 'crusadeId': crusadeId},
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: FhcColors.muted,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Icon(Icons.chevron_right, color: FhcColors.muted),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
 }
 
 class _SoulsTab extends StatelessWidget {
@@ -193,174 +356,6 @@ class _SoulsTab extends StatelessWidget {
               color: active ? FhcColors.green : FhcColors.muted,
               fontWeight: active ? FontWeight.w700 : FontWeight.w500,
               height: 1.2,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SoulRow extends StatelessWidget {
-  const _SoulRow({
-    required this.soul,
-    required this.followUpBlue,
-    required this.onFollowUp,
-  });
-
-  final _Soul soul;
-  final Color followUpBlue;
-  final VoidCallback onFollowUp;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
-      child: Row(
-        children: [
-          _SoulPhoto(asset: soul.photo),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  soul.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: FhcColors.ink,
-                    height: 1.2,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '${soul.isNew ? 'New' : 'Follow-up'} • ${soul.date}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 11,
-                    color: FhcColors.muted,
-                    height: 1.2,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 6),
-          _StatusBadge(
-            label: soul.isNew ? 'New' : 'Follow-up',
-            color: soul.isNew ? FhcColors.orange : followUpBlue,
-            filled: soul.isNew,
-          ),
-          const SizedBox(width: 6),
-          _FollowupButton(onPressed: onFollowUp),
-        ],
-      ),
-    );
-  }
-}
-
-class _SoulPhoto extends StatelessWidget {
-  const _SoulPhoto({required this.asset});
-
-  final String asset;
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipOval(
-      child: Image.asset(
-        asset,
-        width: 40,
-        height: 40,
-        fit: BoxFit.cover,
-        errorBuilder:
-            (_, __, ___) => const ColoredBox(
-              color: FhcColors.mint,
-              child: SizedBox(
-                width: 40,
-                height: 40,
-                child: Icon(
-                  Icons.person_outline,
-                  size: 20,
-                  color: FhcColors.green,
-                ),
-              ),
-            ),
-      ),
-    );
-  }
-}
-
-class _StatusBadge extends StatelessWidget {
-  const _StatusBadge({
-    required this.label,
-    required this.color,
-    required this.filled,
-  });
-
-  final String label;
-  final Color color;
-  final bool filled;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: filled ? color : color.withValues(alpha: 0.16),
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: Text(
-        label,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          fontSize: 10,
-          fontWeight: FontWeight.w700,
-          color: filled ? FhcColors.white : color,
-          height: 1.1,
-        ),
-      ),
-    );
-  }
-}
-
-class _FollowupButton extends StatelessWidget {
-  const _FollowupButton({required this.onPressed});
-
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      button: true,
-      label: 'Follow-up',
-      child: SizedBox(
-        height: 32,
-        child: FilledButton(
-          onPressed: onPressed,
-          style: FilledButton.styleFrom(
-            backgroundColor: FhcColors.green,
-            foregroundColor: FhcColors.white,
-            minimumSize: Size.zero,
-            padding: const EdgeInsets.symmetric(horizontal: 10),
-            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            visualDensity: VisualDensity.compact,
-            elevation: 0,
-            shadowColor: Colors.transparent,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(6),
-            ),
-          ),
-          child: const Text(
-            'Follow-up',
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              height: 1.1,
             ),
           ),
         ),

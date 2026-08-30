@@ -1,3 +1,4 @@
+export 'screens/kingdom_journey_screens.dart';
 export 'screens/language_location_screen.dart';
 export 'screens/module_hub_screen.dart';
 export 'screens/modules_screen.dart';
@@ -6,6 +7,9 @@ export 'screens/onboarding_discover_screen.dart';
 export 'screens/onboarding_multiply_screen.dart';
 export 'screens/role_selection_screen.dart';
 export 'screens/sign_in_screen.dart';
+export 'screens/sign_up_screen.dart';
+export 'screens/forgot_password_screen.dart';
+export 'screens/reset_password_screen.dart';
 export 'screens/splash_screen.dart';
 export 'screens/two_factor_screen.dart';
 export 'screens/verify_phone_screen.dart';

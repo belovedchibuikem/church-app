@@ -1,185 +1,297 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/api/app_failure.dart';
+import '../../../../core/contracts/mobile_repository_contracts.dart';
 import '../../../../core/design_system/fhc_tokens.dart';
+import '../../../../core/di/app_services_scope.dart';
+import '../../../../core/l10n/locale_scope.dart';
+import '../../../../shared/widgets/async_state.dart';
 import '../../../../shared/widgets/fhc_components.dart';
 import '../../../foundation/presentation/fhc_nav.dart';
 
 class PrayerScreen extends StatefulWidget {
-  const PrayerScreen({super.key});
+  const PrayerScreen({super.key, this.prayerRepository});
+
+  final PrayerRepository? prayerRepository;
 
   @override
   State<PrayerScreen> createState() => _PrayerScreenState();
 }
 
 class _PrayerScreenState extends State<PrayerScreen> {
-  int _tab = 0;
+  int _tab = 1;
+  FhcAsyncValue<List<_PrayerItem>> _state = const FhcAsyncValue.loading();
 
-  static const _tabs = <String>['Personal', 'Church', 'Global'];
+  PrayerRepository? get _repo =>
+      widget.prayerRepository ??
+      AppServicesScope.maybeOf(context)?.prayerRepository;
 
-  static const _requests = <List<_PrayerRequest>>[
-    [
-      _PrayerRequest(
-        title: 'Healing for my mother',
-        detail: 'May 20, 2025 • 120 Praying',
-        icon: Icons.people_outline,
-      ),
-      _PrayerRequest(
-        title: 'Financial breakthrough',
-        detail: 'May 19, 2025 • 98 Praying',
-        icon: Icons.people_outline,
-      ),
-      _PrayerRequest(
-        title: 'Wisdom for a decision',
-        detail: 'May 18, 2025 • 76 Praying',
-        icon: Icons.balance,
-      ),
-    ],
-    [
-      _PrayerRequest(
-        title: 'Restoration of our youth',
-        detail: 'May 12, 2025 • 56 Praying',
-        icon: Icons.groups_outlined,
-      ),
-      _PrayerRequest(
-        title: 'Provision for the church building',
-        detail: 'May 8, 2025 • 41 Praying',
-        icon: Icons.church_outlined,
-      ),
-      _PrayerRequest(
-        title: 'First timers this Sunday',
-        detail: 'May 6, 2025 • 19 Praying',
-        icon: Icons.volunteer_activism_outlined,
-      ),
-    ],
-    [
-      _PrayerRequest(
-        title: 'Peace in the nations',
-        detail: 'May 14, 2025 • 312 Praying',
-        icon: Icons.public,
-      ),
-      _PrayerRequest(
-        title: 'Revival across Europe',
-        detail: 'May 11, 2025 • 148 Praying',
-        icon: Icons.volunteer_activism_outlined,
-      ),
-      _PrayerRequest(
-        title: 'Open doors in China',
-        detail: 'May 9, 2025 • 89 Praying',
-        icon: Icons.public,
-      ),
-    ],
-  ];
-
-  static const _answered = <List<_AnsweredPrayer>>[
-    [
-      _AnsweredPrayer(
-        title: 'Job opportunity',
-        detail: 'Answered on May 10, 2025',
-      ),
-    ],
-    [
-      _AnsweredPrayer(
-        title: 'Building project funded',
-        detail: 'Answered on May 4, 2025',
-      ),
-    ],
-    [
-      _AnsweredPrayer(
-        title: 'Peace over the crusade',
-        detail: 'Answered on May 2, 2025',
-      ),
-    ],
-  ];
-
-  static const _sectionTitles = <String>[
-    'Your Prayer Requests',
-    'Church Prayer Requests',
-    'Global Prayer Requests',
-  ];
-
-  void _goBack() {
-    if (Navigator.of(context).canPop()) {
-      Navigator.of(context).pop();
-    } else {
-      fhcGo(context, FhcRoutes.hub);
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_state is FhcAsyncLoading) {
+      _load();
     }
   }
 
-  void _newRequest() => fhcPush(context, FhcRoutes.prayerNew);
+  Future<void> _load() async {
+    final repo = _repo;
+    if (repo == null) {
+      setState(() {
+        _state = FhcAsyncValue.unavailable(
+          message: fhcT(
+            context,
+            'member.prayer.apiUnavailable',
+            fallback:
+                'Prayer requests are waiting on the Laravel prayers API. '
+                'No fixture list is shown.',
+          ),
+        );
+      });
+      return;
+    }
+
+    setState(() => _state = const FhcAsyncValue.loading());
+    final result = await repo.listOwn();
+    if (!mounted) return;
+
+    switch (result) {
+      case AppSuccess(:final value):
+        if (value.isEmpty) {
+          setState(() {
+            _state = FhcAsyncValue.empty(
+              message: fhcT(
+                context,
+                'member.prayer.noneYet',
+                fallback: 'You have not shared a prayer request yet.',
+              ),
+            );
+          });
+          return;
+        }
+        setState(() {
+          _state = FhcAsyncValue.data([
+            for (final item in value) _PrayerItem.fromJson(item, context),
+          ]);
+        });
+      case AppError(:final failure):
+        setState(() => _state = FhcAsyncValue.error(failure));
+    }
+  }
+
+  void _back() {
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+    } else {
+      fhcGo(context, FhcRoutes.discover);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final requests = _requests[_tab];
-    final answered = _answered[_tab];
-
     return FhcDevicePage(
       backgroundColor: FhcColors.white,
       child: Column(
         children: [
-          FhcTopBar(title: 'PRAYER', onBack: _goBack),
-          ColoredBox(
-            color: FhcColors.white,
-            child: Row(
-              children: [
-                for (var i = 0; i < _tabs.length; i++)
-                  Expanded(
-                    child: _PrayerTab(
-                      label: _tabs[i],
-                      active: i == _tab,
-                      onTap: () => setState(() => _tab = i),
+          FhcTopBar(
+            title: fhcT(
+              context,
+              'member.prayer.requests',
+              fallback: 'Prayer Requests',
+            ),
+            onBack: _back,
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Container(
+              width: double.infinity,
+              height: 160,
+              padding: const EdgeInsets.fromLTRB(16, 17, 16, 14),
+              decoration: BoxDecoration(
+                color: FhcColors.greenDark,
+                borderRadius: BorderRadius.circular(FhcRadius.card),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    fhcT(
+                      context,
+                      'member.prayer.bannerTitle',
+                      fallback: 'We believe in the\npower of prayer.',
+                    ),
+                    style: const TextStyle(
+                      fontSize: 18,
+                      height: 1.25,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
                     ),
                   ),
-              ],
+                  const SizedBox(height: 9),
+                  Text(
+                    fhcT(
+                      context,
+                      'member.prayer.bannerCopy',
+                      fallback:
+                          'Share your request and\nour team will pray with you.',
+                    ),
+                    style: const TextStyle(
+                      fontSize: 11,
+                      height: 1.35,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const Spacer(),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 40,
+                    child: FilledButton(
+                      onPressed: () => fhcPush(context, FhcRoutes.prayerNew),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        foregroundColor: FhcColors.greenDark,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(FhcRadius.sm),
+                        ),
+                      ),
+                      child: Text(
+                        fhcT(
+                          context,
+                          'member.prayer.newRequest',
+                          fallback: 'New Prayer Request',
+                        ),
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Expanded(
+                child: _PrayerTab(
+                  label: fhcT(context, 'common.all', fallback: 'All'),
+                  active: _tab == 0,
+                  onTap: () => setState(() => _tab = 0),
+                ),
+              ),
+              Expanded(
+                child: _PrayerTab(
+                  label: fhcT(
+                    context,
+                    'member.prayer.myRequests',
+                    fallback: 'My Requests',
+                  ),
+                  active: _tab == 1,
+                  onTap: () => setState(() => _tab = 1),
+                ),
+              ),
+            ],
           ),
           Expanded(
-            child: ListView(
-              physics: const ClampingScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 18),
-              children: [
-                _PrayerHero(onNewRequest: _newRequest),
-                const SizedBox(height: 18),
-                Text(
-                  _sectionTitles[_tab],
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: FhcColors.ink,
+            child: FhcAsyncBody<List<_PrayerItem>>(
+              value: _state,
+              onRetry: _load,
+              emptyTitle: fhcT(
+                context,
+                'member.prayer.emptyTitle',
+                fallback: 'No prayer requests',
+              ),
+              emptyMessage: fhcT(
+                context,
+                'member.prayer.emptyCopy',
+                fallback: 'Share a request and others can pray with you.',
+              ),
+              unavailableTitle: fhcT(
+                context,
+                'member.prayer.unavailableTitle',
+                fallback: 'Prayer unavailable',
+              ),
+              builder: (context, items) {
+                final visible = _tab == 1
+                    ? items.where((item) => item.isOwn).toList()
+                    : items;
+                if (visible.isEmpty) {
+                  return FhcEmptyState(
+                    title: fhcT(
+                      context,
+                      'member.prayer.tabEmptyTitle',
+                      fallback: 'Nothing in this tab',
+                    ),
+                    message: fhcT(
+                      context,
+                      'member.prayer.tabEmptyCopy',
+                      fallback: 'Try the other tab or create a new request.',
+                    ),
+                  );
+                }
+                return RefreshIndicator(
+                  onRefresh: _load,
+                  child: ListView.separated(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                    itemCount: visible.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder:
+                        (context, index) => _PrayerRow(item: visible[index]),
                   ),
-                ),
-                const SizedBox(height: 6),
-                for (var i = 0; i < requests.length; i++) ...[
-                  if (i > 0)
-                    const Divider(height: 1, color: FhcColors.border),
-                  _RequestRow(request: requests[i]),
-                ],
-                const SizedBox(height: 16),
-                const Text(
-                  'Answered Prayers',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: FhcColors.ink,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                for (var i = 0; i < answered.length; i++) ...[
-                  if (i > 0)
-                    const Divider(height: 1, color: FhcColors.border),
-                  _AnsweredRow(item: answered[i]),
-                ],
-              ],
+                );
+              },
             ),
           ),
-          const FhcBottomNavigation(selected: 0),
+          const FhcBottomNavigation(selected: 3),
         ],
       ),
     );
   }
+}
+
+class _PrayerItem {
+  const _PrayerItem({
+    required this.id,
+    required this.title,
+    required this.date,
+    required this.meta,
+    required this.isOwn,
+    required this.icon,
+  });
+
+  factory _PrayerItem.fromJson(JsonObject json, BuildContext context) {
+    final dateRaw = '${json['created_at'] ?? json['submitted_at'] ?? ''}';
+    final parsed = DateTime.tryParse(dateRaw);
+    final praying = json['praying_count'] ?? json['supporters'] ?? '';
+    return _PrayerItem(
+      id: '${json['id'] ?? json['ulid'] ?? ''}',
+      title:
+          '${json['subject'] ?? json['title'] ?? json['request'] ?? json['body'] ?? fhcT(context, 'member.prayer', fallback: 'Prayer')}',
+      date:
+          parsed == null
+              ? (dateRaw.isEmpty ? '—' : dateRaw)
+              : '${parsed.year}-${parsed.month.toString().padLeft(2, '0')}-${parsed.day.toString().padLeft(2, '0')}',
+      meta: praying.toString().isEmpty
+          ? '${json['status'] ?? fhcT(context, 'member.prayer.shared', fallback: 'Shared')}'
+          : fhcT(
+              context,
+              'member.prayer.prayingCount',
+              args: {'count': '$praying'},
+              fallback: '{count} Praying',
+            ),
+      isOwn: json['is_own'] != false,
+      icon: Icons.volunteer_activism_outlined,
+    );
+  }
+
+  final String id;
+  final String title;
+  final String date;
+  final String meta;
+  final bool isOwn;
+  final IconData icon;
 }
 
 class _PrayerTab extends StatelessWidget {
@@ -188,7 +300,6 @@ class _PrayerTab extends StatelessWidget {
     required this.active,
     required this.onTap,
   });
-
   final String label;
   final bool active;
   final VoidCallback onTap;
@@ -198,11 +309,10 @@ class _PrayerTab extends StatelessWidget {
     return Semantics(
       button: true,
       selected: active,
-      label: label,
       child: InkWell(
         onTap: onTap,
         child: Container(
-          height: 44,
+          height: 49,
           alignment: Alignment.center,
           decoration: BoxDecoration(
             border: Border(
@@ -214,13 +324,10 @@ class _PrayerTab extends StatelessWidget {
           ),
           child: Text(
             label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              fontSize: 12,
-              color: active ? FhcColors.green : FhcColors.muted,
+              fontSize: 11,
+              color: active ? FhcColors.green : FhcColors.ink,
               fontWeight: active ? FontWeight.w700 : FontWeight.w500,
-              height: 1.2,
             ),
           ),
         ),
@@ -229,318 +336,81 @@ class _PrayerTab extends StatelessWidget {
   }
 }
 
-class _PrayerHero extends StatelessWidget {
-  const _PrayerHero({required this.onNewRequest});
-
-  final VoidCallback onNewRequest;
+class _PrayerRow extends StatelessWidget {
+  const _PrayerRow({required this.item});
+  final _PrayerItem item;
 
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(FhcRadius.card),
-      child: SizedBox(
-        height: 148,
-        width: double.infinity,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            const ColoredBox(color: FhcColors.greenDeep),
-            Image.asset(
-              'assets/images/prayer_hero.png',
-              fit: BoxFit.cover,
-              alignment: Alignment.center,
-              errorBuilder:
-                  (context, error, stackTrace) =>
-                      const ColoredBox(color: FhcColors.greenDeep),
-            ),
-            const DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [Color(0x99003D2D), Color(0xCC003D2D)],
+    return Semantics(
+      button: true,
+      label: '${item.title}, ${item.meta}',
+      child: InkWell(
+        onTap: () {
+          // Detail route not published; keep list as the bound surface.
+        },
+        child: SizedBox(
+          height: 72,
+          child: Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: const BoxDecoration(
+                  color: FhcColors.mint,
+                  shape: BoxShape.circle,
                 ),
+                child: Icon(item.icon, size: 19, color: FhcColors.greenDark),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'How can we pray for you?',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: FhcColors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      height: 1.2,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  const Expanded(
-                    child: Text(
-                      'Cast all your anxiety on Him because He cares for you. — 1 Peter 5:7',
-                      maxLines: 2,
+              const SizedBox(width: 11),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item.title,
+                      maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: FhcColors.white,
-                        fontSize: 11,
-                        height: 1.35,
-                        fontWeight: FontWeight.w400,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: FhcColors.ink,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
-                  ),
-                  Center(
-                    child: SizedBox(
-                      height: 34,
-                      child: OutlinedButton(
-                        onPressed: onNewRequest,
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: FhcColors.white,
-                          side: const BorderSide(
-                            color: FhcColors.white,
-                            width: 1.2,
-                          ),
-                          minimumSize: Size.zero,
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          visualDensity: VisualDensity.compact,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                        ),
-                        child: const Text(
-                          'New Prayer Request',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            height: 1.1,
-                            color: FhcColors.white,
-                          ),
-                        ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${item.date}  •  ${item.meta}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 9.5,
+                        color: FhcColors.muted,
                       ),
                     ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _PrayerRequest {
-  const _PrayerRequest({
-    required this.title,
-    required this.detail,
-    required this.icon,
-  });
-
-  final String title;
-  final String detail;
-  final IconData icon;
-}
-
-class _RequestRow extends StatelessWidget {
-  const _RequestRow({required this.request});
-
-  final _PrayerRequest request;
-
-  @override
-  Widget build(BuildContext context) {
-    return ConstrainedBox(
-      constraints: const BoxConstraints(minHeight: FhcSizes.minTap),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        child: Row(
-          children: [
-            FhcCircleIcon(icon: request.icon, size: 40),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    request.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: FhcColors.ink,
-                      height: 1.2,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    request.detail,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 11,
-                      color: FhcColors.muted,
-                      height: 1.2,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            const Icon(
-              Icons.chevron_right,
-              size: 20,
-              color: FhcColors.hint,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _AnsweredPrayer {
-  const _AnsweredPrayer({required this.title, required this.detail});
-
-  final String title;
-  final String detail;
-}
-
-class _AnsweredRow extends StatelessWidget {
-  const _AnsweredRow({required this.item});
-
-  final _AnsweredPrayer item;
-
-  @override
-  Widget build(BuildContext context) {
-    return ConstrainedBox(
-      constraints: const BoxConstraints(minHeight: FhcSizes.minTap),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        child: Row(
-          children: [
-            const _AnsweredAvatar(),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    item.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: FhcColors.ink,
-                      height: 1.2,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    item.detail,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 11,
-                      color: FhcColors.muted,
-                      height: 1.2,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            const _ChurchThumb(),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _AnsweredAvatar extends StatelessWidget {
-  const _AnsweredAvatar();
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 40,
-      height: 40,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          ClipOval(
-            child: Image.asset(
-              'assets/images/prayer_answered_avatar.png',
-              width: 40,
-              height: 40,
-              fit: BoxFit.cover,
-              errorBuilder:
-                  (context, error, stackTrace) => Image.asset(
-                    'assets/images/prayer_avatar.png',
-                    width: 40,
-                    height: 40,
-                    fit: BoxFit.cover,
-                    errorBuilder:
-                        (context, error, stackTrace) => const FhcCircleIcon(
-                          icon: Icons.person_outline,
-                          size: 40,
-                        ),
-                  ),
-            ),
-          ),
-          Positioned(
-            right: -2,
-            bottom: -2,
-            child: Container(
-              width: 16,
-              height: 16,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: FhcColors.green,
-                shape: BoxShape.circle,
-                border: Border.all(color: FhcColors.white, width: 1.5),
-              ),
-              child: const Icon(
-                Icons.check,
-                size: 10,
-                color: FhcColors.white,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ChurchThumb extends StatelessWidget {
-  const _ChurchThumb();
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(6),
-      child: SizedBox(
-        width: 48,
-        height: 36,
-        child: Image.asset(
-          'assets/images/prayer_answered_church.png',
-          fit: BoxFit.cover,
-          alignment: Alignment.center,
-          errorBuilder:
-              (context, error, stackTrace) => const ColoredBox(
-                color: FhcColors.mint,
-                child: Icon(
-                  Icons.church_outlined,
-                  size: 18,
-                  color: FhcColors.green,
+                  ],
                 ),
               ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 7,
+                ),
+                decoration: BoxDecoration(
+                  color: FhcColors.mint,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  fhcT(context, 'common.open', fallback: 'Open'),
+                  style: const TextStyle(
+                    fontSize: 9,
+                    fontWeight: FontWeight.w700,
+                    color: FhcColors.greenDark,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

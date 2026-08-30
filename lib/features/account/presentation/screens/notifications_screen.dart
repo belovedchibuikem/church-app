@@ -1,11 +1,18 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/api/app_failure.dart';
+import '../../../../core/contracts/mobile_repository_contracts.dart';
 import '../../../../core/design_system/fhc_tokens.dart';
+import '../../../../core/di/app_services_scope.dart';
+import '../../../../core/l10n/locale_scope.dart';
+import '../../../../shared/widgets/async_state.dart';
 import '../../../../shared/widgets/fhc_components.dart';
 import '../../../foundation/presentation/fhc_nav.dart';
 
 class NotificationsScreen extends StatefulWidget {
-  const NotificationsScreen({super.key});
+  const NotificationsScreen({super.key, this.notificationRepository});
+
+  final NotificationRepository? notificationRepository;
 
   @override
   State<NotificationsScreen> createState() => _NotificationsScreenState();
@@ -13,125 +20,65 @@ class NotificationsScreen extends StatefulWidget {
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
   int _tab = 0;
+  FhcAsyncValue<List<_Notice>> _state = const FhcAsyncValue.loading();
 
-  late List<_NotificationItem> _items;
+  NotificationRepository? get _repo =>
+      widget.notificationRepository ??
+      AppServicesScope.maybeOf(context)?.notificationRepository;
 
   @override
-  void initState() {
-    super.initState();
-    _items = [
-      const _NotificationItem(
-        icon: Icons.assignment_outlined,
-        color: FhcColors.orange,
-        title: 'KCA Assignment Due',
-        subtitle: 'Submit your Leadership Reflection by May 30, 2025.',
-        time: '2m ago',
-        route: FhcRoutes.kcaAssignments,
-      ),
-      const _NotificationItem(
-        icon: Icons.description_outlined,
-        color: FhcColors.blue,
-        title: 'Home Church Report',
-        subtitle: 'Your monthly report is due on May 31, 2025.',
-        time: '15m ago',
-        route: FhcRoutes.homeChurch,
-      ),
-      const _NotificationItem(
-        icon: Icons.event_outlined,
-        color: FhcColors.orange,
-        title: 'Event Reminder',
-        subtitle: 'Annual Convention 2025 tomorrow at 9:00 AM',
-        time: '1h ago',
-        route: FhcRoutes.events,
-      ),
-      const _NotificationItem(
-        icon: Icons.chat_bubble_outline,
-        color: FhcColors.muted,
-        title: 'New Message',
-        subtitle: 'Pastor John sent you a message',
-        time: '2h ago',
-        route: FhcRoutes.kcaMentor,
-      ),
-      const _NotificationItem(
-        icon: Icons.public,
-        color: FhcColors.purple,
-        title: 'Mission Update',
-        subtitle: 'Abuja City Crusade report is available.',
-        time: '5h ago',
-        route: FhcRoutes.mission,
-      ),
-      const _NotificationItem(
-        icon: Icons.volunteer_activism_outlined,
-        color: FhcColors.green,
-        title: 'Prayer Request',
-        subtitle: 'Sister Grace asked the church to pray with her.',
-        time: '8h ago',
-        route: FhcRoutes.prayer,
-      ),
-      const _NotificationItem(
-        icon: Icons.alternate_email,
-        color: FhcColors.blue,
-        title: 'You were mentioned',
-        subtitle: 'Pastor John mentioned you in Leadership & Influence',
-        time: 'Yesterday',
-        route: FhcRoutes.kcaMentor,
-        mention: true,
-      ),
-      const _NotificationItem(
-        icon: Icons.campaign_outlined,
-        color: FhcColors.wine,
-        title: 'New Sermon Uploaded',
-        subtitle: 'Sunday Worship is now available to watch.',
-        time: 'Yesterday',
-        route: FhcRoutes.sermons,
-      ),
-      const _NotificationItem(
-        icon: Icons.group_add_outlined,
-        color: FhcColors.gold,
-        title: 'Group Invitation',
-        subtitle: 'You have been invited to Young Adults Fellowship.',
-        time: '2 days ago',
-        route: FhcRoutes.groups,
-        mention: true,
-      ),
-      const _NotificationItem(
-        icon: Icons.chat_bubble_outline,
-        color: FhcColors.muted,
-        title: 'New Message',
-        subtitle: 'Church admin sent you a welcome message.',
-        time: '2 days ago',
-        route: FhcRoutes.messages,
-      ),
-      const _NotificationItem(
-        icon: Icons.event_outlined,
-        color: FhcColors.orange,
-        title: 'Event Reminder',
-        subtitle: 'KCA Graduation Ceremony is on Jun 15, 2025.',
-        time: '3 days ago',
-        route: FhcRoutes.events,
-      ),
-      const _NotificationItem(
-        icon: Icons.volunteer_activism_outlined,
-        color: FhcColors.green,
-        title: 'Prayer Update',
-        subtitle: 'Your prayer request has been received.',
-        time: '4 days ago',
-        route: FhcRoutes.prayer,
-      ),
-    ];
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_state is FhcAsyncLoading) {
+      _load();
+    }
   }
 
-  int get _unreadCount => _items.where((item) => item.unread).length;
+  Future<void> _load() async {
+    final repo = _repo;
+    if (repo == null) {
+      setState(() {
+        _state = FhcAsyncValue.unavailable(
+          message: fhcT(
+            context,
+            'account.notificationsWaiting',
+            fallback:
+                'Notifications are waiting on the Laravel notifications API.',
+          ),
+        );
+      });
+      return;
+    }
 
-  List<_NotificationItem> get _visible {
-    return switch (_tab) {
-      1 => _items.where((item) => item.unread).toList(),
-      2 => _items.where((item) => item.mention).toList(),
-      _ => _items,
-    };
+    setState(() => _state = const FhcAsyncValue.loading());
+    final result = await repo.list();
+    if (!mounted) return;
+
+    switch (result) {
+      case AppSuccess(:final value):
+        if (value.isEmpty) {
+          setState(() {
+            _state = FhcAsyncValue.empty(
+              message: fhcT(
+                context,
+                'account.noNotifications',
+                fallback: 'No notifications.',
+              ),
+            );
+          });
+          return;
+        }
+        setState(() {
+          _state = FhcAsyncValue.data([
+            for (final item in value) _Notice.fromJson(item),
+          ]);
+        });
+      case AppError(:final failure):
+        setState(() => _state = FhcAsyncValue.error(failure));
+    }
   }
 
-  void _goBack() {
+  void _back() {
     if (Navigator.of(context).canPop()) {
       Navigator.of(context).pop();
     } else {
@@ -139,203 +86,224 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     }
   }
 
-  void _markAllRead() {
-    setState(() {
-      _items = [for (final item in _items) item.copyWith(unread: false)];
-    });
+  List<_Notice> _visible(List<_Notice> notices) {
+    if (_tab == 1) return notices.where((item) => item.unread).toList();
+    if (_tab == 2) return notices.where((item) => item.mention).toList();
+    return notices;
   }
 
-  void _open(_NotificationItem item) {
-    setState(() {
-      _items = [
-        for (final current in _items)
-          current == item ? current.copyWith(unread: false) : current,
-      ];
-    });
-    fhcPush(context, item.route);
+  Future<void> _open(_Notice item) async {
+    final repo = _repo;
+    if (repo != null && item.unread && item.id.isNotEmpty) {
+      await repo.markRead(item.id);
+      if (!mounted) return;
+      final current = _state;
+      if (current is FhcAsyncData<List<_Notice>>) {
+        setState(() {
+          _state = FhcAsyncValue.data([
+            for (final notice in current.value)
+              notice.id == item.id ? notice.copyWith(unread: false) : notice,
+          ]);
+        });
+      }
+      final resolved = await repo.resolveDestination(item.id);
+      if (!mounted) return;
+      if (resolved is AppSuccess<JsonObject>) {
+        final dest =
+            '${resolved.value['destination'] ?? item.route ?? ''}'.trim();
+        if (dest.isNotEmpty) {
+          fhcPush(context, dest.startsWith('/') ? dest : '/$dest');
+          return;
+        }
+      }
+    }
+    if (item.route != null && item.route!.isNotEmpty) {
+      fhcPush(context, item.route!);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final unread = _unreadCount;
-    final visible = _visible;
-
     return FhcDevicePage(
       backgroundColor: FhcColors.white,
       child: Column(
         children: [
-          FhcTopBar(title: 'NOTIFICATIONS', onBack: _goBack),
-          ColoredBox(
-            color: FhcColors.white,
-            child: Row(
-              children: [
-                Expanded(
-                  child: _FilterTab(
-                    label: 'All',
-                    badge: '${_items.length}',
-                    active: _tab == 0,
-                    onTap: () => setState(() => _tab = 0),
-                  ),
-                ),
-                Expanded(
-                  child: _FilterTab(
-                    label: 'Unread',
-                    active: _tab == 1,
-                    onTap: () => setState(() => _tab = 1),
-                  ),
-                ),
-                Expanded(
-                  child: _FilterTab(
-                    label: 'Mentions',
-                    active: _tab == 2,
-                    onTap: () => setState(() => _tab = 2),
-                  ),
-                ),
-              ],
+          FhcTopBar(
+            title: fhcT(
+              context,
+              'common.notifications',
+              fallback: 'Notifications',
             ),
+            onBack: _back,
+            backTooltip: fhcT(context, 'common.back', fallback: 'Back'),
+          ),
+          Row(
+            children: [
+              Expanded(
+                child: _NoticeTab(
+                  label: fhcT(context, 'account.all', fallback: 'All'),
+                  active: _tab == 0,
+                  onTap: () => setState(() => _tab = 0),
+                ),
+              ),
+              Expanded(
+                child: _NoticeTab(
+                  label: fhcT(context, 'account.unread', fallback: 'Unread'),
+                  active: _tab == 1,
+                  onTap: () => setState(() => _tab = 1),
+                ),
+              ),
+              Expanded(
+                child: _NoticeTab(
+                  label: fhcT(
+                    context,
+                    'account.mentions',
+                    fallback: 'Mentions',
+                  ),
+                  active: _tab == 2,
+                  onTap: () => setState(() => _tab = 2),
+                ),
+              ),
+            ],
           ),
           Expanded(
-            child:
-                visible.isEmpty
-                    ? const _EmptyState()
-                    : ListView.separated(
-                      physics: const ClampingScrollPhysics(),
-                      padding: const EdgeInsets.fromLTRB(4, 4, 8, 8),
-                      itemCount: visible.length,
-                      separatorBuilder:
-                          (_, __) => const Divider(
-                            height: 1,
-                            color: FhcColors.border,
-                          ),
-                      itemBuilder: (context, index) {
-                        final item = visible[index];
-                        return _NotificationRow(
-                          item: item,
-                          onTap: () => _open(item),
-                        );
-                      },
+            child: FhcAsyncBody<List<_Notice>>(
+              value: _state,
+              onRetry: _load,
+              emptyTitle: fhcT(
+                context,
+                'account.noNotificationsTitle',
+                fallback: 'No notifications',
+              ),
+              emptyMessage: fhcT(
+                context,
+                'account.noNotificationsCopy',
+                fallback: 'Updates from your churches will appear here.',
+              ),
+              unavailableTitle: fhcT(
+                context,
+                'account.notificationsUnavailable',
+                fallback: 'Notifications unavailable',
+              ),
+              builder: (context, notices) {
+                final visible = _visible(notices);
+                if (visible.isEmpty) {
+                  return Center(
+                    child: Text(
+                      fhcT(
+                        context,
+                        'account.noNotificationsTitle',
+                        fallback: 'No notifications',
+                      ),
+                      style: FhcTypography.caption,
                     ),
+                  );
+                }
+                return RefreshIndicator(
+                  onRefresh: _load,
+                  child: ListView.separated(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                    itemCount: visible.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (context, index) {
+                      final item = visible[index];
+                      return _NoticeRow(
+                        item: item,
+                        onTap: () => _open(item),
+                      );
+                    },
+                  ),
+                );
+              },
+            ),
           ),
-          _MarkAllFooter(enabled: unread > 0, onTap: _markAllRead),
-          FhcBottomNavigation(
-            selected: 4,
-            onSelected: (index) => fhcTab(context, index),
-          ),
+          const FhcBottomNavigation(selected: 3),
         ],
       ),
     );
   }
 }
 
-class _NotificationItem {
-  const _NotificationItem({
-    required this.icon,
-    required this.color,
+class _Notice {
+  const _Notice({
+    required this.id,
     required this.title,
-    required this.subtitle,
+    required this.body,
     required this.time,
-    required this.route,
+    this.route,
+    this.icon = Icons.notifications_outlined,
     this.unread = true,
     this.mention = false,
   });
 
-  final IconData icon;
-  final Color color;
+  factory _Notice.fromJson(JsonObject json) {
+    final readAt = json['read_at'];
+    final unread = json['unread'] == true ||
+        (json['unread'] == null && (readAt == null || '$readAt'.isEmpty));
+    return _Notice(
+      id: '${json['id'] ?? json['ulid'] ?? ''}',
+      title: '${json['title'] ?? json['subject'] ?? 'Notification'}',
+      body: '${json['body'] ?? json['message'] ?? ''}',
+      time: '${json['created_at'] ?? json['time'] ?? ''}',
+      route: '${json['destination'] ?? json['route'] ?? json['deep_link'] ?? ''}',
+      icon: Icons.notifications_outlined,
+      unread: unread,
+      mention: json['mention'] == true || json['is_mention'] == true,
+    );
+  }
+
+  final String id;
   final String title;
-  final String subtitle;
+  final String body;
   final String time;
-  final String route;
+  final String? route;
+  final IconData icon;
   final bool unread;
   final bool mention;
 
-  _NotificationItem copyWith({bool? unread}) {
-    return _NotificationItem(
-      icon: icon,
-      color: color,
-      title: title,
-      subtitle: subtitle,
-      time: time,
-      route: route,
-      unread: unread ?? this.unread,
-      mention: mention,
-    );
-  }
+  _Notice copyWith({bool? unread}) => _Notice(
+    id: id,
+    title: title,
+    body: body,
+    time: time,
+    route: route,
+    icon: icon,
+    unread: unread ?? this.unread,
+    mention: mention,
+  );
 }
 
-class _FilterTab extends StatelessWidget {
-  const _FilterTab({
+class _NoticeTab extends StatelessWidget {
+  const _NoticeTab({
     required this.label,
     required this.active,
     required this.onTap,
-    this.badge,
   });
-
   final String label;
   final bool active;
   final VoidCallback onTap;
-  final String? badge;
 
   @override
   Widget build(BuildContext context) {
-    final semantics = badge == null ? label : '$label $badge';
-    return Semantics(
-      button: true,
-      selected: active,
-      label: semantics,
-      child: InkWell(
-        onTap: onTap,
-        child: Container(
-          height: 44,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            border: Border(
-              bottom: BorderSide(
-                color: active ? FhcColors.green : FhcColors.border,
-                width: active ? 2 : 1,
-              ),
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        height: 48,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(
+              color: active ? FhcColors.green : FhcColors.border,
+              width: active ? 2 : 1,
             ),
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Flexible(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: active ? FhcColors.ink : FhcColors.muted,
-                    fontWeight: active ? FontWeight.w700 : FontWeight.w500,
-                    height: 1.2,
-                  ),
-                ),
-              ),
-              if (badge != null) ...[
-                const SizedBox(width: 6),
-                Container(
-                  constraints: const BoxConstraints(
-                    minWidth: 18,
-                    minHeight: 18,
-                  ),
-                  padding: const EdgeInsets.symmetric(horizontal: 5),
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: FhcColors.green,
-                    borderRadius: BorderRadius.circular(9),
-                  ),
-                  child: Text(
-                    badge!,
-                    style: const TextStyle(
-                      fontSize: 10,
-                      height: 1,
-                      fontWeight: FontWeight.w700,
-                      color: FhcColors.white,
-                    ),
-                  ),
-                ),
-              ],
-            ],
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+            color: active ? FhcColors.greenDark : FhcColors.ink,
           ),
         ),
       ),
@@ -343,40 +311,33 @@ class _FilterTab extends StatelessWidget {
   }
 }
 
-class _NotificationRow extends StatelessWidget {
-  const _NotificationRow({required this.item, required this.onTap});
-
-  final _NotificationItem item;
+class _NoticeRow extends StatelessWidget {
+  const _NoticeRow({required this.item, required this.onTap});
+  final _Notice item;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 12, 8, 12),
+      child: SizedBox(
+        height: 95,
         child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Padding(
-              padding: const EdgeInsets.only(top: 16),
-              child: SizedBox(
-                width: 12,
-                child: item.unread ? const _UnreadDot() : null,
-              ),
-            ),
             Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: item.color,
+              width: 38,
+              height: 38,
+              decoration: const BoxDecoration(
+                color: FhcColors.mint,
                 shape: BoxShape.circle,
               ),
-              child: Icon(item.icon, size: 20, color: FhcColors.white),
+              child: Icon(item.icon, size: 20, color: FhcColors.greenDark),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 11),
             Expanded(
               child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
@@ -384,115 +345,42 @@ class _NotificationRow extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      fontSize: 13,
+                      fontSize: 11.5,
                       fontWeight: FontWeight.w700,
                       color: FhcColors.ink,
-                      height: 1.2,
                     ),
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 5),
                   Text(
-                    item.subtitle,
+                    item.body,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      fontSize: 11,
+                      fontSize: 10.5,
                       height: 1.35,
+                      color: FhcColors.ink,
+                    ),
+                  ),
+                  const SizedBox(height: 5),
+                  Text(
+                    item.time,
+                    style: const TextStyle(
+                      fontSize: 9.5,
                       color: FhcColors.muted,
                     ),
                   ),
                 ],
               ),
             ),
-            const SizedBox(width: 8),
-            Text(
-              item.time,
-              style: const TextStyle(
-                fontSize: 10,
-                height: 1.2,
-                fontWeight: FontWeight.w500,
-                color: FhcColors.muted,
+            if (item.unread)
+              Container(
+                width: 11,
+                height: 11,
+                decoration: const BoxDecoration(
+                  color: FhcColors.green,
+                  shape: BoxShape.circle,
+                ),
               ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _UnreadDot extends StatelessWidget {
-  const _UnreadDot();
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Container(
-        width: 8,
-        height: 8,
-        decoration: const BoxDecoration(
-          color: FhcColors.green,
-          shape: BoxShape.circle,
-        ),
-      ),
-    );
-  }
-}
-
-class _MarkAllFooter extends StatelessWidget {
-  const _MarkAllFooter({required this.enabled, required this.onTap});
-
-  final bool enabled;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-      child: Center(
-        child: TextButton(
-          onPressed: enabled ? onTap : null,
-          style: TextButton.styleFrom(
-            foregroundColor: FhcColors.green,
-            disabledForegroundColor: FhcColors.hint,
-            minimumSize: const Size(FhcSizes.minTap, FhcSizes.minTap),
-          ),
-          child: const Text(
-            'Mark all as read',
-            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _EmptyState extends StatelessWidget {
-  const _EmptyState();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Center(
-      child: Padding(
-        padding: EdgeInsets.all(28),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            FhcCircleIcon(icon: Icons.notifications_none, size: 58),
-            SizedBox(height: 14),
-            Text(
-              'No notifications',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-                color: FhcColors.ink,
-              ),
-            ),
-            SizedBox(height: 6),
-            Text(
-              'You are all caught up.',
-              style: TextStyle(fontSize: 12, color: FhcColors.muted),
-            ),
           ],
         ),
       ),

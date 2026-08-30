@@ -1,11 +1,22 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/api/app_failure.dart';
 import '../../../../core/design_system/fhc_tokens.dart';
+import '../../../../core/di/app_services_scope.dart';
+import '../../../../core/l10n/locale_scope.dart';
+import '../../../../shared/widgets/async_state.dart';
 import '../../../../shared/widgets/fhc_components.dart';
 import '../../../foundation/presentation/fhc_nav.dart';
+import '../../data/church_repository.dart';
+import '../../data/home_church_repository.dart';
 
 class StartHomeChurchStep1Screen extends StatefulWidget {
-  const StartHomeChurchStep1Screen({super.key});
+  const StartHomeChurchStep1Screen({
+    super.key,
+    this.churchRepository,
+  });
+
+  final ChurchRepositoryImpl? churchRepository;
 
   @override
   State<StartHomeChurchStep1Screen> createState() =>
@@ -14,24 +25,109 @@ class StartHomeChurchStep1Screen extends StatefulWidget {
 
 class _StartHomeChurchStep1ScreenState
     extends State<StartHomeChurchStep1Screen> {
-  String _country = 'Nigeria';
-  String _city = 'Lagos';
+  FhcAsyncValue<List<ChurchSummary>> _state = const FhcAsyncValue.loading();
+  ChurchSummary? _selected;
+  late final TextEditingController _proposedNameController;
+  bool _started = false;
 
-  static const _countries = <String>[
-    'Nigeria',
-    'Ghana',
-    'Kenya',
-    'United Kingdom',
-    'United States',
-  ];
+  ChurchRepositoryImpl? get _churchRepository {
+    final injected = widget.churchRepository;
+    if (injected != null) return injected;
+    final fromServices = AppServicesScope.maybeOf(context)?.churchRepository;
+    return fromServices is ChurchRepositoryImpl ? fromServices : null;
+  }
 
-  static const _cities = <String>[
-    'Lagos',
-    'Abuja',
-    'Ibadan',
-    'Port Harcourt',
-    'Kano',
-  ];
+  @override
+  void initState() {
+    super.initState();
+    final draft = HomeChurchApplicationSession.draft;
+    _proposedNameController = TextEditingController(
+      text: draft.proposedName ?? '',
+    );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_started) {
+      _started = true;
+      _loadChurches();
+    }
+  }
+
+  @override
+  void dispose() {
+    _proposedNameController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadChurches() async {
+    final repo = _churchRepository;
+    if (repo == null) {
+      setState(() {
+        _selected = null;
+        _state = FhcAsyncValue.unavailable(
+          message: fhcT(
+            context,
+            'homeChurch.repoMissingChurches',
+            fallback:
+                'Home church applications need AppServices churchRepository '
+                'to load parent churches. No fixture list is shown.',
+          ),
+        );
+      });
+      return;
+    }
+
+    setState(() => _state = const FhcAsyncValue.loading());
+
+    final result = await repo.listChurches(perPage: 50);
+    if (!mounted) return;
+
+    switch (result) {
+      case AppSuccess(:final value):
+        if (value.items.isEmpty) {
+          setState(() {
+            _selected = null;
+            _state = FhcAsyncValue.empty(
+              message: fhcT(
+                context,
+                'homeChurch.noPublishedChurches',
+                fallback:
+                    'No published churches are available for applications yet.',
+              ),
+            );
+          });
+          return;
+        }
+        final draftId = HomeChurchApplicationSession.draft.churchId;
+        ChurchSummary? selected;
+        if (draftId != null) {
+          for (final church in value.items) {
+            if (church.id == draftId) {
+              selected = church;
+              break;
+            }
+          }
+        }
+        setState(() {
+          _selected = selected ?? value.items.first;
+          _state = FhcAsyncValue.data(value.items);
+        });
+      case AppError(:final failure):
+        if (failure is IntegrationUnavailableFailure) {
+          setState(() {
+            _selected = null;
+            _state = FhcAsyncValue.unavailable(message: failure.message);
+          });
+          return;
+        }
+        setState(() {
+          _selected = null;
+          _state = FhcAsyncValue.error(failure);
+        });
+    }
+  }
 
   void _onBack() {
     if (Navigator.of(context).canPop()) {
@@ -39,6 +135,67 @@ class _StartHomeChurchStep1ScreenState
     } else {
       fhcGo(context, FhcRoutes.hub);
     }
+  }
+
+  void _continue() {
+    final church = _selected;
+    if (church == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            fhcT(
+              context,
+              'homeChurch.selectParentChurch',
+              fallback: 'Select a parent church to continue.',
+            ),
+          ),
+        ),
+      );
+      return;
+    }
+
+    final unitId = church.location.administrativeUnitId;
+    if (church.location.id.isEmpty || unitId == null || unitId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            fhcT(
+              context,
+              'homeChurch.missingLocationScope',
+              fallback:
+                  'This church is missing location scope required for applications.',
+            ),
+          ),
+        ),
+      );
+      return;
+    }
+
+    final proposed = _proposedNameController.text.trim();
+    if (proposed.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            fhcT(
+              context,
+              'homeChurch.enterProposedName',
+              fallback: 'Enter a proposed home church name.',
+            ),
+          ),
+        ),
+      );
+      return;
+    }
+
+    final draft = HomeChurchApplicationSession.draft;
+    draft.churchId = church.id;
+    draft.locationId = church.location.id;
+    draft.administrativeUnitId = unitId;
+    draft.churchName = church.name;
+    draft.locationLabel = church.location.placeLabel;
+    draft.proposedName = proposed;
+
+    fhcPush(context, FhcRoutes.homeChurchStart2);
   }
 
   @override
@@ -52,7 +209,7 @@ class _StartHomeChurchStep1ScreenState
               builder: (context, constraints) {
                 final h = constraints.maxHeight;
                 final compact = h < 520;
-                final photoH = (h * 0.34).clamp(112.0, compact ? 136.0 : 172.0);
+                final photoH = (h * 0.28).clamp(96.0, compact ? 120.0 : 148.0);
 
                 return SingleChildScrollView(
                   physics: const ClampingScrollPhysics(),
@@ -60,10 +217,14 @@ class _StartHomeChurchStep1ScreenState
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      const Text(
-                        'Start a Church\nin Your Home',
+                      Text(
+                        fhcT(
+                          context,
+                          'homeChurch.startTitle',
+                          fallback: 'Start a Church\nin Your Home',
+                        ),
                         textAlign: TextAlign.center,
-                        style: TextStyle(
+                        style: const TextStyle(
                           fontSize: 22,
                           height: 1.18,
                           fontWeight: FontWeight.w700,
@@ -71,7 +232,7 @@ class _StartHomeChurchStep1ScreenState
                         ),
                       ),
                       const SizedBox(height: 10),
-                      const _StepBanner(),
+                      const _StepBanner(step: 1),
                       const SizedBox(height: 10),
                       const _StepProgress(step: 1),
                       SizedBox(height: compact ? 12 : 16),
@@ -81,14 +242,18 @@ class _StartHomeChurchStep1ScreenState
                         child: const _LivingRoomPhoto(),
                       ),
                       SizedBox(height: compact ? 12 : 16),
-                      const Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 8),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
                         child: Text(
-                          'You can begin gathering people in the name of '
-                          'Jesus right where you are. We will guide, support '
-                          'and equip you every step of the way.',
+                          fhcT(
+                            context,
+                            'homeChurch.chooseParentChurch',
+                            fallback:
+                                'Choose the parent church that will shepherd your '
+                                'home church application.',
+                          ),
                           textAlign: TextAlign.center,
-                          style: TextStyle(
+                          style: const TextStyle(
                             fontSize: 13,
                             height: 1.45,
                             color: FhcColors.ink,
@@ -96,18 +261,53 @@ class _StartHomeChurchStep1ScreenState
                         ),
                       ),
                       SizedBox(height: compact ? 14 : 18),
-                      _DropdownField(
-                        label: 'Country',
-                        value: _country,
-                        options: _countries,
-                        onChanged: (value) => setState(() => _country = value),
-                      ),
-                      const SizedBox(height: 12),
-                      _DropdownField(
-                        label: 'City',
-                        value: _city,
-                        options: _cities,
-                        onChanged: (value) => setState(() => _city = value),
+                      FhcAsyncBody<List<ChurchSummary>>(
+                        value: _state,
+                        onRetry: _loadChurches,
+                        emptyTitle: fhcT(
+                          context,
+                          'homeChurch.noChurchesAvailable',
+                          fallback: 'No churches available',
+                        ),
+                        unavailableTitle: fhcT(
+                          context,
+                          'homeChurch.churchesUnavailable',
+                          fallback: 'Churches unavailable',
+                        ),
+                        builder: (context, churches) {
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              _ChurchDropdown(
+                                churches: churches,
+                                value: _selected,
+                                onChanged: (church) =>
+                                    setState(() => _selected = church),
+                              ),
+                              const SizedBox(height: 12),
+                              FhcField(
+                                label: fhcT(
+                                  context,
+                                  'homeChurch.proposedName',
+                                  fallback: 'Proposed home church name',
+                                ),
+                                hint: fhcT(
+                                  context,
+                                  'homeChurch.proposedNameHint',
+                                  fallback: 'e.g. Grace Street Home Church',
+                                ),
+                                controller: _proposedNameController,
+                              ),
+                              if (_selected != null) ...[
+                                const SizedBox(height: 10),
+                                Text(
+                                  _selected!.location.placeLabel,
+                                  style: FhcTypography.caption,
+                                ),
+                              ],
+                            ],
+                          );
+                        },
                       ),
                     ],
                   ),
@@ -118,8 +318,10 @@ class _StartHomeChurchStep1ScreenState
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
             child: FhcPrimaryButton(
-              label: 'Continue',
-              onPressed: () => fhcPush(context, FhcRoutes.homeChurchStart2),
+              label: fhcT(context, 'common.continue', fallback: 'Continue'),
+              onPressed: _state is FhcAsyncData<List<ChurchSummary>>
+                  ? _continue
+                  : null,
             ),
           ),
           TextButton(
@@ -129,9 +331,9 @@ class _StartHomeChurchStep1ScreenState
               minimumSize: const Size(88, 40),
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
             ),
-            child: const Text(
-              'Cancel',
-              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+            child: Text(
+              fhcT(context, 'common.cancel', fallback: 'Cancel'),
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
             ),
           ),
           const SizedBox(height: 12),
@@ -141,26 +343,99 @@ class _StartHomeChurchStep1ScreenState
   }
 }
 
-class _StepBanner extends StatelessWidget {
-  const _StepBanner();
+class _ChurchDropdown extends StatelessWidget {
+  const _ChurchDropdown({
+    required this.churches,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final List<ChurchSummary> churches;
+  final ChurchSummary? value;
+  final ValueChanged<ChurchSummary> onChanged;
 
   @override
   Widget build(BuildContext context) {
-    return const Row(
+    final radius = BorderRadius.circular(FhcRadius.field);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(child: Divider(color: FhcColors.border, height: 1)),
+        Text(
+          fhcT(context, 'homeChurch.parentChurch', fallback: 'Parent church'),
+          style: FhcTypography.label,
+        ),
+        const SizedBox(height: 7),
+        DecoratedBox(
+          decoration: BoxDecoration(
+            color: FhcColors.white,
+            borderRadius: radius,
+            border: Border.all(color: FhcColors.border),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<ChurchSummary>(
+              value: value,
+              isExpanded: true,
+              icon: const Icon(
+                Icons.keyboard_arrow_down,
+                size: 22,
+                color: FhcColors.muted,
+              ),
+              borderRadius: radius,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: FhcColors.ink,
+              ),
+              items: [
+                for (final church in churches)
+                  DropdownMenuItem<ChurchSummary>(
+                    value: church,
+                    child: Text(
+                      church.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+              ],
+              onChanged: (next) {
+                if (next != null) onChanged(next);
+              },
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _StepBanner extends StatelessWidget {
+  const _StepBanner({required this.step});
+
+  final int step;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        const Expanded(child: Divider(color: FhcColors.border, height: 1)),
         Padding(
-          padding: EdgeInsets.symmetric(horizontal: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 12),
           child: Text(
-            'Step 1 of 4',
-            style: TextStyle(
+            fhcT(
+              context,
+              'homeChurch.stepOf',
+              args: {'current': '$step', 'total': '4'},
+              fallback: 'Step {current} of {total}',
+            ),
+            style: const TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w600,
               color: FhcColors.muted,
             ),
           ),
         ),
-        Expanded(child: Divider(color: FhcColors.border, height: 1)),
+        const Expanded(child: Divider(color: FhcColors.border, height: 1)),
       ],
     );
   }
@@ -216,64 +491,6 @@ class _LivingRoomPhoto extends StatelessWidget {
           );
         },
       ),
-    );
-  }
-}
-
-class _DropdownField extends StatelessWidget {
-  const _DropdownField({
-    required this.label,
-    required this.value,
-    required this.options,
-    required this.onChanged,
-  });
-
-  final String label;
-  final String value;
-  final List<String> options;
-  final ValueChanged<String> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final radius = BorderRadius.circular(FhcRadius.field);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: FhcTypography.label),
-        const SizedBox(height: 7),
-        DecoratedBox(
-          decoration: BoxDecoration(
-            color: FhcColors.white,
-            borderRadius: radius,
-            border: Border.all(color: FhcColors.border),
-          ),
-          child: DropdownButtonHideUnderline(
-            child: DropdownButton<String>(
-              value: value,
-              isExpanded: true,
-              icon: const Icon(
-                Icons.keyboard_arrow_down,
-                size: 22,
-                color: FhcColors.muted,
-              ),
-              borderRadius: radius,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: FhcColors.ink,
-              ),
-              items: [
-                for (final option in options)
-                  DropdownMenuItem<String>(value: option, child: Text(option)),
-              ],
-              onChanged: (next) {
-                if (next != null) onChanged(next);
-              },
-            ),
-          ),
-        ),
-      ],
     );
   }
 }

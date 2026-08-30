@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/design_system/fhc_tokens.dart';
+import '../../../../core/l10n/locale_scope.dart';
+import '../../../../shared/widgets/fhc_brand_logo.dart';
 import '../../../../shared/widgets/fhc_components.dart';
 import '../fhc_nav.dart';
+import '../onboarding_actions.dart';
 
 class OnboardingConnectScreen extends StatelessWidget {
   const OnboardingConnectScreen({super.key});
@@ -10,11 +13,11 @@ class OnboardingConnectScreen extends StatelessWidget {
   static const _copy =
       'Build meaningful relationships,\ngrow in faith, receive prayer\nand serve your community.';
 
-  static const _rows = <String>[
-    'Join a Church / Home Church',
-    'Prayer & Support',
-    'Discipleship & Mentorship',
-    'Community & Fellowship',
+  static const _rows = <(String, String)>[
+    ('onboarding.joinChurch', 'Join a Church / Home Church'),
+    ('onboarding.prayerSupport', 'Prayer & Support'),
+    ('onboarding.discipleshipMentorship', 'Discipleship & Mentorship'),
+    ('onboarding.communityFellowship', 'Community & Fellowship'),
   ];
 
   @override
@@ -31,10 +34,10 @@ class OnboardingConnectScreen extends StatelessWidget {
             padding: EdgeInsets.fromLTRB(20, compact ? 12 : 20, 20, 8),
             child: Column(
               children: [
-                const Text(
-                  'CONNECT',
+                Text(
+                  fhcT(context, 'mobile.connect', fallback: 'CONNECT'),
                   textAlign: TextAlign.center,
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w700,
                     letterSpacing: 1.4,
@@ -42,20 +45,28 @@ class OnboardingConnectScreen extends StatelessWidget {
                   ),
                 ),
                 SizedBox(height: gap * 0.7),
-                const Text(
-                  'Grow. Serve.',
+                Text(
+                  fhcT(
+                    context,
+                    'onboarding.growServe',
+                    fallback: 'Grow. Serve.',
+                  ),
                   textAlign: TextAlign.center,
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.w700,
                     height: 1.15,
                     color: FhcColors.ink,
                   ),
                 ),
-                const Text(
-                  'Make an Impact.',
+                Text(
+                  fhcT(
+                    context,
+                    'onboarding.makeAnImpact',
+                    fallback: 'Make an Impact.',
+                  ),
                   textAlign: TextAlign.center,
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.w700,
                     height: 1.15,
@@ -63,10 +74,10 @@ class OnboardingConnectScreen extends StatelessWidget {
                   ),
                 ),
                 SizedBox(height: gap),
-                const Text(
-                  _copy,
+                Text(
+                  fhcT(context, 'onboarding.connectCopy', fallback: _copy),
                   textAlign: TextAlign.center,
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 13,
                     height: 1.45,
                     color: FhcColors.muted,
@@ -82,8 +93,10 @@ class OnboardingConnectScreen extends StatelessWidget {
                       'assets/images/connect_people.png',
                       fit: BoxFit.cover,
                       errorBuilder:
-                          (context, error, stackTrace) =>
-                              const ColoredBox(color: FhcColors.mint),
+                          (context, error, stackTrace) => const ColoredBox(
+                            color: FhcColors.mint,
+                            child: Center(child: FhcBrandLogo(size: 120)),
+                          ),
                     ),
                   ),
                 ),
@@ -92,7 +105,8 @@ class OnboardingConnectScreen extends StatelessWidget {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
-                      for (final label in _rows) _ConnectRow(label: label),
+                      for (final row in _rows)
+                        _ConnectRow(labelKey: row.$1, fallback: row.$2),
                     ],
                   ),
                 ),
@@ -107,9 +121,10 @@ class OnboardingConnectScreen extends StatelessWidget {
 }
 
 class _ConnectRow extends StatelessWidget {
-  const _ConnectRow({required this.label});
+  const _ConnectRow({required this.labelKey, required this.fallback});
 
-  final String label;
+  final String labelKey;
+  final String fallback;
 
   @override
   Widget build(BuildContext context) {
@@ -134,7 +149,7 @@ class _ConnectRow extends StatelessWidget {
           const SizedBox(width: 14),
           Expanded(
             child: Text(
-              label,
+              fhcT(context, labelKey, fallback: fallback),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
@@ -161,16 +176,16 @@ class _ConnectFooter extends StatelessWidget {
       child: Row(
         children: [
           TextButton(
-            onPressed: () => fhcGo(context, '/language'),
+            onPressed: () => fhcCompleteOnboarding(context),
             style: TextButton.styleFrom(
               foregroundColor: FhcColors.muted,
               padding: const EdgeInsets.symmetric(horizontal: 8),
               minimumSize: const Size(48, 40),
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
             ),
-            child: const Text(
-              'Skip',
-              style: TextStyle(
+            child: Text(
+              fhcT(context, 'common.skip', fallback: 'Skip'),
+              style: const TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w500,
                 color: FhcColors.muted,
@@ -178,7 +193,7 @@ class _ConnectFooter extends StatelessWidget {
             ),
           ),
           const Spacer(),
-          for (var i = 0; i < 4; i++)
+          for (var i = 0; i < 3; i++)
             Container(
               width: i == 1 ? 9 : 7,
               height: i == 1 ? 9 : 7,
@@ -191,7 +206,7 @@ class _ConnectFooter extends StatelessWidget {
           const Spacer(),
           IconButton.filled(
             onPressed: () => fhcGo(context, '/onboarding/multiply'),
-            tooltip: 'Next',
+            tooltip: fhcT(context, 'common.next', fallback: 'Next'),
             style: IconButton.styleFrom(
               backgroundColor: FhcColors.green,
               foregroundColor: FhcColors.white,

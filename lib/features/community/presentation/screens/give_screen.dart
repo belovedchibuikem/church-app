@@ -1,13 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
+import '../../../../core/api/app_failure.dart';
+import '../../../../core/contracts/mobile_repository_contracts.dart';
 import '../../../../core/design_system/fhc_tokens.dart';
+import '../../../../core/di/app_services_scope.dart';
+import '../../../../core/l10n/locale_scope.dart';
 import '../../../../shared/widgets/fhc_components.dart';
 import '../../../foundation/presentation/fhc_nav.dart';
-
-enum _PayMethod { card, bank, ussd }
+import '../../data/payment_repository.dart';
 
 class GiveScreen extends StatefulWidget {
-  const GiveScreen({super.key});
+  const GiveScreen({super.key, this.paymentRepository});
+
+  final PaymentRepository? paymentRepository;
 
   @override
   State<GiveScreen> createState() => _GiveScreenState();
@@ -16,8 +22,11 @@ class GiveScreen extends StatefulWidget {
 class _GiveScreenState extends State<GiveScreen> {
   String _purpose = 'Tithes & Offerings';
   int _amountIndex = 1;
-  bool _recurring = false;
-  _PayMethod _method = _PayMethod.card;
+  bool _submitting = false;
+  String? _error;
+  String? _providerLabel;
+  bool _providerActive = false;
+  final TextEditingController _customAmount = TextEditingController();
 
   static const _purposes = <String>[
     'Tithes & Offerings',
@@ -26,7 +35,76 @@ class _GiveScreenState extends State<GiveScreen> {
     'Seed',
   ];
 
+  /// Major-unit NGN presets shown in the UI; submitted as `amount_minor` (×100).
   static const _amounts = <int?>[1000, 2000, 5000, null];
+
+  PaymentRepository? get _repo =>
+      widget.paymentRepository ??
+      AppServicesScope.maybeOf(context)?.paymentRepository;
+
+  String _purposeLabel(String value) {
+    switch (value) {
+      case 'Tithes & Offerings':
+        return fhcT(
+          context,
+          'give.purposeTithes',
+          fallback: 'Tithes & Offerings',
+        );
+      case 'Missions':
+        return fhcT(context, 'give.purposeMissions', fallback: 'Missions');
+      case 'Building Project':
+        return fhcT(
+          context,
+          'give.purposeBuilding',
+          fallback: 'Building Project',
+        );
+      case 'Seed':
+        return fhcT(context, 'give.purposeSeed', fallback: 'Seed');
+      default:
+        return value;
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final services = AppServicesScope.maybeOf(context);
+    if (services?.visualReview == true) return;
+    final repo = _repo;
+    if (repo == null || _providerLabel != null) return;
+    repo.getConfiguration().then((result) {
+      if (!mounted) return;
+      switch (result) {
+        case AppSuccess(:final value):
+          final active = value['active'] == true;
+          final provider = '${value['provider'] ?? ''}'.trim();
+          setState(() {
+            _providerActive = active;
+            _providerLabel = active && provider.isNotEmpty
+                ? provider[0].toUpperCase() + provider.substring(1)
+                : fhcT(
+                    context,
+                    'give.notActivated',
+                    fallback: 'Not activated',
+                  );
+          });
+        case AppError():
+          setState(
+            () => _providerLabel = fhcT(
+              context,
+              'give.notActivated',
+              fallback: 'Not activated',
+            ),
+          );
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _customAmount.dispose();
+    super.dispose();
+  }
 
   void _goBack() {
     if (Navigator.of(context).canPop()) {
@@ -36,17 +114,33 @@ class _GiveScreenState extends State<GiveScreen> {
     }
   }
 
-  void _setRecurring(bool value) => setState(() => _recurring = value);
-
   String get _buttonLabel {
-    final amount = _amounts[_amountIndex];
-    if (amount == null) return 'Give';
-    return 'Give ${_formatNaira(amount)}';
+    if (_submitting) {
+      return fhcT(context, 'give.processing', fallback: 'Processing…');
+    }
+    final amount = _selectedAmountMajor();
+    if (amount == null) {
+      return fhcT(context, 'nav.give', fallback: 'Give');
+    }
+    return fhcT(
+      context,
+      'give.giveAmount',
+      args: {'amount': _formatNaira(amount)},
+      fallback: 'Give {amount}',
+    );
+  }
+
+  int? _selectedAmountMajor() {
+    final preset = _amounts[_amountIndex];
+    if (preset != null) return preset;
+    final parsed = num.tryParse(_customAmount.text.trim().replaceAll(',', ''));
+    if (parsed == null || parsed < 1) return null;
+    return parsed.round();
   }
 
   static String _formatNaira(int amount) {
     final raw = amount.toString();
-    final buffer = StringBuffer('N');
+    final buffer = StringBuffer('₦');
     for (var i = 0; i < raw.length; i++) {
       final fromEnd = raw.length - i;
       if (i > 0 && fromEnd % 3 == 0) buffer.write(',');
@@ -55,9 +149,117 @@ class _GiveScreenState extends State<GiveScreen> {
     return buffer.toString();
   }
 
-  static String _chipLabel(int? amount) {
-    if (amount == null) return 'Other';
+  String _chipLabel(int? amount) {
+    if (amount == null) {
+      return fhcT(context, 'give.other', fallback: 'Other');
+    }
     return _formatNaira(amount);
+  }
+
+  Future<void> _submit() async {
+    final repo = _repo;
+    if (repo == null) {
+      setState(() {
+        _error = fhcT(
+          context,
+          'give.notConnected',
+          fallback:
+              'Giving is not connected to the Laravel payments API in this build.',
+        );
+      });
+      return;
+    }
+
+    final amountMajor = _selectedAmountMajor();
+    if (amountMajor == null) {
+      setState(
+        () => _error = fhcT(
+          context,
+          'give.enterAmount',
+          fallback: 'Enter a gift amount of at least ₦1 to continue.',
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _submitting = true;
+      _error = null;
+    });
+
+    final amountMinor = amountMajor * 100;
+    final result = await repo.initiate({
+      'amount_minor': amountMinor,
+      'currency': 'NGN',
+    });
+
+    if (!mounted) return;
+
+    switch (result) {
+      case AppSuccess(:final value):
+        final intentId = '${value['id'] ?? value['ulid'] ?? ''}';
+        final provider = '${value['provider_code'] ?? ''}';
+        if (provider == 'local_manual' && intentId.isNotEmpty) {
+          final completed = await repo.completeGivingIntent(intentId);
+          if (!mounted) return;
+          switch (completed) {
+            case AppError(:final failure):
+              setState(() {
+                _submitting = false;
+                _error = paymentFailureMessage(failure);
+              });
+              return;
+            case AppSuccess(:final value):
+              setState(() => _submitting = false);
+              final receipt = value['receipt'];
+              final transaction = value['transaction'];
+              final receiptId =
+                  receipt is Map ? '${receipt['id'] ?? ''}' : '';
+              final txnId =
+                  transaction is Map
+                      ? '${transaction['id'] ?? ''}'
+                      : intentId;
+              fhcPush(
+                context,
+                receiptId.isNotEmpty
+                    ? '/payments/success?id=${Uri.encodeComponent(receiptId)}'
+                    : '/payments/success?id=${Uri.encodeComponent(txnId)}',
+              );
+              return;
+          }
+        }
+        setState(() => _submitting = false);
+        final checkoutUrl = hostedCheckoutUrlOf(value);
+        if (checkoutUrl != null) {
+          final launched = await launchUrl(
+            Uri.parse(checkoutUrl),
+            mode: LaunchMode.externalApplication,
+          );
+          if (!mounted) return;
+          if (!launched) {
+            setState(() {
+              _error = fhcT(
+                context,
+                'give.checkoutOpenFailed',
+                args: {
+                  'provider': provider.isEmpty
+                      ? fhcT(context, 'give.payment', fallback: 'payment')
+                      : provider,
+                },
+                fallback:
+                    'Could not open {provider} checkout. Try again from a device with a browser.',
+              );
+            });
+            return;
+          }
+        }
+        fhcPush(context, paymentIntentRoute(value));
+      case AppError(:final failure):
+        setState(() {
+          _submitting = false;
+          _error = paymentFailureMessage(failure);
+        });
+    }
   }
 
   @override
@@ -66,44 +268,20 @@ class _GiveScreenState extends State<GiveScreen> {
       backgroundColor: FhcColors.white,
       child: Column(
         children: [
-          FhcTopBar(title: 'Give', onBack: _goBack),
+          FhcTopBar(
+            title: fhcT(context, 'give.title', fallback: 'Give / Donate'),
+            onBack: _goBack,
+          ),
           Expanded(
             child: ListView(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
               children: [
-                const Text(
-                  'GIVE / DONATE',
-                  textAlign: TextAlign.center,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 18,
-                    height: 1.2,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.6,
-                    color: FhcColors.greenDark,
+                Text(
+                  fhcT(
+                    context,
+                    'give.wantToGiveTo',
+                    fallback: 'I want to give to',
                   ),
-                ),
-                const SizedBox(height: 6),
-                const Text(
-                  'Support the work of the Kingdom.',
-                  textAlign: TextAlign.center,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 13,
-                    height: 1.35,
-                    color: FhcColors.muted,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                _FrequencySegment(
-                  recurring: _recurring,
-                  onChanged: _setRecurring,
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  'I want to give to',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: FhcTypography.label,
@@ -112,11 +290,12 @@ class _GiveScreenState extends State<GiveScreen> {
                 _PurposeField(
                   value: _purpose,
                   options: _purposes,
+                  labelOf: _purposeLabel,
                   onSelected: (value) => setState(() => _purpose = value),
                 ),
                 const SizedBox(height: 14),
-                const Text(
-                  'Amount',
+                Text(
+                  fhcT(context, 'give.amount', fallback: 'Amount'),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: FhcTypography.label,
@@ -136,152 +315,125 @@ class _GiveScreenState extends State<GiveScreen> {
                     ],
                   ],
                 ),
+                if (_amounts[_amountIndex] == null) ...[
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: _customAmount,
+                    keyboardType: TextInputType.number,
+                    onChanged: (_) => setState(() {}),
+                    decoration: InputDecoration(
+                      labelText: fhcT(
+                        context,
+                        'give.customAmount',
+                        fallback: 'Custom amount (NGN)',
+                      ),
+                      hintText: fhcT(
+                        context,
+                        'give.customAmountHint',
+                        fallback: 'e.g. 7500',
+                      ),
+                      border: const OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 14),
-                const Text(
-                  'Payment Method',
+                Text(
+                  fhcT(context, 'give.checkout', fallback: 'Checkout'),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: FhcTypography.label,
                 ),
                 const SizedBox(height: 8),
-                _PaymentMethods(
-                  selected: _method,
-                  onSelected: (value) => setState(() => _method = value),
+                FhcSurfaceCard(
+                  child: Text(
+                    _providerActive
+                        ? fhcT(
+                            context,
+                            'give.checkoutActiveCopy',
+                            args: {
+                              'provider': _providerLabel ??
+                                  fhcT(
+                                    context,
+                                    'give.activatedProvider',
+                                    fallback: 'your activated provider',
+                                  ),
+                            },
+                            fallback:
+                                'Checkout opens {provider} '
+                                '(Paystack, Flutterwave, or Stripe). Finish the gift '
+                                'in that secure page, then return here to confirm.',
+                          )
+                        : fhcT(
+                            context,
+                            'give.checkoutInactiveCopy',
+                            fallback:
+                                'Giving stays closed until an administrator activates '
+                                'Paystack, Flutterwave, or Stripe. No charge is created '
+                                'while checkout is inactive.',
+                          ),
+                    style: const TextStyle(
+                      fontSize: 12,
+                      height: 1.4,
+                      color: FhcColors.muted,
+                    ),
+                  ),
                 ),
-                const SizedBox(height: 12),
-                _RecurringCheck(
-                  value: _recurring,
-                  onChanged: _setRecurring,
-                ),
+                if (_error != null) ...[
+                  const SizedBox(height: 12),
+                  FhcErrorState(
+                    title: _errorTitle(_error!),
+                    message: _error!,
+                    onRetry: _submitting ? null : _submit,
+                  ),
+                ],
                 const SizedBox(height: 16),
-                FhcPrimaryButton(label: _buttonLabel, onPressed: () {}),
+                FhcPrimaryButton(
+                  label: _buttonLabel,
+                  onPressed: _submitting ? null : _submit,
+                ),
                 const SizedBox(height: 8),
-                const Text(
-                  'Your giving is secure and tax-deductible.',
+                Text(
+                  fhcT(
+                    context,
+                    'give.noChargeUntilSuccess',
+                    fallback:
+                        'No charge is created until a governed payment intent succeeds.',
+                  ),
                   textAlign: TextAlign.center,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 11,
                     height: 1.35,
                     color: FhcColors.muted,
-                  ),
-                ),
-                Center(
-                  child: TextButton(
-                    onPressed: () => fhcPush(context, FhcRoutes.giveHistory),
-                    style: TextButton.styleFrom(
-                      foregroundColor: FhcColors.green,
-                      minimumSize: const Size(88, 40),
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                    child: const Text(
-                      'Giving History',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
                   ),
                 ),
               ],
             ),
           ),
           FhcBottomNavigation(
-            selected: 0,
+            selected: 2,
             onSelected: (index) => fhcTab(context, index),
           ),
         ],
       ),
     );
   }
-}
 
-class _FrequencySegment extends StatelessWidget {
-  const _FrequencySegment({required this.recurring, required this.onChanged});
-
-  final bool recurring;
-  final ValueChanged<bool> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      label: recurring ? 'Recurring giving' : 'One-time giving',
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: FhcColors.canvas,
-          borderRadius: BorderRadius.circular(22),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(3),
-          child: Row(
-            children: [
-              Expanded(
-                child: _FrequencyTab(
-                  label: 'One-time',
-                  selected: !recurring,
-                  onTap: () => onChanged(false),
-                ),
-              ),
-              const SizedBox(width: 4),
-              Expanded(
-                child: _FrequencyTab(
-                  label: 'Recurring',
-                  selected: recurring,
-                  onTap: () => onChanged(true),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _FrequencyTab extends StatelessWidget {
-  const _FrequencyTab({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      button: true,
-      selected: selected,
-      label: label,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
-        child: Ink(
-          height: 36,
-          decoration: BoxDecoration(
-            color: selected ? FhcColors.green : Colors.transparent,
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Center(
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                height: 1.1,
-                color: selected ? FhcColors.white : FhcColors.ink,
-              ),
-            ),
-          ),
-        ),
-      ),
+  String _errorTitle(String message) {
+    final lower = message.toLowerCase();
+    if (lower.contains('governance')) {
+      return fhcT(
+        context,
+        'give.notAvailable',
+        fallback: 'Giving not available',
+      );
+    }
+    return fhcT(
+      context,
+      'give.unableToStart',
+      fallback: 'Unable to start giving',
     );
   }
 }
@@ -290,11 +442,13 @@ class _PurposeField extends StatelessWidget {
   const _PurposeField({
     required this.value,
     required this.options,
+    required this.labelOf,
     required this.onSelected,
   });
 
   final String value;
   final List<String> options;
+  final String Function(String value) labelOf;
   final ValueChanged<String> onSelected;
 
   @override
@@ -320,7 +474,10 @@ class _PurposeField extends StatelessWidget {
           style: FhcTypography.body,
           items: [
             for (final option in options)
-              DropdownMenuItem<String>(value: option, child: Text(option)),
+              DropdownMenuItem<String>(
+                value: option,
+                child: Text(labelOf(option)),
+              ),
           ],
           onChanged: (next) {
             if (next != null) onSelected(next);
@@ -373,246 +530,6 @@ class _AmountChip extends StatelessWidget {
                 ),
               ),
             ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _PaymentMethods extends StatelessWidget {
-  const _PaymentMethods({required this.selected, required this.onSelected});
-
-  final _PayMethod selected;
-  final ValueChanged<_PayMethod> onSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    return FhcSurfaceCard(
-      padding: EdgeInsets.zero,
-      child: Column(
-        children: [
-          _PaymentRow(
-            selected: selected == _PayMethod.card,
-            onTap: () => onSelected(_PayMethod.card),
-            leading: const _CardBrandMark(),
-            title: 'Card **** 4242',
-            trailing: TextButton(
-              onPressed: () => onSelected(_PayMethod.card),
-              style: TextButton.styleFrom(
-                foregroundColor: FhcColors.green,
-                minimumSize: const Size(0, 36),
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                visualDensity: VisualDensity.compact,
-              ),
-              child: const Text(
-                'Change',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-              ),
-            ),
-          ),
-          const Divider(height: 1, color: FhcColors.border),
-          _PaymentRow(
-            selected: selected == _PayMethod.bank,
-            onTap: () => onSelected(_PayMethod.bank),
-            leading: const _PayIcon(Icons.account_balance_outlined),
-            title: 'Bank Transfer',
-          ),
-          const Divider(height: 1, color: FhcColors.border),
-          _PaymentRow(
-            selected: selected == _PayMethod.ussd,
-            onTap: () => onSelected(_PayMethod.ussd),
-            leading: const _PayIcon(Icons.dialpad),
-            title: 'USSD',
-            subtitle: '*737*Grace*Amount#',
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PaymentRow extends StatelessWidget {
-  const _PaymentRow({
-    required this.selected,
-    required this.onTap,
-    required this.leading,
-    required this.title,
-    this.subtitle,
-    this.trailing,
-  });
-
-  final bool selected;
-  final VoidCallback onTap;
-  final Widget leading;
-  final String title;
-  final String? subtitle;
-  final Widget? trailing;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: selected ? FhcColors.mint : FhcColors.white,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
-          child: Row(
-            children: [
-              leading,
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: FhcColors.ink,
-                        height: 1.2,
-                      ),
-                    ),
-                    if (subtitle != null) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        subtitle!,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: FhcColors.muted,
-                          height: 1.2,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              if (trailing != null) trailing!,
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _PayIcon extends StatelessWidget {
-  const _PayIcon(this.icon);
-
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 32,
-      height: 32,
-      decoration: BoxDecoration(
-        color: FhcColors.mint,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Icon(icon, color: FhcColors.green, size: 16),
-    );
-  }
-}
-
-class _CardBrandMark extends StatelessWidget {
-  const _CardBrandMark();
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 32,
-      height: 20,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          Positioned(
-            left: 2,
-            child: Container(
-              width: 16,
-              height: 16,
-              decoration: const BoxDecoration(
-                color: Color(0xFFEB001B),
-                shape: BoxShape.circle,
-              ),
-            ),
-          ),
-          Positioned(
-            right: 2,
-            child: Container(
-              width: 16,
-              height: 16,
-              decoration: BoxDecoration(
-                color: const Color(0xFFF79E1B).withValues(alpha: 0.92),
-                shape: BoxShape.circle,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _RecurringCheck extends StatelessWidget {
-  const _RecurringCheck({required this.value, required this.onChanged});
-
-  final bool value;
-  final ValueChanged<bool> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      checked: value,
-      label: 'Make this a recurring gift',
-      child: InkWell(
-        onTap: () => onChanged(!value),
-        borderRadius: BorderRadius.circular(FhcRadius.sm),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 4),
-          child: Row(
-            children: [
-              SizedBox(
-                width: 24,
-                height: 24,
-                child: Checkbox(
-                  value: value,
-                  onChanged: (next) => onChanged(next ?? false),
-                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  visualDensity: VisualDensity.compact,
-                  side: const BorderSide(color: FhcColors.border, width: 1.4),
-                  fillColor: WidgetStateProperty.resolveWith((states) {
-                    if (states.contains(WidgetState.selected)) {
-                      return FhcColors.green;
-                    }
-                    return FhcColors.white;
-                  }),
-                  checkColor: FhcColors.white,
-                ),
-              ),
-              const SizedBox(width: 8),
-              const Expanded(
-                child: Text(
-                  'Make this a recurring gift',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                    color: FhcColors.ink,
-                    height: 1.2,
-                  ),
-                ),
-              ),
-            ],
           ),
         ),
       ),

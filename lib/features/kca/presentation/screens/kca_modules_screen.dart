@@ -1,13 +1,18 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/api/app_failure.dart';
+import '../../../../core/contracts/mobile_repository_contracts.dart';
 import '../../../../core/design_system/fhc_tokens.dart';
+import '../../../../core/di/app_services_scope.dart';
+import '../../../../core/l10n/locale_scope.dart';
+import '../../../../shared/widgets/async_state.dart';
 import '../../../../shared/widgets/fhc_components.dart';
 import '../../../foundation/presentation/fhc_nav.dart';
 
-enum _ModuleStatus { completed, inProgress, notStarted }
-
 class KcaModulesScreen extends StatefulWidget {
-  const KcaModulesScreen({super.key});
+  const KcaModulesScreen({super.key, this.kcaRepository});
+
+  final KcaRepository? kcaRepository;
 
   @override
   State<KcaModulesScreen> createState() => _KcaModulesScreenState();
@@ -15,23 +20,65 @@ class KcaModulesScreen extends StatefulWidget {
 
 class _KcaModulesScreenState extends State<KcaModulesScreen> {
   int _tab = 0;
+  FhcAsyncValue<List<_ModuleSpec>> _state = const FhcAsyncValue.loading();
 
-  static const _tabs = ['All Modules', 'My Progress'];
+  KcaRepository? get _repo =>
+      widget.kcaRepository ??
+      AppServicesScope.maybeOf(context)?.kcaRepository;
 
-  static const _modules = <_ModuleSpec>[
-    _ModuleSpec(1, 'Foundations of Faith', _ModuleStatus.completed),
-    _ModuleSpec(2, 'Walking with Christ', _ModuleStatus.completed),
-    _ModuleSpec(3, 'The Word of God', _ModuleStatus.completed),
-    _ModuleSpec(4, 'Prayer & Spiritual Life', _ModuleStatus.completed),
-    _ModuleSpec(5, 'Identity & Purpose', _ModuleStatus.inProgress),
-    _ModuleSpec(6, 'The Holy Spirit', _ModuleStatus.notStarted),
-    _ModuleSpec(7, 'Discipleship Essentials', _ModuleStatus.notStarted),
-    _ModuleSpec(8, 'Leadership & Influence', _ModuleStatus.notStarted),
-    _ModuleSpec(9, 'Evangelism & Mission', _ModuleStatus.notStarted),
-    _ModuleSpec(10, 'Church & Community', _ModuleStatus.notStarted),
-    _ModuleSpec(11, 'Stewardship & Service', _ModuleStatus.notStarted),
-    _ModuleSpec(12, 'Commissioning', _ModuleStatus.notStarted),
-  ];
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_state is FhcAsyncLoading) {
+      _load();
+    }
+  }
+
+  Future<void> _load() async {
+    final repo = _repo;
+    if (repo == null) {
+      setState(() {
+        _state = FhcAsyncValue.unavailable(
+          message: fhcT(
+            context,
+            'member.kca.modulesRequireApi',
+            fallback:
+                'KCA modules require the member curriculum API. '
+                'No design fixtures are shown.',
+          ),
+        );
+      });
+      return;
+    }
+
+    setState(() => _state = const FhcAsyncValue.loading());
+    final result = await repo.listModules();
+    if (!mounted) return;
+
+    switch (result) {
+      case AppSuccess(:final value):
+        if (value.isEmpty) {
+          setState(() {
+            _state = FhcAsyncValue.empty(
+              message: fhcT(
+                context,
+                'member.kca.noActiveModules',
+                fallback: 'No active KCA modules are published yet.',
+              ),
+            );
+          });
+          return;
+        }
+        setState(() {
+          _state = FhcAsyncValue.data([
+            for (var i = 0; i < value.length; i++)
+              _ModuleSpec.fromJson(value[i], fallbackNumber: i + 1),
+          ]);
+        });
+      case AppError(:final failure):
+        setState(() => _state = FhcAsyncValue.error(failure));
+    }
+  }
 
   void _back() {
     if (Navigator.of(context).canPop()) {
@@ -41,31 +88,34 @@ class _KcaModulesScreenState extends State<KcaModulesScreen> {
     }
   }
 
-  void _openInProgress() => fhcPush(context, FhcRoutes.kcaModule);
-
   @override
   Widget build(BuildContext context) {
-    final visible =
-        _tab == 0
-            ? _modules
-            : _modules
-                .where((m) => m.status != _ModuleStatus.notStarted)
-                .toList();
+    final tabs = [
+      fhcT(context, 'member.kca.allModules', fallback: 'All Modules'),
+      fhcT(context, 'member.kca.myProgress', fallback: 'My Progress'),
+    ];
 
     return FhcDevicePage(
       backgroundColor: FhcColors.canvas,
       child: Column(
         children: [
-          FhcTopBar(title: 'KCA Modules', onBack: _back),
-          const Padding(
-            padding: EdgeInsets.fromLTRB(16, 0, 16, 10),
+          FhcTopBar(
+            title: fhcT(context, 'member.kca.modulesTitle', fallback: 'KCA Modules'),
+            onBack: _back,
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
             child: Align(
               alignment: Alignment.centerLeft,
               child: Text(
-                '12 Modules One Journey',
+                fhcT(
+                  context,
+                  'member.kca.modulesSubtitle',
+                  fallback: 'Published curriculum from Laravel',
+                ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 13,
                   height: 1.3,
                   color: FhcColors.muted,
@@ -77,10 +127,10 @@ class _KcaModulesScreenState extends State<KcaModulesScreen> {
             color: FhcColors.white,
             child: Row(
               children: [
-                for (var i = 0; i < _tabs.length; i++)
+                for (var i = 0; i < tabs.length; i++)
                   Expanded(
                     child: _TabLabel(
-                      label: _tabs[i],
+                      label: tabs[i],
                       active: _tab == i,
                       onTap: () => setState(() => _tab = i),
                     ),
@@ -89,24 +139,49 @@ class _KcaModulesScreenState extends State<KcaModulesScreen> {
             ),
           ),
           Expanded(
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 18),
-              children: [
-                if (_tab == 1) ...[
-                  const _ProgressOverview(),
-                  const SizedBox(height: 12),
-                ],
-                for (var i = 0; i < visible.length; i++) ...[
-                  if (i > 0) const SizedBox(height: 8),
-                  _ModuleRow(
-                    spec: visible[i],
-                    onTap:
-                        visible[i].status == _ModuleStatus.inProgress
-                            ? _openInProgress
-                            : null,
-                  ),
-                ],
-              ],
+            child: FhcAsyncBody<List<_ModuleSpec>>(
+              value: _state,
+              onRetry: _load,
+              emptyTitle: fhcT(
+                context,
+                'member.kca.noModules',
+                fallback: 'No modules',
+              ),
+              unavailableTitle: fhcT(
+                context,
+                'member.kca.modulesUnavailable',
+                fallback: 'KCA modules unavailable',
+              ),
+              builder: (context, modules) {
+                final visible =
+                    _tab == 0
+                        ? modules
+                        : modules
+                            .where((m) => m.status != _ModuleStatus.notStarted)
+                            .toList();
+                return ListView(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 18),
+                  children: [
+                    if (_tab == 1) ...[
+                      _ProgressOverview(modules: modules),
+                      const SizedBox(height: 12),
+                    ],
+                    for (var i = 0; i < visible.length; i++) ...[
+                      if (i > 0) const SizedBox(height: 8),
+                      _ModuleRow(
+                        spec: visible[i],
+                        onTap:
+                            visible[i].id.isEmpty
+                                ? null
+                                : () => fhcPush(
+                                  context,
+                                  '${FhcRoutes.kcaModule}/${Uri.encodeComponent(visible[i].id)}',
+                                ),
+                      ),
+                    ],
+                  ],
+                );
+              },
             ),
           ),
           const FhcBottomNavigation(selected: 1),
@@ -116,9 +191,45 @@ class _KcaModulesScreenState extends State<KcaModulesScreen> {
   }
 }
 
-class _ModuleSpec {
-  const _ModuleSpec(this.number, this.title, this.status);
+enum _ModuleStatus { completed, inProgress, notStarted }
 
+class _ModuleSpec {
+  const _ModuleSpec({
+    required this.id,
+    required this.number,
+    required this.title,
+    required this.status,
+  });
+
+  factory _ModuleSpec.fromJson(
+    Map<String, Object?> json, {
+    required int fallbackNumber,
+  }) {
+    final id = '${json['id'] ?? json['public_id'] ?? ''}';
+    final sequence = json['sequence'];
+    final number =
+        sequence is int
+            ? sequence
+            : sequence is num
+            ? sequence.round()
+            : fallbackNumber;
+    final progress = '${json['progress_state'] ?? json['status'] ?? ''}'
+        .toLowerCase();
+    final status =
+        progress.contains('complete')
+            ? _ModuleStatus.completed
+            : progress.contains('progress') || progress.contains('active')
+            ? _ModuleStatus.inProgress
+            : _ModuleStatus.notStarted;
+    return _ModuleSpec(
+      id: id,
+      number: number,
+      title: '${json['title'] ?? json['code'] ?? 'Module'}',
+      status: status,
+    );
+  }
+
+  final String id;
   final int number;
   final String title;
   final _ModuleStatus status;
@@ -172,23 +283,40 @@ class _TabLabel extends StatelessWidget {
 }
 
 class _ProgressOverview extends StatelessWidget {
-  const _ProgressOverview();
+  const _ProgressOverview({required this.modules});
+
+  final List<_ModuleSpec> modules;
 
   @override
   Widget build(BuildContext context) {
+    final done =
+        modules.where((m) => m.status == _ModuleStatus.completed).length;
+    final total = modules.length;
+    _ModuleSpec? current;
+    for (final m in modules) {
+      if (m.status == _ModuleStatus.inProgress) {
+        current = m;
+        break;
+      }
+    }
+
     return FhcSurfaceCard(
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
+          Row(
             children: [
               Expanded(
                 child: Text(
-                  'Your Progress',
+                  fhcT(
+                    context,
+                    'member.kca.yourProgress',
+                    fallback: 'Your Progress',
+                  ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w700,
                     color: FhcColors.ink,
@@ -196,10 +324,10 @@ class _ProgressOverview extends StatelessWidget {
                   ),
                 ),
               ),
-              SizedBox(width: 8),
+              const SizedBox(width: 8),
               Text(
-                '4 / 12',
-                style: TextStyle(
+                '$done / $total',
+                style: const TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.w700,
                   color: FhcColors.greenDark,
@@ -211,19 +339,34 @@ class _ProgressOverview extends StatelessWidget {
           const SizedBox(height: 10),
           ClipRRect(
             borderRadius: BorderRadius.circular(8),
-            child: const LinearProgressIndicator(
-              value: 4 / 12,
+            child: LinearProgressIndicator(
+              value: total == 0 ? 0 : done / total,
               minHeight: 8,
               backgroundColor: FhcColors.border,
-              valueColor: AlwaysStoppedAnimation(FhcColors.green),
+              valueColor: const AlwaysStoppedAnimation(FhcColors.green),
             ),
           ),
           const SizedBox(height: 8),
-          const Text(
-            'Module 5 · Identity & Purpose',
+          Text(
+            current == null
+                ? fhcT(
+                  context,
+                  'member.kca.noModuleInProgress',
+                  fallback: 'No module in progress',
+                )
+                : fhcT(
+                  context,
+                  'member.kca.moduleInProgress',
+                  args: {'n': '${current.number}', 'title': current.title},
+                  fallback: 'Module {n} · {title}',
+                ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(fontSize: 11, color: FhcColors.muted, height: 1.2),
+            style: const TextStyle(
+              fontSize: 11,
+              color: FhcColors.muted,
+              height: 1.2,
+            ),
           ),
         ],
       ),
@@ -242,9 +385,21 @@ class _ModuleRow extends StatelessWidget {
     final inProgress = spec.status == _ModuleStatus.inProgress;
     final notStarted = spec.status == _ModuleStatus.notStarted;
     final statusLabel = switch (spec.status) {
-      _ModuleStatus.completed => 'Completed',
-      _ModuleStatus.inProgress => 'In Progress',
-      _ModuleStatus.notStarted => 'Not Started',
+      _ModuleStatus.completed => fhcT(
+        context,
+        'member.kca.completed',
+        fallback: 'Completed',
+      ),
+      _ModuleStatus.inProgress => fhcT(
+        context,
+        'member.kca.inProgress',
+        fallback: 'In Progress',
+      ),
+      _ModuleStatus.notStarted => fhcT(
+        context,
+        'member.kca.notStarted',
+        fallback: 'Not Started',
+      ),
     };
     final statusColor = switch (spec.status) {
       _ModuleStatus.completed => FhcColors.green,
@@ -277,7 +432,12 @@ class _ModuleRow extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Module ${spec.number}',
+                        fhcT(
+                          context,
+                          'member.kca.moduleN',
+                          args: {'n': '${spec.number}'},
+                          fallback: 'Module {n}',
+                        ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
@@ -321,7 +481,7 @@ class _ModuleRow extends StatelessWidget {
                     ),
                   ),
                 ),
-                if (inProgress)
+                if (onTap != null)
                   const Icon(
                     Icons.chevron_right,
                     size: 18,

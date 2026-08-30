@@ -1,11 +1,18 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/api/app_failure.dart';
+import '../../../../core/contracts/mobile_repository_contracts.dart';
 import '../../../../core/design_system/fhc_tokens.dart';
+import '../../../../core/di/app_services_scope.dart';
+import '../../../../core/l10n/locale_scope.dart';
+import '../../../../shared/widgets/async_state.dart';
 import '../../../../shared/widgets/fhc_components.dart';
 import '../../../foundation/presentation/fhc_nav.dart';
 
 class MessagesInboxScreen extends StatefulWidget {
-  const MessagesInboxScreen({super.key});
+  const MessagesInboxScreen({super.key, this.messageRepository});
+
+  final MessageRepository? messageRepository;
 
   @override
   State<MessagesInboxScreen> createState() => _MessagesInboxScreenState();
@@ -13,62 +20,67 @@ class MessagesInboxScreen extends StatefulWidget {
 
 class _MessagesInboxScreenState extends State<MessagesInboxScreen> {
   int _tab = 0;
+  FhcAsyncValue<List<_ThreadSpec>> _state = const FhcAsyncValue.loading();
 
-  static const _tabs = <String>['Inbox', 'Groups'];
+  MessageRepository? get _repo =>
+      widget.messageRepository ??
+      AppServicesScope.maybeOf(context)?.messageRepository;
 
-  static const _threads = <_ThreadSpec>[
-    _ThreadSpec(
-      name: 'Pastor John',
-      role: 'Mentor',
-      snippet: 'Great job on Module 7! Keep going.',
-      time: '10:20 AM',
-      unread: 2,
-      asset: 'assets/images/pastor_john_avatar.png',
-      fallback: 'assets/images/mentor_john.png',
-      route: FhcRoutes.kcaMentor,
-    ),
-    _ThreadSpec(
-      name: 'Home Church Team',
-      role: 'Group',
-      snippet: 'Meeting reminder for this Sunday.',
-      time: '9:15 AM',
-      asset: 'assets/images/message_group.png',
-      fallback: 'assets/images/member_avatar.png',
-      group: true,
-      route: FhcRoutes.groups,
-    ),
-    _ThreadSpec(
-      name: 'KCA Leaders',
-      role: 'Group',
-      snippet: 'Leadership assignment updated.',
-      time: 'Yesterday',
-      asset: 'assets/images/mentor_john.png',
-      fallback: 'assets/images/message_group.png',
-      group: true,
-      route: FhcRoutes.groups,
-    ),
-    _ThreadSpec(
-      name: 'Mission Team',
-      role: 'Group',
-      snippet: 'Crusade report due this week.',
-      time: 'Yesterday',
-      asset: 'assets/images/mission_team_avatar.png',
-      fallback: 'assets/images/member_avatar.png',
-      group: true,
-      route: FhcRoutes.groups,
-    ),
-    _ThreadSpec(
-      name: 'Admin',
-      role: 'Official',
-      snippet: 'Your report has been approved.',
-      time: 'May 18',
-      asset: 'assets/images/member_avatar.png',
-      fallback: 'assets/images/pastor_john_avatar.png',
-    ),
-  ];
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_state is FhcAsyncLoading) {
+      _load();
+    }
+  }
 
-  List<_ThreadSpec> get _visible =>
-      _tab == 1 ? _threads.where((thread) => thread.group).toList() : _threads;
+  Future<void> _load() async {
+    final repo = _repo;
+    if (repo == null) {
+      setState(() {
+        _state = FhcAsyncValue.unavailable(
+          message: fhcT(
+            context,
+            'account.messagingWaiting',
+            fallback:
+                'Messaging is waiting on the Laravel messages API. '
+                'No fixture threads are shown.',
+          ),
+        );
+      });
+      return;
+    }
+
+    setState(() => _state = const FhcAsyncValue.loading());
+    final result = await repo.conversations();
+    if (!mounted) return;
+
+    switch (result) {
+      case AppSuccess(:final value):
+        if (value.isEmpty) {
+          setState(() {
+            _state = FhcAsyncValue.empty(
+              message: fhcT(
+                context,
+                'account.noConversations',
+                fallback: 'No conversations yet.',
+              ),
+            );
+          });
+          return;
+        }
+        setState(() {
+          _state = FhcAsyncValue.data([
+            for (final item in value) _ThreadSpec.fromJson(item),
+          ]);
+        });
+      case AppError(:final failure):
+        setState(() => _state = FhcAsyncValue.error(failure));
+    }
+  }
+
+  List<_ThreadSpec> _visible(List<_ThreadSpec> threads) =>
+      _tab == 1 ? threads.where((thread) => thread.group).toList() : threads;
 
   void _goBack() {
     if (Navigator.of(context).canPop()) {
@@ -80,33 +92,36 @@ class _MessagesInboxScreenState extends State<MessagesInboxScreen> {
 
   void _selectTab(int index) {
     setState(() => _tab = index);
-    if (index == 1) {
-      fhcPush(context, FhcRoutes.groups);
-    }
   }
 
   void _open(_ThreadSpec thread) {
-    if (thread.route == null) return;
-    fhcPush(context, thread.route!);
+    if (thread.id.isEmpty) return;
+    fhcPush(context, '${FhcRoutes.kcaMentor}?conversation=${thread.id}');
   }
 
   @override
   Widget build(BuildContext context) {
-    final visible = _visible;
-
+    final tabs = [
+      fhcT(context, 'account.inbox', fallback: 'Inbox'),
+      fhcT(context, 'account.groups', fallback: 'Groups'),
+    ];
     return FhcDevicePage(
       backgroundColor: FhcColors.white,
       child: Column(
         children: [
-          FhcTopBar(title: 'MESSAGES', onBack: _goBack),
+          FhcTopBar(
+            title: fhcT(context, 'account.messagesTitle', fallback: 'MESSAGES'),
+            onBack: _goBack,
+            backTooltip: fhcT(context, 'common.back', fallback: 'Back'),
+          ),
           ColoredBox(
             color: FhcColors.white,
             child: Row(
               children: [
-                for (var i = 0; i < _tabs.length; i++)
+                for (var i = 0; i < tabs.length; i++)
                   Expanded(
                     child: _InboxTab(
-                      label: _tabs[i],
+                      label: tabs[i],
                       active: i == _tab,
                       onTap: () => _selectTab(i),
                     ),
@@ -115,23 +130,48 @@ class _MessagesInboxScreenState extends State<MessagesInboxScreen> {
             ),
           ),
           Expanded(
-            child:
-                visible.isEmpty
-                    ? const _EmptyInbox()
-                    : ListView.separated(
-                      padding: EdgeInsets.zero,
-                      itemCount: visible.length,
-                      separatorBuilder:
-                          (_, __) =>
-                              const Divider(height: 1, color: FhcColors.border),
-                      itemBuilder: (context, index) {
-                        final thread = visible[index];
-                        return _ThreadRow(
-                          thread: thread,
-                          onTap: () => _open(thread),
-                        );
-                      },
-                    ),
+            child: FhcAsyncBody<List<_ThreadSpec>>(
+              value: _state,
+              onRetry: _load,
+              emptyTitle: fhcT(
+                context,
+                'account.noMessages',
+                fallback: 'No messages',
+              ),
+              emptyMessage: fhcT(
+                context,
+                'account.noMessagesCopy',
+                fallback: 'Conversations will appear here.',
+              ),
+              unavailableTitle: fhcT(
+                context,
+                'account.messagingUnavailable',
+                fallback: 'Messaging unavailable',
+              ),
+              builder: (context, threads) {
+                final visible = _visible(threads);
+                if (visible.isEmpty) {
+                  return const _EmptyInbox();
+                }
+                return RefreshIndicator(
+                  onRefresh: _load,
+                  child: ListView.separated(
+                    padding: EdgeInsets.zero,
+                    itemCount: visible.length,
+                    separatorBuilder:
+                        (_, __) =>
+                            const Divider(height: 1, color: FhcColors.border),
+                    itemBuilder: (context, index) {
+                      final thread = visible[index];
+                      return _ThreadRow(
+                        thread: thread,
+                        onTap: () => _open(thread),
+                      );
+                    },
+                  ),
+                );
+              },
+            ),
           ),
           FhcBottomNavigation(
             selected: 3,
@@ -145,26 +185,39 @@ class _MessagesInboxScreenState extends State<MessagesInboxScreen> {
 
 class _ThreadSpec {
   const _ThreadSpec({
+    required this.id,
     required this.name,
     required this.role,
     required this.snippet,
     required this.time,
-    required this.asset,
-    required this.fallback,
     this.unread = 0,
     this.group = false,
-    this.route,
   });
 
+  factory _ThreadSpec.fromJson(JsonObject json) {
+    final unreadRaw = json['unread_count'] ?? json['unread'] ?? 0;
+    final unread =
+        unreadRaw is int ? unreadRaw : int.tryParse('$unreadRaw') ?? 0;
+    final type = '${json['type'] ?? json['kind'] ?? ''}'.toLowerCase();
+    return _ThreadSpec(
+      id: '${json['id'] ?? json['ulid'] ?? ''}',
+      name:
+          '${json['subject'] ?? json['title'] ?? json['name'] ?? json['participant_name'] ?? 'Conversation'}',
+      role: '${json['role'] ?? json['subtitle'] ?? (type == 'group' ? 'Group' : 'Inbox')}',
+      snippet: '${json['last_message'] ?? json['snippet'] ?? json['preview'] ?? ''}',
+      time: '${json['updated_at'] ?? json['last_message_at'] ?? json['time'] ?? ''}',
+      unread: unread,
+      group: type == 'group' || json['is_group'] == true,
+    );
+  }
+
+  final String id;
   final String name;
   final String role;
   final String snippet;
   final String time;
-  final String asset;
-  final String fallback;
   final int unread;
   final bool group;
-  final String? route;
 }
 
 class _InboxTab extends StatelessWidget {
@@ -231,7 +284,11 @@ class _ThreadRow extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _ThreadAvatar(asset: thread.asset, fallback: thread.fallback),
+              const CircleAvatar(
+                radius: 24,
+                backgroundColor: FhcColors.mint,
+                child: Icon(Icons.person_outline, color: FhcColors.green),
+              ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -302,46 +359,6 @@ class _ThreadRow extends StatelessWidget {
   }
 }
 
-class _ThreadAvatar extends StatelessWidget {
-  const _ThreadAvatar({required this.asset, required this.fallback});
-
-  final String asset;
-  final String fallback;
-
-  static const _size = 48.0;
-
-  Widget _leaf() {
-    return const ColoredBox(
-      color: FhcColors.mint,
-      child: Icon(Icons.person_outline, size: 22, color: FhcColors.green),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipOval(
-      child: SizedBox(
-        width: _size,
-        height: _size,
-        child: Image.asset(
-          asset,
-          width: _size,
-          height: _size,
-          fit: BoxFit.cover,
-          errorBuilder:
-              (context, error, stackTrace) => Image.asset(
-                fallback,
-                width: _size,
-                height: _size,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) => _leaf(),
-              ),
-        ),
-      ),
-    );
-  }
-}
-
 class _UnreadBadge extends StatelessWidget {
   const _UnreadBadge({required this.count});
 
@@ -350,7 +367,12 @@ class _UnreadBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Semantics(
-      label: '$count unread',
+      label: fhcT(
+        context,
+        'account.unreadCount',
+        args: {'count': '$count'},
+        fallback: '$count unread',
+      ),
       child: Container(
         constraints: const BoxConstraints(minWidth: 20, minHeight: 20),
         padding: const EdgeInsets.symmetric(horizontal: 5),
@@ -378,19 +400,19 @@ class _EmptyInbox extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Center(
+    return Center(
       child: Padding(
-        padding: EdgeInsets.all(28),
+        padding: const EdgeInsets.all(28),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            FhcCircleIcon(icon: Icons.chat_bubble_outline, size: 58),
-            SizedBox(height: 14),
+            const FhcCircleIcon(icon: Icons.chat_bubble_outline, size: 58),
+            const SizedBox(height: 14),
             Text(
-              'No messages',
+              fhcT(context, 'account.noMessages', fallback: 'No messages'),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(
+              style: const TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
                 color: FhcColors.ink,

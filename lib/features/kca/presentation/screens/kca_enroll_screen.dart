@@ -1,19 +1,12 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/design_system/fhc_tokens.dart';
+import '../../../../core/l10n/locale_scope.dart';
 import '../../../../shared/widgets/fhc_components.dart';
 import '../../../foundation/presentation/fhc_nav.dart';
 
 class KcaEnrollScreen extends StatelessWidget {
   const KcaEnrollScreen({super.key});
-
-  static const _bullets = <(IconData, String)>[
-    (Icons.menu_book_outlined, '12 Powerful Modules'),
-    (Icons.groups_outlined, 'Mentorship & Accountability'),
-    (Icons.assignment_turned_in_outlined, 'Assignments & Evidence'),
-    (Icons.school_outlined, 'Practical Ministry Experience'),
-    (Icons.public, 'Global Certification'),
-  ];
 
   void _pop(BuildContext context) {
     if (Navigator.of(context).canPop()) {
@@ -25,6 +18,49 @@ class KcaEnrollScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bullets = <(IconData, String)>[
+      (
+        Icons.menu_book_outlined,
+        fhcT(
+          context,
+          'member.kca.twelveModules',
+          fallback: '12 Powerful Modules',
+        ),
+      ),
+      (
+        Icons.groups_outlined,
+        fhcT(
+          context,
+          'member.kca.mentorshipAccountability',
+          fallback: 'Mentorship & Accountability',
+        ),
+      ),
+      (
+        Icons.assignment_turned_in_outlined,
+        fhcT(
+          context,
+          'member.kca.assignmentsEvidence',
+          fallback: 'Assignments & Evidence',
+        ),
+      ),
+      (
+        Icons.school_outlined,
+        fhcT(
+          context,
+          'member.kca.practicalMinistry',
+          fallback: 'Practical Ministry Experience',
+        ),
+      ),
+      (
+        Icons.public,
+        fhcT(
+          context,
+          'member.kca.globalCertification',
+          fallback: 'Global Certification',
+        ),
+      ),
+    ];
+
     return FhcDevicePage(
       child: Column(
         children: [
@@ -36,7 +72,7 @@ class KcaEnrollScreen extends StatelessWidget {
               padding: EdgeInsets.zero,
               icon: const Icon(Icons.close, size: 22),
               color: FhcColors.ink,
-              tooltip: 'Close',
+              tooltip: fhcT(context, 'common.close', fallback: 'Close'),
             ),
           ),
           Expanded(
@@ -74,10 +110,14 @@ class KcaEnrollScreen extends StatelessWidget {
                           ),
                         ),
                         SizedBox(height: compact ? 12 : 18),
-                        const Text(
-                          'KINGDOM CHANGE AGENTS',
+                        Text(
+                          fhcT(
+                            context,
+                            'member.kca.kingdomChangeAgents',
+                            fallback: 'KINGDOM CHANGE AGENTS',
+                          ),
                           textAlign: TextAlign.center,
-                          style: TextStyle(
+                          style: const TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.w700,
                             height: 1.2,
@@ -86,17 +126,21 @@ class KcaEnrollScreen extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(height: 8),
-                        const Text(
-                          'A discipleship journey. Not just a course.',
+                        Text(
+                          fhcT(
+                            context,
+                            'member.kca.discipleshipJourney',
+                            fallback: 'A discipleship journey. Not just a course.',
+                          ),
                           textAlign: TextAlign.center,
-                          style: TextStyle(
+                          style: const TextStyle(
                             fontSize: 13,
                             height: 1.4,
                             color: FhcColors.muted,
                           ),
                         ),
                         SizedBox(height: compact ? 16 : 24),
-                        for (final bullet in _bullets)
+                        for (final bullet in bullets)
                           _BulletLine(icon: bullet.$1, text: bullet.$2),
                       ],
                     ),
@@ -108,20 +152,24 @@ class KcaEnrollScreen extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
             child: FhcPrimaryButton(
-              label: 'Enroll Now',
-              onPressed: () => fhcGo(context, FhcRoutes.kca),
+              label: fhcT(
+                context,
+                'member.kca.enrollNow',
+                fallback: 'Enroll Now',
+              ),
+              onPressed: () => fhcGo(context, '/kca/enrollment/1'),
             ),
           ),
           TextButton(
-            onPressed: () {},
+            onPressed: () => fhcPush(context, FhcRoutes.kcaModules),
             style: TextButton.styleFrom(
               foregroundColor: FhcColors.green,
               minimumSize: const Size(88, 40),
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
             ),
-            child: const Text(
-              'Learn More',
-              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+            child: Text(
+              fhcT(context, 'member.kca.learnMore', fallback: 'Learn More'),
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
             ),
           ),
           const SizedBox(height: 4),

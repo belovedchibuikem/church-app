@@ -1,11 +1,11 @@
 {
-    "name": "family_house_connect_mobile",
-    "short_name": "family_house_connect_mobile",
+    "name": "Family House Connect",
+    "short_name": "FHC",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#FFFFFF",
+    "theme_color": "#1D3D81",
+    "description": "The Family House of God Int'l — Reaching the World With the Love of Christ.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

@@ -1,11 +1,17 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/api/app_failure.dart';
+import '../../../../core/contracts/mobile_repository_contracts.dart';
 import '../../../../core/design_system/fhc_tokens.dart';
+import '../../../../core/di/app_services_scope.dart';
+import '../../../../core/l10n/locale_scope.dart';
 import '../../../../shared/widgets/fhc_components.dart';
 import '../../../foundation/presentation/fhc_nav.dart';
 
 class PrayerNewScreen extends StatefulWidget {
-  const PrayerNewScreen({super.key});
+  const PrayerNewScreen({super.key, this.prayerRepository});
+
+  final PrayerRepository? prayerRepository;
 
   @override
   State<PrayerNewScreen> createState() => _PrayerNewScreenState();
@@ -15,26 +21,112 @@ class _PrayerNewScreenState extends State<PrayerNewScreen> {
   final _requestController = TextEditingController();
   bool _anonymous = false;
   String _category = 'Personal';
+  bool _submitting = false;
+  String? _error;
+  List<_RecentPrayer> _recent = const [];
 
-  static const _categories = <(IconData, String)>[
-    (Icons.person_outline, 'Personal'),
-    (Icons.groups_outlined, 'Family'),
-    (Icons.favorite_border, 'Healing'),
-    (Icons.auto_awesome, 'Breakthrough'),
-    (Icons.shield_outlined, 'Protection'),
-    (Icons.volunteer_activism_outlined, 'Thanksgiving'),
+  static const _categories = <(IconData, String, String)>[
+    (Icons.person_outline, 'Personal', 'member.prayer.categoryPersonal'),
+    (Icons.groups_outlined, 'Family', 'member.prayer.categoryFamily'),
+    (Icons.favorite_border, 'Healing', 'member.prayer.categoryHealing'),
+    (Icons.auto_awesome, 'Breakthrough', 'member.prayer.categoryBreakthrough'),
+    (Icons.shield_outlined, 'Protection', 'member.prayer.categoryProtection'),
+    (
+      Icons.volunteer_activism_outlined,
+      'Thanksgiving',
+      'member.prayer.categoryThanksgiving',
+    ),
   ];
 
-  static const _recent = <(String, String, String)>[
-    ('Healing for my mother', 'Healing', '24 praying · 2 days ago'),
-    ('Breakthrough in my business', 'Breakthrough', '18 praying · 5 days ago'),
-    ('Protection over my family', 'Protection', '12 praying · 1 week ago'),
-  ];
+  PrayerRepository? get _repo =>
+      widget.prayerRepository ??
+      AppServicesScope.maybeOf(context)?.prayerRepository;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_recent.isEmpty) {
+      _loadRecent();
+    }
+  }
 
   @override
   void dispose() {
     _requestController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadRecent() async {
+    final repo = _repo;
+    if (repo == null) return;
+    final result = await repo.listOwn();
+    if (!mounted) return;
+    if (result is AppSuccess<List<JsonObject>>) {
+      setState(() {
+        _recent = [
+          for (final item in result.value.take(3))
+            _RecentPrayer(
+              title:
+                  '${item['subject'] ?? item['title'] ?? item['request'] ?? item['body'] ?? fhcT(context, 'member.prayer', fallback: 'Prayer')}',
+              category:
+                  '${item['status'] ?? item['category'] ?? fhcT(context, 'member.prayer.categoryPersonal', fallback: 'Personal')}',
+              meta:
+                  '${item['praying_count'] ?? item['supporters'] ?? fhcT(context, 'member.prayer.shared', fallback: 'Shared')}',
+            ),
+        ];
+      });
+    }
+  }
+
+  Future<void> _submit() async {
+    final text = _requestController.text.trim();
+    if (text.isEmpty) {
+      setState(
+        () => _error = fhcT(
+          context,
+          'member.prayer.writeBeforeSubmit',
+          fallback: 'Write your prayer request before submitting.',
+        ),
+      );
+      return;
+    }
+    final repo = _repo;
+    if (repo == null) {
+      setState(() {
+        _error = fhcT(
+          context,
+          'member.prayer.submitUnavailable',
+          fallback: 'Prayer submission is waiting on the Laravel prayers API.',
+        );
+      });
+      return;
+    }
+
+    setState(() {
+      _submitting = true;
+      _error = null;
+    });
+
+    final subject = text.length > 80 ? '${text.substring(0, 77)}…' : text;
+    final result = await repo.create({
+      'subject': subject,
+      'body': _anonymous
+          ? '[$_category · anonymous]\n$text'
+          : '[$_category]\n$text',
+    });
+
+    if (!mounted) return;
+
+    switch (result) {
+      case AppSuccess():
+        setState(() => _submitting = false);
+        fhcGo(context, FhcRoutes.prayer);
+      case AppError(:final failure):
+        setState(() {
+          _submitting = false;
+          _error = failure.message;
+        });
+    }
   }
 
   void _onBack() {
@@ -52,14 +144,21 @@ class _PrayerNewScreenState extends State<PrayerNewScreen> {
       backgroundColor: FhcColors.canvas,
       child: Column(
         children: [
-          FhcTopBar(title: 'Prayer', onBack: _onBack),
+          FhcTopBar(
+            title: fhcT(context, 'member.prayer', fallback: 'Prayer'),
+            onBack: _onBack,
+          ),
           Expanded(
             child: ListView(
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
               children: [
-                const Text(
-                  'Write your prayer request',
-                  style: TextStyle(
+                Text(
+                  fhcT(
+                    context,
+                    'member.prayer.writeRequest',
+                    fallback: 'Write your prayer request',
+                  ),
+                  style: const TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w700,
                     color: FhcColors.ink,
@@ -73,9 +172,9 @@ class _PrayerNewScreenState extends State<PrayerNewScreen> {
                   onChanged: (value) => setState(() => _anonymous = value),
                 ),
                 const SizedBox(height: 18),
-                const Text(
-                  'Category',
-                  style: TextStyle(
+                Text(
+                  fhcT(context, 'member.prayer.category', fallback: 'Category'),
+                  style: const TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w700,
                     color: FhcColors.ink,
@@ -93,29 +192,47 @@ class _PrayerNewScreenState extends State<PrayerNewScreen> {
                     for (final item in _categories)
                       _CategoryTile(
                         icon: item.$1,
-                        label: item.$2,
+                        label: fhcT(context, item.$3, fallback: item.$2),
                         selected: _category == item.$2,
                         onTap: () => setState(() => _category = item.$2),
                       ),
                   ],
                 ),
-                const SizedBox(height: 18),
-                const Text(
-                  'Recent Requests',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: FhcColors.ink,
+                if (_error != null) ...[
+                  const SizedBox(height: 12),
+                  FhcErrorState(
+                    title: fhcT(
+                      context,
+                      'errors.unableToSubmit',
+                      fallback: 'Unable to submit',
+                    ),
+                    message: _error!,
+                    onRetry: _submitting ? null : _submit,
                   ),
-                ),
-                const SizedBox(height: 10),
-                for (var i = 0; i < _recent.length; i++) ...[
-                  if (i > 0) const SizedBox(height: 8),
-                  _RecentRequestCard(
-                    title: _recent[i].$1,
-                    category: _recent[i].$2,
-                    meta: _recent[i].$3,
+                ],
+                if (_recent.isNotEmpty) ...[
+                  const SizedBox(height: 18),
+                  Text(
+                    fhcT(
+                      context,
+                      'member.prayer.recentRequests',
+                      fallback: 'Recent Requests',
+                    ),
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: FhcColors.ink,
+                    ),
                   ),
+                  const SizedBox(height: 10),
+                  for (var i = 0; i < _recent.length; i++) ...[
+                    if (i > 0) const SizedBox(height: 8),
+                    _RecentRequestCard(
+                      title: _recent[i].title,
+                      category: _recent[i].category,
+                      meta: _recent[i].meta,
+                    ),
+                  ],
                 ],
               ],
             ),
@@ -123,14 +240,32 @@ class _PrayerNewScreenState extends State<PrayerNewScreen> {
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
             child: FhcPrimaryButton(
-              label: 'Submit',
-              onPressed: () => fhcGo(context, FhcRoutes.prayer),
+              label: _submitting
+                  ? fhcT(
+                      context,
+                      'common.submitting',
+                      fallback: 'Submitting…',
+                    )
+                  : fhcT(context, 'common.submit', fallback: 'Submit'),
+              onPressed: _submitting ? null : _submit,
             ),
           ),
         ],
       ),
     );
   }
+}
+
+class _RecentPrayer {
+  const _RecentPrayer({
+    required this.title,
+    required this.category,
+    required this.meta,
+  });
+
+  final String title;
+  final String category;
+  final String meta;
 }
 
 class _RequestField extends StatelessWidget {
@@ -149,7 +284,11 @@ class _RequestField extends StatelessWidget {
       textCapitalization: TextCapitalization.sentences,
       style: FhcTypography.body,
       decoration: InputDecoration(
-        hintText: 'Share what you would like the church to pray for.',
+        hintText: fhcT(
+          context,
+          'member.prayer.requestHint',
+          fallback: 'Share what you would like the church to pray for.',
+        ),
         hintStyle: FhcTypography.hint,
         filled: true,
         fillColor: FhcColors.white,
@@ -187,27 +326,35 @@ class _AnonymousToggle extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(14, 8, 8, 8),
       child: Row(
         children: [
-          const Expanded(
+          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Submit Anonymously',
+                  fhcT(
+                    context,
+                    'member.prayer.submitAnonymously',
+                    fallback: 'Submit Anonymously',
+                  ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w700,
                     color: FhcColors.ink,
                     height: 1.2,
                   ),
                 ),
-                SizedBox(height: 3),
+                const SizedBox(height: 3),
                 Text(
-                  'Your name will not be shown',
+                  fhcT(
+                    context,
+                    'member.prayer.anonymousCopy',
+                    fallback: 'Your name will not be shown',
+                  ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 11,
                     color: FhcColors.muted,
                     height: 1.2,

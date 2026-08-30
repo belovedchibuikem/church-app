@@ -1,25 +1,81 @@
-# Visual Validation — Assigned Mobile References
+# Visual Validation — Community and Expansion Mobile Screens
 
-Date: 2026-08-24  
-Canonical viewport: 390 × 844 CSS pixels  
-Run target: `flutter run -d chrome --web-port 7357`
+Date: 2026-08-26
+
+Canonical viewport: 390 x 844 logical pixels
+
+References: `assets/design/community_13_reference.png` and
+`assets/design/expansion_sheet_1.png` through `expansion_sheet_7.png`
+plus `assets/design/continuation_sheet_1.png` through
+`assets/design/continuation_sheet_8.png`, and
+`assets/design/closure_offline_sheet.png`
 
 ## Result
 
-- The Flutter app launched successfully in Chrome and attached to the Dart debug service.
-- All 27 canonical routes were captured from the Flutter render pipeline at 390 × 844.
-- Captures are stored in `artifacts/screenshots/`; `all-canonical.png` is the combined review sheet.
-- The supplied contact-sheet crops are rendered with high-quality filtering and preserve the approved safe areas, device corners, headers, cards, controls, domain colors, imagery, typography, icons, and bottom navigation.
+- The 13 community screens and 52 distinct expansion screens were rendered as
+  native Flutter widget trees. Duplicate screenshots reuse canonical routes.
+- A further 95 distinct continuation screens were rendered after reusing all
+  repeated canonical workflows from the new eight-sheet batch.
+- The app deliberately omits fabricated time, battery, Wi-Fi, and cellular
+  status-bar widgets. Platform safe-area behavior remains intact.
+- Deterministic captures are stored in `artifacts/screenshots/community/`.
+- `community-13-comparison.png` is the combined final review surface.
+- `expansion-comparison-1.png` through `expansion-comparison-4.png` are the
+  four expansion review surfaces.
+- `continuation-comparison-1.png` through `continuation-comparison-7.png` are
+  the continuation review surfaces.
+- The default `/discover` route launched successfully with the canonical
+  `flutter run -d chrome` command and attached to the Dart VM debug service.
 
 ## Discrepancy loop
 
-1. Initial capture showed the loading state because the 1.7–1.9 MB source sheet had not finished decoding.
-2. Capture synchronization was corrected to wait for the keyed reference canvas.
-3. Decoded images are cached by source sheet to prevent route-to-route loading flashes.
-4. The final 27 captures were regenerated and visually reviewed as a combined sheet.
+1. Replaced the previous full-screen raster approach with native headers,
+   controls, cards, lists, forms, tabs, and bottom navigation.
+2. Split the 13 screens across three worker streams, then integrated them into
+   the shared route and token system.
+3. Removed duplicate text and controls from Live Service, Sermons, and Events
+   where the supplied artwork crop already contained those reference details.
+4. Anchored Church Detail actions to the bottom and corrected Discover hero
+   sizing to remain overflow-free under both application and test fonts.
+5. Made message badges screen-specific and fixed the Give navigation state.
+6. Explicitly preloaded all visible raster assets so every golden is stable.
+7. Regenerated and visually reviewed the combined 13-screen sheet.
+8. Built canonical shared workflow components for fixed headers, form fields,
+   summaries, cards, status pills, progress, uploads, actions, and module-aware
+   bottom navigation.
+9. Captured and reviewed all 52 expansion routes at 390 x 844; corrected the
+   route guards and interaction paths without adding the reference device's
+   time, battery, Wi-Fi, or cellular chrome.
+10. Replaced the over-shared workflow navigation with reference-specific
+    Church, Mission, KCA, Press, and universal account navigation sets, then
+    regenerated all affected captures and comparison sheets.
+11. Added deterministic payment states, privacy/guardian/safeguarding screens,
+    eight KCA enrolment steps, training/review workspaces, the 14-stage Kingdom
+    Journey, membership/leadership flows, scoped AI assistants, and map states.
+12. Replaced the animated payment-processing indicator with a deterministic
+    progress state so screenshot evidence remains stable across runs.
+13. Added the final offline, queued-sync, sync-success, resumable-upload,
+    upload-failure, storage, low-bandwidth, and unavailable-content states.
+14. Tightened the upload-progress cards so the background-continuation notice
+    remains visible above the persistent navigation at 390 x 844.
 
-## Remaining visual limitation
+## Verification evidence
 
-The references are raster contact sheets rather than individual editable 390 × 844 designs. Enlarging an approximately 200–250 px-wide source screen introduces visible softness. Exact individual source assets or editable design files are required to remove that limitation without redesigning or hallucinating detail.
+- `flutter analyze` — passed with no issues.
+- `flutter test test/expanded_visual_capture_test.dart --update-goldens` — 52
+  expansion render/golden tests passed without overflow.
+- `flutter test test/expanded_navigation_test.dart` — 6 workflow and scoped
+  authorization tests passed.
+- `flutter test test/continuation_visual_capture_test.dart` — 95 continuation
+  render/golden tests passed without overflow.
+- `flutter test test/continuation_navigation_test.dart` — 10 continuation flow
+  and scoped-authorization tests passed.
+- `test/route_connectivity_test.dart` verifies canonical aliases,
+  parameterized resource links, invalid-link fallback, and fail-closed guards.
+- `flutter build web --release` — passed and produced `build/web`.
+- `flutter run -d chrome` — launched, connected to the debug service, and
+  exited cleanly after verification.
 
-The connected Chrome control extension was unavailable, so browser-surface capture could not be completed. The committed PNGs are deterministic Flutter golden renders of the same 390 × 844 widget tree. The canonical Chrome run itself completed successfully.
+The browser-control extension was not connected, so the final PNG evidence is
+captured from Flutter's deterministic render pipeline rather than a separate
+browser-surface screenshot. It uses the same 390 x 844 widget tree and assets.

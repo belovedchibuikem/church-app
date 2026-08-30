@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/design_system/fhc_tokens.dart';
+import '../../../../core/l10n/locale_scope.dart';
+import '../../../../core/launch/app_launch_scope.dart';
 import '../../../../shared/widgets/fhc_components.dart';
 import '../fhc_nav.dart';
 
@@ -14,18 +16,34 @@ class RoleSelectionScreen extends StatefulWidget {
 class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
   int _selected = 0;
 
-  static const _roles = <(IconData, String, String)>[
-    (Icons.person_outline, 'Member', 'I want to connect, grow and belong.'),
-    (Icons.groups_outlined, 'Volunteer / Worker', 'I serve in the ministry.'),
-    (
-      Icons.school_outlined,
-      'KCA Student',
-      'I want to grow through the KCA journey.',
+  static const _roles = <_RoleSpec>[
+    _RoleSpec(
+      icon: Icons.person_outline,
+      titleKey: 'auth.roleMember',
+      title: 'Member',
+      subtitleKey: 'auth.roleMemberCopy',
+      subtitle: 'I want to connect, grow and belong.',
     ),
-    (
-      Icons.person_pin_outlined,
-      'Leader / Pastor',
-      'I lead a church or ministry.',
+    _RoleSpec(
+      icon: Icons.groups_outlined,
+      titleKey: 'auth.roleVolunteer',
+      title: 'Volunteer / Worker',
+      subtitleKey: 'auth.roleVolunteerCopy',
+      subtitle: 'I serve in the ministry.',
+    ),
+    _RoleSpec(
+      icon: Icons.school_outlined,
+      titleKey: 'auth.roleKca',
+      title: 'KCA Student',
+      subtitleKey: 'auth.roleKcaCopy',
+      subtitle: 'I want to grow through the KCA journey.',
+    ),
+    _RoleSpec(
+      icon: Icons.person_pin_outlined,
+      titleKey: 'auth.roleLeader',
+      title: 'Leader / Pastor',
+      subtitleKey: 'auth.roleLeaderCopy',
+      subtitle: 'I lead a church or ministry.',
     ),
   ];
 
@@ -34,11 +52,11 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
     return FhcDevicePage(
       child: Column(
         children: [
-          FhcTopBar(title: '', onBack: () => fhcGo(context, '/2fa')),
-          const Text(
-            'Who Are You?',
+          FhcTopBar(title: '', onBack: () => fhcGo(context, '/sign-in')),
+          Text(
+            fhcT(context, 'auth.whoAreYou', fallback: 'Who Are You?'),
             textAlign: TextAlign.center,
-            style: TextStyle(
+            style: const TextStyle(
               fontSize: 22,
               fontWeight: FontWeight.w700,
               height: 1.2,
@@ -46,12 +64,16 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
             ),
           ),
           const SizedBox(height: 8),
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 36),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 36),
             child: Text(
-              'Select the option that best describes you.',
+              fhcT(
+                context,
+                'auth.selectRoleCopy',
+                fallback: 'Select the option that best describes you.',
+              ),
               textAlign: TextAlign.center,
-              style: TextStyle(
+              style: const TextStyle(
                 fontSize: 13,
                 height: 1.4,
                 color: FhcColors.muted,
@@ -67,9 +89,17 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
                     if (i > 0) const SizedBox(height: 10),
                     Expanded(
                       child: _RoleCard(
-                        icon: _roles[i].$1,
-                        title: _roles[i].$2,
-                        subtitle: _roles[i].$3,
+                        icon: _roles[i].icon,
+                        title: fhcT(
+                          context,
+                          _roles[i].titleKey,
+                          fallback: _roles[i].title,
+                        ),
+                        subtitle: fhcT(
+                          context,
+                          _roles[i].subtitleKey,
+                          fallback: _roles[i].subtitle,
+                        ),
                         selected: i == _selected,
                         onTap: () => setState(() => _selected = i),
                       ),
@@ -77,8 +107,19 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
                   ],
                   const SizedBox(height: 16),
                   FhcPrimaryButton(
-                    label: 'Continue',
-                    onPressed: () => fhcGo(context, '/hub'),
+                    label: fhcT(
+                      context,
+                      'common.continue',
+                      fallback: 'Continue',
+                    ),
+                    onPressed: () async {
+                      const keys = ['member', 'volunteer', 'kca', 'leader'];
+                      await AppLaunchScope.maybeOf(
+                        context,
+                      )?.saveRole(keys[_selected]);
+                      if (!context.mounted) return;
+                      fhcReset(context, '/hub');
+                    },
                   ),
                 ],
               ),
@@ -88,6 +129,22 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
       ),
     );
   }
+}
+
+class _RoleSpec {
+  const _RoleSpec({
+    required this.icon,
+    required this.titleKey,
+    required this.title,
+    required this.subtitleKey,
+    required this.subtitle,
+  });
+
+  final IconData icon;
+  final String titleKey;
+  final String title;
+  final String subtitleKey;
+  final String subtitle;
 }
 
 class _RoleCard extends StatelessWidget {

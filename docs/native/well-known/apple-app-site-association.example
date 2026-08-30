@@ -1,0 +1,11 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appIDs": ["TEAMID.com.smartlogix.family_house_connect"],
+        "paths": ["*"]
+      }
+    ]
+  }
+}

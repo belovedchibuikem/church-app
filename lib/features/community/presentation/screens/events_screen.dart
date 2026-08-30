@@ -1,11 +1,17 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/api/app_failure.dart';
+import '../../../../core/contracts/mobile_repository_contracts.dart';
 import '../../../../core/design_system/fhc_tokens.dart';
+import '../../../../core/di/app_services_scope.dart';
+import '../../../../core/l10n/locale_scope.dart';
+import '../../../../shared/widgets/async_state.dart';
 import '../../../../shared/widgets/fhc_components.dart';
-import '../../../foundation/presentation/fhc_nav.dart';
 
 class EventsScreen extends StatefulWidget {
-  const EventsScreen({super.key});
+  const EventsScreen({super.key, this.repository});
+
+  final EventRepository? repository;
 
   @override
   State<EventsScreen> createState() => _EventsScreenState();
@@ -13,545 +19,383 @@ class EventsScreen extends StatefulWidget {
 
 class _EventsScreenState extends State<EventsScreen> {
   int _tab = 0;
+  FhcAsyncValue<List<JsonObject>> _state = const FhcAsyncValue.loading();
+  bool _loadedTab = false;
 
-  static const _tabs = <String>['Upcoming', 'My Events', 'Past Events'];
+  EventRepository? get _repository =>
+      widget.repository ??
+      AppServicesScope.maybeOf(context)?.eventRepository;
 
-  static const _upcoming = <_EventItem>[
-    _EventItem(
-      title: 'KCA Training - Module 5',
-      detail: 'May 31, 2025 • Online',
-      asset: 'assets/images/event_kca_training.png',
-      fallback: 'assets/images/event_kca_graduation.png',
-      extraFallback: 'assets/images/event_graduation_thumb.png',
-      icon: Icons.school_outlined,
-    ),
-    _EventItem(
-      title: 'Youth & Young Adults Summit',
-      detail: 'Jul 10 – 12, 2025 • Port Harcourt',
-      asset: 'assets/images/event_youth_thumb.png',
-      fallback: 'assets/images/event_youth_summit.png',
-      extraFallback: 'assets/images/event_kca_graduation.png',
-      icon: Icons.groups_outlined,
-    ),
-    _EventItem(
-      title: 'Global Prayer Conference',
-      detail: 'Aug 1 – 3, 2025 • Online',
-      asset: 'assets/images/event_prayer_thumb.png',
-      fallback: 'assets/images/event_prayer_conference.png',
-      extraFallback: 'assets/images/event_kca_graduation.png',
-      icon: Icons.volunteer_activism_outlined,
-    ),
-  ];
-
-  static const _mine = <_EventItem>[
-    _EventItem(
-      title: 'Annual Convention 2025',
-      detail: 'May 24 – 26, 2025 • Lagos, Nigeria',
-      asset: 'assets/images/convention_crowd.png',
-      fallback: 'assets/images/event_convention.png',
-      extraFallback: 'assets/images/convention_2025.png',
-      icon: Icons.event_outlined,
-      registered: true,
-    ),
-  ];
-
-  static const _past = <_EventItem>[
-    _EventItem(
-      title: 'Youth Summit',
-      detail: 'Mar 8 – 9, 2025 • Ikeja',
-      asset: 'assets/images/event_youth_thumb.png',
-      fallback: 'assets/images/event_youth_summit.png',
-      extraFallback: 'assets/images/event_kca_graduation.png',
-      icon: Icons.groups_outlined,
-    ),
-  ];
-
-  List<_EventItem> get _items => switch (_tab) {
-    1 => _mine,
-    2 => _past,
-    _ => _upcoming,
-  };
-
-  void _goBack() {
-    if (Navigator.of(context).canPop()) {
-      Navigator.of(context).pop();
-    } else {
-      fhcGo(context, FhcRoutes.hub);
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_loadedTab) {
+      _loadedTab = true;
+      _load();
     }
   }
 
-  void _openDetail() => fhcPush(context, FhcRoutes.eventDetail);
+  Future<void> _load() async {
+    final repository = _repository;
+    if (repository == null) {
+      setState(() {
+        _state = FhcAsyncValue.unavailable(
+          message: fhcT(
+            context,
+            'events.catalogueRequiresApi',
+            fallback:
+                'Events catalogue requires the Laravel public events API. '
+                'No fixture list is shown.',
+          ),
+        );
+      });
+      return;
+    }
+
+    setState(() => _state = const FhcAsyncValue.loading());
+    final AppResult<List<JsonObject>> result;
+    if (_tab == 0) {
+      result = await repository.list(const {'sort': 'starts_at'});
+    } else {
+      final when = _tab == 1 ? 'upcoming' : 'past';
+      result = await repository.listMyRegistrations(when: when);
+    }
+    if (!mounted) return;
+    switch (result) {
+      case AppSuccess(:final value):
+        setState(() {
+          _state = value.isEmpty
+              ? FhcAsyncValue.empty(
+                  message: fhcT(
+                    context,
+                    'events.publishedAppearHere',
+                    fallback:
+                        'When events are published, they will appear here.',
+                  ),
+                )
+              : FhcAsyncValue.data(value);
+        });
+      case AppError(:final failure):
+        setState(() => _state = FhcAsyncValue.error(failure));
+    }
+  }
+
+  void _selectTab(int index) {
+    if (_tab == index) return;
+    setState(() => _tab = index);
+    _load();
+  }
+
+  void _openEvent(String id) {
+    if (id.isEmpty) return;
+    Navigator.of(context).pushNamed('/events/$id', arguments: id);
+  }
+
+  void _openRegister(String id) {
+    if (id.isEmpty) return;
+    Navigator.of(context).pushNamed('/events/$id/register', arguments: id);
+  }
+
+  void _openTicket(JsonObject registration) {
+    final id =
+        '${registration['id'] ?? registration['registration_id'] ?? ''}'.trim();
+    if (id.isEmpty) return;
+    Navigator.of(context).pushNamed('/events/tickets', arguments: id);
+  }
+
+  String _monthLabel(int month) {
+    const keys = [
+      'events.monthJan',
+      'events.monthFeb',
+      'events.monthMar',
+      'events.monthApr',
+      'events.monthMay',
+      'events.monthJun',
+      'events.monthJul',
+      'events.monthAug',
+      'events.monthSep',
+      'events.monthOct',
+      'events.monthNov',
+      'events.monthDec',
+    ];
+    const fallbacks = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    return fhcT(context, keys[month - 1], fallback: fallbacks[month - 1]);
+  }
+
+  String _formatDate(DateTime d) {
+    return '${_monthLabel(d.month)} ${d.day}, ${d.year}';
+  }
+
+  String _formatTime(DateTime d) {
+    final hour = d.hour % 12 == 0 ? 12 : d.hour % 12;
+    final minute = d.minute.toString().padLeft(2, '0');
+    final suffix = d.hour >= 12
+        ? fhcT(context, 'events.pm', fallback: 'PM')
+        : fhcT(context, 'events.am', fallback: 'AM');
+    return '$hour:$minute $suffix';
+  }
+
+  JsonObject _eventOf(JsonObject row) {
+    final nested = row['event'];
+    if (nested is Map) {
+      return Map<String, Object?>.from(
+        nested.map((k, v) => MapEntry('$k', v)),
+      );
+    }
+    return row;
+  }
+
+  String _when(JsonObject event) {
+    final startsAt = DateTime.tryParse('${event['starts_at'] ?? ''}');
+    final endsAt = DateTime.tryParse('${event['ends_at'] ?? ''}');
+    if (startsAt == null) {
+      return fhcT(context, 'events.scheduleTba', fallback: 'Schedule TBA');
+    }
+    final localStart = startsAt.toLocal();
+    if (endsAt != null) {
+      final localEnd = endsAt.toLocal();
+      if (localStart.year == localEnd.year &&
+          localStart.month == localEnd.month &&
+          localStart.day == localEnd.day) {
+        return '${_formatDate(localStart)}  •  ${_formatTime(localStart)}';
+      }
+      return '${_formatDate(localStart)} – ${_formatDate(localEnd)}';
+    }
+    return '${_formatDate(localStart)}  •  ${_formatTime(localStart)}';
+  }
+
+  String _where(JsonObject event) {
+    final location = event['location'];
+    if (location is Map) {
+      final name = '${location['name'] ?? ''}'.trim();
+      final locality = '${location['locality'] ?? ''}'.trim();
+      if (name.isNotEmpty && locality.isNotEmpty) return '$name, $locality';
+      if (name.isNotEmpty) return name;
+      if (locality.isNotEmpty) return locality;
+    }
+    return fhcT(context, 'events.locationTba', fallback: 'Location TBA');
+  }
 
   @override
   Widget build(BuildContext context) {
-    final items = _items;
-
     return FhcDevicePage(
-      backgroundColor: FhcColors.canvas,
+      backgroundColor: FhcColors.white,
       child: Column(
         children: [
-          ColoredBox(
-            color: FhcColors.white,
-            child: Column(
-              children: [
-                FhcTopBar(title: 'EVENTS', onBack: _goBack),
-                Row(
-                  children: [
-                    for (var i = 0; i < _tabs.length; i++)
-                      Expanded(
-                        child: _EventsTab(
-                          label: _tabs[i],
-                          active: i == _tab,
-                          onTap: () => setState(() => _tab = i),
-                        ),
-                      ),
-                  ],
-                ),
-              ],
-            ),
+          FhcTopBar(
+            title: fhcT(context, 'nav.events', fallback: 'Events'),
           ),
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 18),
-              children: [
-                if (_tab == 0) ...[
-                  _FeaturedConvention(onOpen: _openDetail),
-                  const SizedBox(height: 12),
-                ],
-                if (items.isEmpty)
-                  const _EmptyEvents()
-                else
-                  FhcSurfaceCard(
-                    padding: EdgeInsets.zero,
-                    child: Column(
-                      children: [
-                        for (var i = 0; i < items.length; i++) ...[
-                          if (i > 0)
-                            const Divider(height: 1, color: FhcColors.border),
-                          _EventRow(item: items[i], onTap: _openDetail),
-                        ],
-                      ],
-                    ),
+          Row(
+            children: [
+              for (var index = 0; index < 3; index++)
+                Expanded(
+                  child: _EventTab(
+                    label: [
+                      fhcT(context, 'events.upcoming', fallback: 'Upcoming'),
+                      fhcT(context, 'events.myEvents', fallback: 'My Events'),
+                      fhcT(context, 'events.past', fallback: 'Past'),
+                    ][index],
+                    active: _tab == index,
+                    onTap: () => _selectTab(index),
                   ),
-              ],
-            ),
+                ),
+            ],
           ),
-          const FhcBottomNavigation(selected: 1),
+          Expanded(child: _buildBody()),
+          const FhcBottomNavigation(selected: 3),
         ],
       ),
     );
   }
+
+  Widget _buildBody() {
+    return FhcAsyncBody<List<JsonObject>>(
+      value: _state,
+      onRetry: _load,
+      emptyTitle: fhcT(
+        context,
+        'events.noUpcoming',
+        fallback: 'No upcoming events',
+      ),
+      emptyMessage: fhcT(
+        context,
+        'events.publishedAppearHere',
+        fallback: 'When events are published, they will appear here.',
+      ),
+      unavailableTitle: fhcT(
+        context,
+        'events.unavailable',
+        fallback: 'Events unavailable',
+      ),
+      builder: (context, rows) {
+        return RefreshIndicator(
+          onRefresh: _load,
+          child: ListView.builder(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+            itemCount: rows.length,
+            itemBuilder: (context, index) {
+              final row = rows[index];
+              final event = _eventOf(row);
+              final id = '${event['id'] ?? row['event_id'] ?? ''}'.trim();
+              final name =
+                  '${event['name'] ?? row['event_name'] ?? fhcT(context, 'events.event', fallback: 'Event')}';
+              final ticketCode =
+                  '${row['ticket_code'] ?? row['code'] ?? ''}'.trim();
+              final isRegistrationTab = _tab != 0;
+              return _EventRow(
+                title: name,
+                when: _when(event),
+                where: ticketCode.isNotEmpty
+                    ? '${_where(event)}  •  $ticketCode'
+                    : _where(event),
+                actionLabel: isRegistrationTab
+                    ? fhcT(context, 'events.ticket', fallback: 'Ticket')
+                    : fhcT(context, 'common.register', fallback: 'Register'),
+                onOpen: () => _openEvent(id),
+                onAction: () => isRegistrationTab
+                    ? _openTicket(row)
+                    : _openRegister(id),
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
 }
 
-class _EventsTab extends StatelessWidget {
-  const _EventsTab({
+class _EventTab extends StatelessWidget {
+  const _EventTab({
     required this.label,
     required this.active,
     required this.onTap,
   });
-
   final String label;
   final bool active;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Semantics(
-      button: true,
-      selected: active,
-      label: label,
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 9),
       child: InkWell(
         onTap: onTap,
+        borderRadius: BorderRadius.circular(7),
         child: Container(
-          height: 44,
+          height: 36,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            border: Border(
-              bottom: BorderSide(
-                color: active ? FhcColors.green : FhcColors.border,
-                width: active ? 2 : 1,
-              ),
-            ),
+            color: active ? FhcColors.green : Colors.transparent,
+            borderRadius: BorderRadius.circular(7),
           ),
           child: Text(
             label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              fontSize: 12,
-              color: active ? FhcColors.green : FhcColors.muted,
-              fontWeight: active ? FontWeight.w700 : FontWeight.w500,
-              height: 1.2,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: active ? Colors.white : FhcColors.ink,
             ),
           ),
         ),
       ),
     );
   }
-}
-
-class _FeaturedConvention extends StatelessWidget {
-  const _FeaturedConvention({required this.onOpen});
-
-  final VoidCallback onOpen;
-
-  @override
-  Widget build(BuildContext context) {
-    return FhcSurfaceCard(
-      padding: EdgeInsets.zero,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: onOpen,
-              child: const _ConventionBanner(),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                const Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Annual Convention 2025',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          color: FhcColors.ink,
-                          height: 1.2,
-                        ),
-                      ),
-                      SizedBox(height: 4),
-                      Text(
-                        'May 24 – 26, 2025 • Lagos, Nigeria',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 10,
-                          color: FhcColors.muted,
-                          height: 1.2,
-                        ),
-                      ),
-                      SizedBox(height: 6),
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.people_outline,
-                            size: 14,
-                            color: FhcColors.muted,
-                          ),
-                          SizedBox(width: 4),
-                          Expanded(
-                            child: Text(
-                              '2.5K Registered',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w600,
-                                color: FhcColors.muted,
-                                height: 1.2,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 8),
-                SizedBox(
-                  height: 32,
-                  child: FilledButton(
-                    onPressed: onOpen,
-                    style: FilledButton.styleFrom(
-                      backgroundColor: FhcColors.green,
-                      foregroundColor: FhcColors.white,
-                      minimumSize: Size.zero,
-                      padding: const EdgeInsets.symmetric(horizontal: 14),
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      visualDensity: VisualDensity.compact,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(FhcRadius.button),
-                      ),
-                    ),
-                    child: const Text(
-                      'Register',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        height: 1.1,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ConventionBanner extends StatelessWidget {
-  const _ConventionBanner();
-
-  static const _assets = <String>[
-    'assets/images/convention_crowd.png',
-    'assets/images/convention_hero.png',
-    'assets/images/event_convention.png',
-    'assets/images/convention_2025.png',
-  ];
-
-  static const _fallback = ColoredBox(
-    color: FhcColors.greenDeep,
-    child: Padding(
-      padding: EdgeInsets.fromLTRB(14, 12, 14, 14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
-          Text(
-            'ANNUAL CONVENTION 2025',
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: FhcColors.white,
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-              height: 1.15,
-              letterSpacing: 0.2,
-            ),
-          ),
-          SizedBox(height: 4),
-          Text(
-            'ONE HOUSE, MANY NATIONS',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: FhcColors.white,
-              fontSize: 10,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 0.8,
-              height: 1.2,
-            ),
-          ),
-        ],
-      ),
-    ),
-  );
-
-  static Widget _chain(List<String> paths) {
-    if (paths.isEmpty) return _fallback;
-    final first = paths.first;
-    final rest = paths.skip(1).toList();
-    return Image.asset(
-      first,
-      fit: BoxFit.cover,
-      alignment: Alignment.center,
-      semanticLabel: 'Annual Convention 2025',
-      errorBuilder: (context, error, stackTrace) => _chain(rest),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 148,
-      width: double.infinity,
-      child: _chain(_assets),
-    );
-  }
-}
-
-class _EventItem {
-  const _EventItem({
-    required this.title,
-    required this.detail,
-    required this.asset,
-    required this.fallback,
-    required this.extraFallback,
-    required this.icon,
-    this.registered = false,
-  });
-
-  final String title;
-  final String detail;
-  final String asset;
-  final String fallback;
-  final String extraFallback;
-  final IconData icon;
-  final bool registered;
 }
 
 class _EventRow extends StatelessWidget {
-  const _EventRow({required this.item, required this.onTap});
-
-  final _EventItem item;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        child: SizedBox(
-          height: 72,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Row(
-              children: [
-                _EventThumb(
-                  asset: item.asset,
-                  fallback: item.fallback,
-                  extraFallback: item.extraFallback,
-                  icon: item.icon,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        item.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: FhcColors.ink,
-                          height: 1.2,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        item.detail,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: FhcColors.muted,
-                          height: 1.2,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                if (item.registered)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: FhcColors.mint,
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: const Text(
-                      'Registered',
-                      style: TextStyle(
-                        fontSize: 9,
-                        fontWeight: FontWeight.w700,
-                        color: FhcColors.green,
-                        height: 1.1,
-                      ),
-                    ),
-                  )
-                else
-                  const Icon(
-                    Icons.chevron_right,
-                    size: 20,
-                    color: FhcColors.muted,
-                  ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _EventThumb extends StatelessWidget {
-  const _EventThumb({
-    required this.asset,
-    required this.fallback,
-    required this.extraFallback,
-    required this.icon,
+  const _EventRow({
+    required this.title,
+    required this.when,
+    required this.where,
+    required this.onOpen,
+    required this.onAction,
+    required this.actionLabel,
   });
 
-  final String asset;
-  final String fallback;
-  final String extraFallback;
-  final IconData icon;
-
-  static const _size = 48.0;
-
-  Widget _leaf() {
-    return ColoredBox(
-      color: FhcColors.mint,
-      child: Icon(icon, size: 22, color: FhcColors.green),
-    );
-  }
-
-  Widget _chain(List<String> paths) {
-    if (paths.isEmpty) return _leaf();
-    final first = paths.first;
-    final rest = paths.skip(1).toList();
-    return Image.asset(
-      first,
-      width: _size,
-      height: _size,
-      fit: BoxFit.cover,
-      errorBuilder: (context, error, stackTrace) => _chain(rest),
-    );
-  }
+  final String title;
+  final String when;
+  final String where;
+  final VoidCallback onOpen;
+  final VoidCallback onAction;
+  final String actionLabel;
 
   @override
   Widget build(BuildContext context) {
-    final paths = <String>[asset, fallback, extraFallback];
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(FhcRadius.sm),
-      child: SizedBox(
-        width: _size,
-        height: _size,
-        child: _chain(paths),
-      ),
-    );
-  }
-}
-
-class _EmptyEvents extends StatelessWidget {
-  const _EmptyEvents();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.symmetric(vertical: 48),
-      child: Column(
-        children: [
-          FhcCircleIcon(icon: Icons.event_busy_outlined, size: 48),
-          SizedBox(height: 12),
-          Text(
-            'No events yet',
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              color: FhcColors.ink,
+    return InkWell(
+      onTap: onOpen,
+      child: Container(
+        height: 106,
+        decoration: const BoxDecoration(
+          border: Border(bottom: BorderSide(color: FhcColors.border)),
+        ),
+        child: Row(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: ColoredBox(
+                color: FhcColors.green.withValues(alpha: 0.12),
+                child: const SizedBox(
+                  width: 56,
+                  height: 56,
+                  child: Icon(Icons.event, color: FhcColors.green),
+                ),
+              ),
             ),
-          ),
-        ],
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: FhcColors.ink,
+                    ),
+                  ),
+                  const SizedBox(height: 5),
+                  Text(when, style: FhcTypography.caption),
+                  const SizedBox(height: 3),
+                  Text(where, style: FhcTypography.caption),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            SizedBox(
+              height: 34,
+              child: FilledButton(
+                onPressed: onAction,
+                style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 13),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(7),
+                  ),
+                ),
+                child: Text(
+                  actionLabel,
+                  style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

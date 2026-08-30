@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../core/design_system/fhc_tokens.dart';
+import '../../core/l10n/locale_scope.dart';
 import '../../features/foundation/presentation/fhc_nav.dart';
 
 class FhcDevicePage extends StatelessWidget {
@@ -50,11 +51,22 @@ class FhcDevicePage extends StatelessWidget {
 }
 
 class FhcTopBar extends StatelessWidget {
-  const FhcTopBar({super.key, required this.title, this.onBack, this.trailing});
+  const FhcTopBar({
+    super.key,
+    required this.title,
+    this.onBack,
+    this.trailing,
+    this.backIcon = Icons.chevron_left,
+    this.backTooltip,
+    this.trailingWidth = 112,
+  });
 
   final String title;
   final VoidCallback? onBack;
   final Widget? trailing;
+  final IconData backIcon;
+  final String? backTooltip;
+  final double trailingWidth;
 
   @override
   Widget build(BuildContext context) {
@@ -70,9 +82,10 @@ class FhcTopBar extends StatelessWidget {
                     : IconButton(
                       onPressed: onBack,
                       padding: EdgeInsets.zero,
-                      icon: const Icon(Icons.chevron_left, size: 28),
+                      icon: Icon(backIcon, size: 28),
                       color: FhcColors.ink,
-                      tooltip: 'Back',
+                      tooltip: backTooltip ??
+                          fhcT(context, 'common.back', fallback: 'Back'),
                     ),
           ),
           Expanded(
@@ -85,11 +98,8 @@ class FhcTopBar extends StatelessWidget {
             ),
           ),
           SizedBox(
-            width: trailing == null ? FhcSizes.minTap : 112,
-            child: Align(
-              alignment: Alignment.centerRight,
-              child: trailing,
-            ),
+            width: trailing == null ? FhcSizes.minTap : trailingWidth,
+            child: Align(alignment: Alignment.centerRight, child: trailing),
           ),
         ],
       ),
@@ -135,7 +145,7 @@ class FhcPrimaryButton extends StatelessWidget {
   }
 }
 
-class FhcField extends StatelessWidget {
+class FhcField extends StatefulWidget {
   const FhcField({
     super.key,
     required this.label,
@@ -146,6 +156,8 @@ class FhcField extends StatelessWidget {
     this.keyboardType,
     this.controller,
     this.onChanged,
+    this.textInputAction,
+    this.autofillHints,
   });
 
   final String label;
@@ -156,32 +168,64 @@ class FhcField extends StatelessWidget {
   final TextInputType? keyboardType;
   final TextEditingController? controller;
   final ValueChanged<String>? onChanged;
+  final TextInputAction? textInputAction;
+  final Iterable<String>? autofillHints;
+
+  @override
+  State<FhcField> createState() => _FhcFieldState();
+}
+
+class _FhcFieldState extends State<FhcField> {
+  late bool _obscured = widget.obscureText;
+
+  @override
+  void didUpdateWidget(covariant FhcField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.obscureText != widget.obscureText) {
+      _obscured = widget.obscureText;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final radius = BorderRadius.circular(FhcRadius.field);
+    final showToggle = widget.obscureText;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: FhcTypography.label),
+        Text(widget.label, style: FhcTypography.label),
         const SizedBox(height: 7),
         TextField(
-          controller: controller,
-          obscureText: obscureText,
-          keyboardType: keyboardType,
-          onChanged: onChanged,
+          controller: widget.controller,
+          obscureText: _obscured,
+          keyboardType: widget.keyboardType,
+          textInputAction: widget.textInputAction,
+          autofillHints: widget.autofillHints,
+          onChanged: widget.onChanged,
           style: FhcTypography.body,
           decoration: InputDecoration(
-            hintText: hint,
+            hintText: widget.hint,
             hintStyle: FhcTypography.hint,
             prefixIcon:
-                prefixIcon == null
+                widget.prefixIcon == null
                     ? null
-                    : Icon(prefixIcon, size: 18, color: FhcColors.muted),
+                    : Icon(widget.prefixIcon, size: 18, color: FhcColors.muted),
             suffixIcon:
-                suffixIcon == null
+                showToggle
+                    ? IconButton(
+                      tooltip: _obscured ? 'Show password' : 'Hide password',
+                      onPressed: () => setState(() => _obscured = !_obscured),
+                      icon: Icon(
+                        _obscured
+                            ? Icons.visibility_outlined
+                            : Icons.visibility_off_outlined,
+                        size: 18,
+                        color: FhcColors.muted,
+                      ),
+                    )
+                    : widget.suffixIcon == null
                     ? null
-                    : Icon(suffixIcon, size: 18, color: FhcColors.muted),
+                    : Icon(widget.suffixIcon, size: 18, color: FhcColors.muted),
             isDense: true,
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 14,
@@ -211,21 +255,27 @@ class FhcBottomNavigation extends StatelessWidget {
     super.key,
     required this.selected,
     this.onSelected,
+    this.messageBadgeCount,
   });
 
   final int selected;
   final ValueChanged<int>? onSelected;
+  final int? messageBadgeCount;
 
-  static const _items = <(IconData, IconData, String)>[
-    (Icons.home_outlined, Icons.home, 'Home'),
-    (Icons.grid_view_outlined, Icons.grid_view, 'Modules'),
-    (Icons.explore_outlined, Icons.explore, 'Discover'),
-    (Icons.chat_bubble_outline, Icons.chat_bubble, 'Messages'),
-    (Icons.person_outline, Icons.person, 'Profile'),
+  static const _items = <(IconData, IconData, String, String)>[
+    (Icons.home_outlined, Icons.home, 'nav.home', 'Home'),
+    (Icons.grid_view_outlined, Icons.grid_view, 'nav.modules', 'Modules'),
+    (Icons.favorite_border, Icons.favorite, 'nav.give', 'Give'),
+    (Icons.event_outlined, Icons.event, 'nav.events', 'Events'),
+    (Icons.person_outline, Icons.person, 'common.profile', 'Profile'),
   ];
 
   @override
   Widget build(BuildContext context) {
+    final labels = [
+      for (final item in _items)
+        fhcT(context, item.$3, fallback: item.$4),
+    ];
     return Container(
       height: FhcSizes.bottomNavHeight,
       decoration: const BoxDecoration(
@@ -239,7 +289,7 @@ class FhcBottomNavigation extends StatelessWidget {
               child: Semantics(
                 button: true,
                 selected: i == selected,
-                label: _items[i].$3,
+                label: labels[i],
                 excludeSemantics: true,
                 child: InkWell(
                   onTap: () {
@@ -263,18 +313,18 @@ class FhcBottomNavigation extends StatelessWidget {
                                     ? FhcColors.green
                                     : FhcColors.muted,
                           ),
-                          if (i == 3)
-                            const Positioned(
+                          if (i == 3 && messageBadgeCount != null)
+                            Positioned(
                               right: -6,
                               top: -4,
-                              child: _MessageBadge(),
+                              child: _MessageBadge(count: messageBadgeCount!),
                             ),
                         ],
                       ),
                       const SizedBox(height: 3),
                       ExcludeSemantics(
                         child: Text(
-                          _items[i].$3,
+                          labels[i],
                           style: FhcTypography.nav.copyWith(
                             color:
                                 i == selected
@@ -299,7 +349,9 @@ class FhcBottomNavigation extends StatelessWidget {
 }
 
 class _MessageBadge extends StatelessWidget {
-  const _MessageBadge();
+  const _MessageBadge({required this.count});
+
+  final int count;
 
   @override
   Widget build(BuildContext context) {
@@ -312,9 +364,9 @@ class _MessageBadge extends StatelessWidget {
           color: FhcColors.red,
           shape: BoxShape.circle,
         ),
-        child: const Text(
-          '3',
-          style: TextStyle(
+        child: Text(
+          '$count',
+          style: const TextStyle(
             fontSize: 8,
             height: 1,
             fontWeight: FontWeight.w700,
@@ -376,6 +428,388 @@ class FhcCircleIcon extends StatelessWidget {
         shape: BoxShape.circle,
       ),
       child: Icon(icon, size: size * .52, color: color),
+    );
+  }
+}
+
+class FhcSectionLabel extends StatelessWidget {
+  const FhcSectionLabel(this.label, {super.key});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8, top: 4),
+      child: Text(
+        label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.3,
+          color: FhcColors.muted,
+        ),
+      ),
+    );
+  }
+}
+
+class FhcNotificationBell extends StatelessWidget {
+  const FhcNotificationBell({
+    super.key,
+    required this.onTap,
+    this.count = 0,
+  });
+
+  final VoidCallback onTap;
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      onPressed: onTap,
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(
+        minWidth: FhcSizes.minTap,
+        minHeight: FhcSizes.minTap,
+      ),
+      tooltip: 'Notifications',
+      icon: SizedBox(
+        width: 28,
+        height: 28,
+        child: Stack(
+          clipBehavior: Clip.none,
+          alignment: Alignment.center,
+          children: [
+            const Icon(
+              Icons.notifications_none,
+              size: 22,
+              color: FhcColors.ink,
+            ),
+            if (count > 0)
+              Positioned(
+                right: -2,
+                top: 0,
+                child: Container(
+                  constraints: const BoxConstraints(minWidth: 14, minHeight: 14),
+                  padding: const EdgeInsets.symmetric(horizontal: 3),
+                  alignment: Alignment.center,
+                  decoration: const BoxDecoration(
+                    color: FhcColors.red,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Text(
+                    count > 9 ? '9+' : '$count',
+                    style: const TextStyle(
+                      color: FhcColors.white,
+                      fontSize: 8,
+                      fontWeight: FontWeight.w700,
+                      height: 1,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class FhcMenuTile extends StatelessWidget {
+  const FhcMenuTile({
+    super.key,
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+    this.accent = FhcColors.green,
+    this.showDivider = false,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+  final Color accent;
+  final bool showDivider;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Semantics(
+          button: true,
+          label: '$title. $subtitle',
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: onTap,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: FhcSizes.minTap),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
+                  child: Row(
+                    children: [
+                      FhcCircleIcon(icon: icon, color: accent, size: 40),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                height: 1.2,
+                                color: FhcColors.ink,
+                              ),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              subtitle,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                height: 1.25,
+                                color: FhcColors.muted,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      const Icon(
+                        Icons.chevron_right,
+                        size: 20,
+                        color: FhcColors.hint,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+        if (showDivider)
+          const Divider(
+            height: 1,
+            thickness: 1,
+            indent: 66,
+            color: FhcColors.border,
+          ),
+      ],
+    );
+  }
+}
+
+class FhcMenuGroup extends StatelessWidget {
+  const FhcMenuGroup({
+    super.key,
+    required this.children,
+    this.title,
+  });
+
+  final String? title;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (title != null) FhcSectionLabel(title!),
+        FhcSurfaceCard(
+          padding: EdgeInsets.zero,
+          child: Column(children: children),
+        ),
+      ],
+    );
+  }
+}
+
+class FhcMetricCard extends StatelessWidget {
+  const FhcMetricCard({
+    super.key,
+    required this.label,
+    required this.value,
+    this.note,
+    this.noteColor = FhcColors.muted,
+  });
+
+  final String label;
+  final String value;
+  final String? note;
+  final Color noteColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return FhcSurfaceCard(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 9,
+              color: FhcColors.muted,
+              height: 1.2,
+            ),
+          ),
+          const SizedBox(height: 8),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              value,
+              maxLines: 1,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: FhcColors.ink,
+                height: 1.1,
+              ),
+            ),
+          ),
+          if (note != null) ...[
+            const SizedBox(height: 5),
+            Text(
+              note!,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 8,
+                color: noteColor,
+                fontWeight: FontWeight.w600,
+                height: 1.2,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class FhcEmptyState extends StatelessWidget {
+  const FhcEmptyState({
+    super.key,
+    required this.title,
+    required this.message,
+    this.icon = Icons.inbox_outlined,
+    this.actionLabel,
+    this.onAction,
+  });
+
+  final String title;
+  final String message;
+  final IconData icon;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 28),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            FhcCircleIcon(icon: icon, size: 56),
+            const SizedBox(height: 16),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: FhcTypography.titleSmall,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: FhcTypography.caption.copyWith(fontSize: 13, height: 1.4),
+            ),
+            if (actionLabel != null && onAction != null) ...[
+              const SizedBox(height: 18),
+              SizedBox(
+                width: 180,
+                child: FhcPrimaryButton(label: actionLabel!, onPressed: onAction),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class FhcErrorState extends StatelessWidget {
+  const FhcErrorState({
+    super.key,
+    required this.title,
+    required this.message,
+    this.onRetry,
+  });
+
+  final String title;
+  final String message;
+  final VoidCallback? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return FhcEmptyState(
+      icon: Icons.error_outline,
+      title: title,
+      message: message,
+      actionLabel: onRetry == null
+          ? null
+          : fhcT(context, 'common.retry', fallback: 'Try Again'),
+      onAction: onRetry,
+    );
+  }
+}
+
+class FhcStatusBadge extends StatelessWidget {
+  const FhcStatusBadge(
+    this.label, {
+    super.key,
+    this.color = FhcColors.green,
+  });
+
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
+          color: color,
+          height: 1.1,
+        ),
+      ),
     );
   }
 }

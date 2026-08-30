@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/design_system/fhc_tokens.dart';
+import '../../../../core/l10n/locale_scope.dart';
 import '../../../../shared/widgets/fhc_components.dart';
 import '../../../foundation/presentation/fhc_nav.dart';
 
@@ -10,20 +11,26 @@ class MediaHubScreen extends StatelessWidget {
   static const _cards = <_MediaSpec>[
     _MediaSpec(
       icon: Icons.play_circle,
-      title: 'Watch',
-      subtitle: 'Live services and video.',
+      titleKey: 'online.watch',
+      titleFallback: 'Watch',
+      subtitleKey: 'online.watchCopy',
+      subtitleFallback: 'Live services and video.',
       route: FhcRoutes.live,
     ),
     _MediaSpec(
       icon: Icons.headphones,
-      title: 'Listen',
-      subtitle: 'Sermons and audio messages.',
+      titleKey: 'online.listen',
+      titleFallback: 'Listen',
+      subtitleKey: 'online.listenCopy',
+      subtitleFallback: 'Sermons and audio messages.',
       route: FhcRoutes.sermons,
     ),
     _MediaSpec(
       icon: Icons.menu_book,
-      title: 'Read',
-      subtitle: 'Books, devotionals, and press.',
+      titleKey: 'online.read',
+      titleFallback: 'Read',
+      subtitleKey: 'online.readCopy',
+      subtitleFallback: 'Books, devotionals, and press.',
       route: FhcRoutes.press,
     ),
   ];
@@ -42,16 +49,24 @@ class MediaHubScreen extends StatelessWidget {
       backgroundColor: FhcColors.canvas,
       child: Column(
         children: [
-          FhcTopBar(title: 'Media', onBack: () => _goBack(context)),
-          const Padding(
-            padding: EdgeInsets.fromLTRB(16, 0, 16, 10),
+          FhcTopBar(
+            title: fhcT(context, 'online.media', fallback: 'Media'),
+            onBack: () => _goBack(context),
+            backTooltip: fhcT(context, 'common.back', fallback: 'Back'),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
             child: Align(
               alignment: Alignment.centerLeft,
               child: Text(
-                'Watch, listen, and read.',
+                fhcT(
+                  context,
+                  'online.mediaSubtitle',
+                  fallback: 'Watch, listen, and read.',
+                ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 13,
                   height: 1.3,
                   color: FhcColors.muted,
@@ -87,14 +102,18 @@ class MediaHubScreen extends StatelessWidget {
 class _MediaSpec {
   const _MediaSpec({
     required this.icon,
-    required this.title,
-    required this.subtitle,
+    required this.titleKey,
+    required this.titleFallback,
+    required this.subtitleKey,
+    required this.subtitleFallback,
     required this.route,
   });
 
   final IconData icon;
-  final String title;
-  final String subtitle;
+  final String titleKey;
+  final String titleFallback;
+  final String subtitleKey;
+  final String subtitleFallback;
   final String route;
 }
 
@@ -130,7 +149,11 @@ class _MediaCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        spec.title,
+                        fhcT(
+                          context,
+                          spec.titleKey,
+                          fallback: spec.titleFallback,
+                        ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
@@ -142,7 +165,11 @@ class _MediaCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        spec.subtitle,
+                        fhcT(
+                          context,
+                          spec.subtitleKey,
+                          fallback: spec.subtitleFallback,
+                        ),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(

@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/design_system/fhc_tokens.dart';
+import '../../../../core/l10n/locale_scope.dart';
 import '../../../../shared/widgets/fhc_components.dart';
 import '../../../foundation/presentation/fhc_nav.dart';
+import '../../data/home_church_repository.dart';
 
 class StartHomeChurchProgressScreen extends StatelessWidget {
   const StartHomeChurchProgressScreen({super.key});
@@ -13,27 +15,32 @@ class StartHomeChurchProgressScreen extends StatelessWidget {
   static const _steps = <_ProgressStep>[
     _ProgressStep(
       number: 1,
-      title: 'Application Submitted',
+      titleKey: 'homeChurch.stepSubmitted',
+      titleFallback: 'Application Submitted',
       state: _StepState.done,
     ),
     _ProgressStep(
       number: 2,
-      title: 'Interview / Orientation',
+      titleKey: 'homeChurch.stepInterview',
+      titleFallback: 'Interview / Orientation',
       state: _StepState.current,
     ),
     _ProgressStep(
       number: 3,
-      title: 'Review & Approval',
+      titleKey: 'homeChurch.stepReview',
+      titleFallback: 'Review & Approval',
       state: _StepState.pending,
     ),
     _ProgressStep(
       number: 4,
-      title: 'Home Church ID',
+      titleKey: 'homeChurch.stepHomeChurchId',
+      titleFallback: 'Home Church ID',
       state: _StepState.pending,
     ),
     _ProgressStep(
       number: 5,
-      title: 'Activation & Training',
+      titleKey: 'homeChurch.stepActivation',
+      titleFallback: 'Activation & Training',
       state: _StepState.pending,
     ),
   ];
@@ -52,6 +59,10 @@ class StartHomeChurchProgressScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final draft = HomeChurchApplicationSession.draft;
+    final applicationId = draft.lastApplicationId;
+    final status = draft.lastStatus;
+
     return FhcDevicePage(
       child: Column(
         children: [
@@ -61,12 +72,16 @@ class StartHomeChurchProgressScreen extends StatelessWidget {
               physics: const ClampingScrollPhysics(),
               padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
               children: [
-                const Text(
-                  'START A CHURCH IN YOUR HOME',
+                Text(
+                  fhcT(
+                    context,
+                    'homeChurch.startTitleCaps',
+                    fallback: 'START A CHURCH IN YOUR HOME',
+                  ),
                   textAlign: TextAlign.center,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 16,
                     height: 1.25,
                     fontWeight: FontWeight.w700,
@@ -74,12 +89,40 @@ class StartHomeChurchProgressScreen extends StatelessWidget {
                     color: FhcColors.greenDark,
                   ),
                 ),
+                if (applicationId != null && applicationId.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    status == null || status.isEmpty
+                        ? fhcT(
+                            context,
+                            'homeChurch.applicationId',
+                            args: {'id': applicationId},
+                            fallback: 'Application {id}',
+                          )
+                        : fhcT(
+                            context,
+                            'homeChurch.applicationIdStatus',
+                            args: {'id': applicationId, 'status': status},
+                            fallback: 'Application {id} · {status}',
+                          ),
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      height: 1.3,
+                      color: FhcColors.muted,
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 18),
-                const Text(
-                  'Application Progress',
+                Text(
+                  fhcT(
+                    context,
+                    'homeChurch.applicationProgress',
+                    fallback: 'Application Progress',
+                  ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w700,
                     color: FhcColors.ink,
@@ -87,21 +130,29 @@ class StartHomeChurchProgressScreen extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 10),
-                const Row(
+                Row(
                   children: [
                     Text(
-                      'Step $_currentStep of $_totalSteps',
+                      fhcT(
+                        context,
+                        'homeChurch.stepOf',
+                        args: {
+                          'current': '$_currentStep',
+                          'total': '$_totalSteps',
+                        },
+                        fallback: 'Step {current} of {total}',
+                      ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
+                      style: const TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
                         color: FhcColors.muted,
                         height: 1.2,
                       ),
                     ),
-                    SizedBox(width: 16),
-                    Expanded(
+                    const SizedBox(width: 16),
+                    const Expanded(
                       child: _ProgressTrack(
                         current: _currentStep,
                         total: _totalSteps,
@@ -122,7 +173,11 @@ class StartHomeChurchProgressScreen extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
             child: FhcPrimaryButton(
-              label: 'View Application',
+              label: fhcT(
+                context,
+                'homeChurch.viewApplication',
+                fallback: 'View Application',
+              ),
               onPressed: () => _viewApplication(context),
             ),
           ),
@@ -138,12 +193,14 @@ enum _StepState { done, current, pending }
 class _ProgressStep {
   const _ProgressStep({
     required this.number,
-    required this.title,
+    required this.titleKey,
+    required this.titleFallback,
     required this.state,
   });
 
   final int number;
-  final String title;
+  final String titleKey;
+  final String titleFallback;
   final _StepState state;
 }
 
@@ -231,7 +288,7 @@ class _StepRow extends StatelessWidget {
             const SizedBox(width: 12),
             Expanded(
               child: Text(
-                step.title,
+                fhcT(context, step.titleKey, fallback: step.titleFallback),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
@@ -252,7 +309,7 @@ class _StepRow extends StatelessWidget {
               const Icon(Icons.check_circle, size: 20, color: FhcColors.green)
             else
               Text(
-                'Pending',
+                fhcT(context, 'homeChurch.pending', fallback: 'Pending'),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
@@ -314,10 +371,10 @@ class _ReviewInfoBox extends StatelessWidget {
         color: FhcColors.mint,
         borderRadius: BorderRadius.circular(FhcRadius.md),
       ),
-      child: const Row(
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(
+          const SizedBox(
             width: 32,
             height: 32,
             child: DecoratedBox(
@@ -334,13 +391,18 @@ class _ReviewInfoBox extends StatelessWidget {
               ),
             ),
           ),
-          SizedBox(width: 10),
+          const SizedBox(width: 10),
           Expanded(
             child: Text(
-              'Our team is reviewing your application. You will be notified soon.',
+              fhcT(
+                context,
+                'homeChurch.reviewingApplication',
+                fallback:
+                    'Our team is reviewing your application. You will be notified soon.',
+              ),
               maxLines: 3,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(
+              style: const TextStyle(
                 fontSize: 12,
                 height: 1.4,
                 fontWeight: FontWeight.w500,

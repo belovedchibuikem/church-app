@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/design_system/fhc_tokens.dart';
+import '../../../../core/l10n/locale_scope.dart';
 import '../../../../shared/widgets/fhc_components.dart';
 import '../fhc_nav.dart';
 
@@ -10,43 +11,55 @@ class ModulesScreen extends StatelessWidget {
   static const _modules = <_ModuleSpec>[
     _ModuleSpec(
       icon: Icons.church_outlined,
-      title: 'CHURCH',
-      subtitle: 'Connect, Grow, Serve',
+      titleKey: 'auth.moduleChurch',
+      titleFallback: 'CHURCH',
+      subtitleKey: 'auth.moduleChurchCopy',
+      subtitleFallback: 'Connect, Grow, Serve',
       color: FhcColors.green,
       route: FhcRoutes.churchHome,
     ),
     _ModuleSpec(
       icon: Icons.school_outlined,
-      title: 'KCA',
-      subtitle: 'Kingdom Christian Academy',
+      titleKey: 'auth.moduleKca',
+      titleFallback: 'KCA',
+      subtitleKey: 'auth.moduleKcaAcademy',
+      subtitleFallback: 'Kingdom Christian Academy',
       color: FhcColors.purple,
       route: FhcRoutes.kcaGate,
     ),
     _ModuleSpec(
       icon: Icons.public,
-      title: 'MISSION',
-      subtitle: 'Go, Preach, Disciple',
+      titleKey: 'auth.moduleMission',
+      titleFallback: 'MISSION',
+      subtitleKey: 'auth.moduleMissionCopy',
+      subtitleFallback: 'Go, Preach, Disciple',
       color: FhcColors.navy,
       route: FhcRoutes.mission,
     ),
     _ModuleSpec(
       icon: Icons.volunteer_activism_outlined,
-      title: 'GIVE',
-      subtitle: 'Tithe, Donate, Support',
+      titleKey: 'auth.moduleGive',
+      titleFallback: 'GIVE',
+      subtitleKey: 'auth.moduleGiveCopy',
+      subtitleFallback: 'Tithe, Donate, Support',
       color: FhcColors.gold,
       route: FhcRoutes.give,
     ),
     _ModuleSpec(
       icon: Icons.smart_display_outlined,
-      title: 'MEDIA',
-      subtitle: 'Watch, Listen, Read',
+      titleKey: 'auth.moduleMedia',
+      titleFallback: 'MEDIA',
+      subtitleKey: 'auth.moduleMediaCopy',
+      subtitleFallback: 'Watch, Listen, Read',
       color: FhcColors.media,
       route: FhcRoutes.media,
     ),
     _ModuleSpec(
       icon: Icons.calendar_month_outlined,
-      title: 'EVENTS',
-      subtitle: 'Conferences, Meetings',
+      titleKey: 'auth.moduleEvents',
+      titleFallback: 'EVENTS',
+      subtitleKey: 'auth.moduleEventsCopy',
+      subtitleFallback: 'Conferences, Meetings',
       color: FhcColors.eventsAccent,
       route: FhcRoutes.events,
     ),
@@ -63,7 +76,7 @@ class ModulesScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return FhcDevicePage(
-      backgroundColor: FhcColors.white,
+      backgroundColor: FhcColors.canvas,
       child: Column(
         children: [
           SizedBox(
@@ -77,20 +90,23 @@ class ModulesScreen extends StatelessWidget {
                     padding: EdgeInsets.zero,
                     icon: const Icon(Icons.chevron_left, size: 28),
                     color: FhcColors.navy,
-                    tooltip: 'Back',
+                    tooltip: fhcT(context, 'common.back', fallback: 'Back'),
                   ),
                 ),
-                const Expanded(
+                Expanded(
                   child: Text(
-                    'CHOOSE A MODULE',
+                    fhcT(
+                      context,
+                      'auth.chooseModule',
+                      fallback: 'Choose a Module',
+                    ),
                     textAlign: TextAlign.center,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
                       height: 1.2,
-                      letterSpacing: 0.4,
                       color: FhcColors.navy,
                     ),
                   ),
@@ -99,14 +115,18 @@ class ModulesScreen extends StatelessWidget {
               ],
             ),
           ),
-          const Padding(
-            padding: EdgeInsets.fromLTRB(20, 0, 20, 8),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
             child: Text(
-              'Select a module to continue.',
+              fhcT(
+                context,
+                'auth.selectModuleContinue',
+                fallback: 'Select a module to continue.',
+              ),
               textAlign: TextAlign.center,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(
+              style: const TextStyle(
                 fontSize: 13,
                 height: 1.3,
                 color: FhcColors.muted,
@@ -127,10 +147,7 @@ class ModulesScreen extends StatelessWidget {
                             child: _ModuleCard(
                               spec: _modules[row * 2],
                               onTap:
-                                  () => fhcGo(
-                                    context,
-                                    _modules[row * 2].route,
-                                  ),
+                                  () => fhcGo(context, _modules[row * 2].route),
                             ),
                           ),
                           const SizedBox(width: 12),
@@ -162,15 +179,19 @@ class ModulesScreen extends StatelessWidget {
 class _ModuleSpec {
   const _ModuleSpec({
     required this.icon,
-    required this.title,
-    required this.subtitle,
+    required this.titleKey,
+    required this.titleFallback,
+    required this.subtitleKey,
+    required this.subtitleFallback,
     required this.color,
     required this.route,
   });
 
   final IconData icon;
-  final String title;
-  final String subtitle;
+  final String titleKey;
+  final String titleFallback;
+  final String subtitleKey;
+  final String subtitleFallback;
   final Color color;
   final String route;
 }
@@ -183,10 +204,16 @@ class _ModuleCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final title = fhcT(context, spec.titleKey, fallback: spec.titleFallback);
+    final subtitle = fhcT(
+      context,
+      spec.subtitleKey,
+      fallback: spec.subtitleFallback,
+    );
     final radius = BorderRadius.circular(FhcRadius.card);
     return Semantics(
       button: true,
-      label: '${spec.title}. ${spec.subtitle}',
+      label: '$title. $subtitle',
       child: Material(
         color: Colors.transparent,
         borderRadius: radius,
@@ -196,6 +223,7 @@ class _ModuleCard extends StatelessWidget {
           child: Ink(
             decoration: BoxDecoration(
               borderRadius: radius,
+              boxShadow: FhcElevation.card,
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
@@ -219,7 +247,7 @@ class _ModuleCard extends StatelessWidget {
                       Icon(spec.icon, color: FhcColors.white, size: iconSize),
                       const SizedBox(height: 10),
                       Text(
-                        spec.title,
+                        title,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
@@ -232,7 +260,7 @@ class _ModuleCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        spec.subtitle,
+                        subtitle,
                         textAlign: TextAlign.center,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,

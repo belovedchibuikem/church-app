@@ -1,47 +1,84 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/design_system/fhc_tokens.dart';
+import '../../../../core/l10n/locale_scope.dart';
 import '../../../../shared/widgets/fhc_components.dart';
 import '../../../foundation/presentation/fhc_nav.dart';
 
 class MinistriesScreen extends StatelessWidget {
   const MinistriesScreen({super.key});
 
-  static const _items = <_MinistryItem>[
+  static List<_MinistryItem> _itemsOf(BuildContext context) => [
     _MinistryItem(
-      title: 'Worship Ministry',
-      subtitle: 'Leading people in worship',
-      icon: Icons.music_note,
+      title: fhcT(
+        context,
+        'member.worshipMinistry',
+        fallback: 'Worship Ministry',
+      ),
+      subtitle: fhcT(
+        context,
+        'member.worshipMinistryCopy',
+        fallback: 'Leading people in worship',
+      ),
+      icon: Icons.music_note_outlined,
       color: FhcColors.ink,
     ),
     _MinistryItem(
-      title: 'Children Ministry',
-      subtitle: 'Teaching kids about Jesus',
-      icon: Icons.groups,
-      color: Color(0xFF3B82F6),
+      title: fhcT(
+        context,
+        'member.childrenMinistry',
+        fallback: 'Children Ministry',
+      ),
+      subtitle: fhcT(
+        context,
+        'member.childrenMinistryCopy',
+        fallback: 'Teaching kids about Jesus Christ',
+      ),
+      icon: Icons.child_care_outlined,
+      color: const Color(0xFF3B82F6),
     ),
     _MinistryItem(
-      title: 'Youth Ministry',
-      subtitle: 'Empowering young people',
-      icon: Icons.people_alt,
+      title: fhcT(context, 'member.youthMinistry', fallback: 'Youth Ministry'),
+      subtitle: fhcT(
+        context,
+        'member.youthMinistryCopy',
+        fallback: 'Empowering young people',
+      ),
+      icon: Icons.groups_outlined,
       color: FhcColors.green,
     ),
     _MinistryItem(
-      title: 'Outreach Ministry',
-      subtitle: 'Reaching our community',
-      icon: Icons.campaign,
+      title: fhcT(
+        context,
+        'member.outreachMinistry',
+        fallback: 'Outreach Ministry',
+      ),
+      subtitle: fhcT(
+        context,
+        'member.outreachMinistryCopy',
+        fallback: 'Reaching our community',
+      ),
+      icon: Icons.campaign_outlined,
       color: FhcColors.orange,
     ),
     _MinistryItem(
-      title: 'Media Ministry',
-      subtitle: 'Producing church media',
-      icon: Icons.videocam,
+      title: fhcT(context, 'member.mediaMinistry', fallback: 'Media Ministry'),
+      subtitle: fhcT(
+        context,
+        'member.mediaMinistryCopy',
+        fallback: 'Producing church media',
+      ),
+      icon: Icons.videocam_outlined,
       color: FhcColors.purple,
     ),
     _MinistryItem(
-      title: 'Usher Ministry',
-      subtitle: 'Serving with excellence',
-      icon: Icons.handshake,
+      title: fhcT(context, 'member.usherMinistry', fallback: 'Usher Ministry'),
+      subtitle: fhcT(
+        context,
+        'member.usherMinistryCopy',
+        fallback: 'Serving with excellence',
+      ),
+      icon: Icons.handshake_outlined,
       color: FhcColors.navy,
     ),
   ];
@@ -54,25 +91,31 @@ class MinistriesScreen extends StatelessWidget {
     }
   }
 
-  static void _openGroups(BuildContext context) {
-    fhcPush(context, FhcRoutes.churchGroups);
-  }
-
   @override
   Widget build(BuildContext context) {
+    final items = _itemsOf(context);
+
     return FhcDevicePage(
-      backgroundColor: FhcColors.white,
+      backgroundColor: FhcColors.canvas,
       child: Column(
         children: [
           FhcTopBar(
-            title: 'Ministries',
+            title: fhcT(context, 'member.ministries', fallback: 'Ministries'),
             onBack: () => _goBack(context),
             trailing: IconButton(
-              onPressed: () {},
+              onPressed:
+                  () => fhcApiUnavailable(
+                    context,
+                    action: fhcT(
+                      context,
+                      'member.creatingMinistry',
+                      fallback: 'Creating a ministry',
+                    ),
+                  ),
               padding: EdgeInsets.zero,
               icon: const Icon(Icons.add, size: 24),
               color: FhcColors.ink,
-              tooltip: 'Add',
+              tooltip: fhcT(context, 'common.add', fallback: 'Add'),
             ),
           ),
           Expanded(
@@ -81,14 +124,20 @@ class MinistriesScreen extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 18),
               children: [
                 const _SearchField(),
-                const SizedBox(height: 8),
-                for (var i = 0; i < _items.length; i++) ...[
-                  if (i > 0) const Divider(height: 1, color: FhcColors.border),
-                  _MinistryRow(
-                    item: _items[i],
-                    onTap: () => _openGroups(context),
-                  ),
-                ],
+                const SizedBox(height: 12),
+                FhcMenuGroup(
+                  children: [
+                    for (var i = 0; i < items.length; i++)
+                      FhcMenuTile(
+                        icon: items[i].icon,
+                        title: items[i].title,
+                        subtitle: items[i].subtitle,
+                        accent: items[i].color,
+                        showDivider: i < items.length - 1,
+                        onTap: () => fhcPush(context, FhcRoutes.churchGroups),
+                      ),
+                  ],
+                ),
               ],
             ),
           ),
@@ -122,10 +171,14 @@ class _SearchField extends StatelessWidget {
     return TextField(
       style: FhcTypography.body,
       decoration: InputDecoration(
-        hintText: 'Search ministries...',
+        hintText: fhcT(
+          context,
+          'member.searchMinistries',
+          fallback: 'Search ministries...',
+        ),
         hintStyle: FhcTypography.hint,
         filled: true,
-        fillColor: FhcColors.canvas,
+        fillColor: FhcColors.white,
         prefixIcon: const Icon(Icons.search, size: 20, color: FhcColors.muted),
         isDense: true,
         contentPadding: const EdgeInsets.symmetric(
@@ -133,11 +186,11 @@ class _SearchField extends StatelessWidget {
           vertical: 12,
         ),
         border: OutlineInputBorder(
-          borderSide: BorderSide.none,
+          borderSide: const BorderSide(color: FhcColors.border),
           borderRadius: radius,
         ),
         enabledBorder: OutlineInputBorder(
-          borderSide: BorderSide.none,
+          borderSide: const BorderSide(color: FhcColors.border),
           borderRadius: radius,
         ),
         focusedBorder: OutlineInputBorder(
@@ -145,90 +198,6 @@ class _SearchField extends StatelessWidget {
           borderRadius: radius,
         ),
       ),
-    );
-  }
-}
-
-class _MinistryRow extends StatelessWidget {
-  const _MinistryRow({required this.item, required this.onTap});
-
-  final _MinistryItem item;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      button: true,
-      label: '${item.title}, ${item.subtitle}',
-      child: InkWell(
-        onTap: onTap,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 64),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 10),
-            child: Row(
-              children: [
-                _SolidCircleIcon(icon: item.icon, color: item.color),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        item.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          height: 1.2,
-                          color: FhcColors.ink,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        item.subtitle,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 11,
-                          height: 1.2,
-                          color: FhcColors.muted,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 8),
-                const Icon(
-                  Icons.chevron_right,
-                  size: 20,
-                  color: FhcColors.muted,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SolidCircleIcon extends StatelessWidget {
-  const _SolidCircleIcon({required this.icon, required this.color});
-
-  final IconData icon;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 40,
-      height: 40,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-      child: Icon(icon, size: 20, color: FhcColors.white),
     );
   }
 }

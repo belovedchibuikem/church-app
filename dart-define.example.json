@@ -1,0 +1,5 @@
+{
+  "FHC_API_URL": "https://familyconnect.katakarra.com/api/v1",
+  "FHC_PUBLIC_API_BASE_URL": "https://familyconnect.katakarra.com",
+  "FHC_VISUAL_REVIEW": "false"
+}

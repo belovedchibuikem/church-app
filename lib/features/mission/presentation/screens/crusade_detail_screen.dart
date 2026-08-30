@@ -1,20 +1,116 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/api/app_failure.dart';
+import '../../../../core/contracts/mobile_repository_contracts.dart';
 import '../../../../core/design_system/fhc_tokens.dart';
+import '../../../../core/di/app_services_scope.dart';
+import '../../../../core/l10n/locale_scope.dart';
+import '../../../../core/routing/fhc_route_args.dart';
 import '../../../../shared/widgets/fhc_components.dart';
 import '../../../foundation/presentation/fhc_nav.dart';
+import '../../data/mission_repository.dart';
 
 class CrusadeDetailScreen extends StatefulWidget {
-  const CrusadeDetailScreen({super.key});
+  const CrusadeDetailScreen({
+    super.key,
+    this.crusadeId,
+    this.repository,
+  });
+
+  final String? crusadeId;
+  final HttpMissionRepository? repository;
 
   @override
   State<CrusadeDetailScreen> createState() => _CrusadeDetailScreenState();
 }
 
 class _CrusadeDetailScreenState extends State<CrusadeDetailScreen> {
-  int _tab = 0;
+  HttpMissionRepository? _repository;
 
-  static const _tabs = ['Overview', 'Souls', 'Schedule', 'Team'];
+  int _tab = 0;
+  bool _loading = true;
+  String? _error;
+  JsonObject? _crusade;
+  List<JsonObject> _catalogue = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_repository != null) return;
+    if (widget.repository != null) {
+      _repository = widget.repository;
+      return;
+    }
+    final fromScope = AppServicesScope.maybeOf(context)?.missionRepository;
+    _repository = fromScope is HttpMissionRepository
+        ? fromScope
+        : HttpMissionRepository();
+  }
+
+  String? get _routeCrusadeId {
+    final fromWidget = widget.crusadeId?.trim();
+    if (fromWidget != null && fromWidget.isNotEmpty) return fromWidget;
+    return FhcRouteArgs.entityIdOf(context) ??
+        missionCrusadeIdFromRoute(ModalRoute.of(context)?.settings.name);
+  }
+
+  HttpMissionRepository get _repo =>
+      _repository ?? HttpMissionRepository();
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+
+    final id = _routeCrusadeId;
+    if (id != null) {
+      final result = await _repo.getCrusade(id);
+      if (!mounted) return;
+      switch (result) {
+        case AppSuccess(:final value):
+          setState(() {
+            _crusade = value;
+            _catalogue = const [];
+            _loading = false;
+          });
+        case AppError(:final failure):
+          setState(() {
+            _crusade = null;
+            _error = failure.message;
+            _loading = false;
+          });
+      }
+      return;
+    }
+
+    final result = await _repo.getCrusades(const {
+      'status': 'all',
+      'sort': '-starts_at',
+      'per_page': '25',
+    });
+    if (!mounted) return;
+    switch (result) {
+      case AppSuccess(:final value):
+        setState(() {
+          _catalogue = value;
+          _crusade = null;
+          _loading = false;
+        });
+      case AppError(:final failure):
+        setState(() {
+          _catalogue = const [];
+          _error = failure.message;
+          _loading = false;
+        });
+    }
+  }
 
   void _onBack() {
     if (Navigator.of(context).canPop()) {
@@ -26,6 +122,24 @@ class _CrusadeDetailScreenState extends State<CrusadeDetailScreen> {
 
   void _openSouls() => fhcPush(context, FhcRoutes.souls);
 
+  void _openAddSoul() {
+    final id = (_crusade?['id'] as String?)?.trim() ?? _routeCrusadeId;
+    if (id != null && looksLikeMissionUlid(id)) {
+      fhcPush(context, '${FhcRoutes.soulAdd}?id=$id');
+      return;
+    }
+    fhcPush(context, FhcRoutes.soulAdd);
+  }
+
+  void _openCrusade(String id) {
+    final route = '${FhcRoutes.crusade}/$id';
+    if (Navigator.of(context).canPop()) {
+      fhcPush(context, route);
+    } else {
+      fhcGo(context, route);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return FhcDevicePage(
@@ -33,62 +147,332 @@ class _CrusadeDetailScreenState extends State<CrusadeDetailScreen> {
       child: Column(
         children: [
           FhcTopBar(
-            title: 'ABUJA CITY CRUSADE',
+            title: (_crusade?['name'] as String?)?.toUpperCase() ??
+                fhcT(context, 'mission.crusades', fallback: 'CRUSADES'),
             onBack: _onBack,
             trailing: IconButton(
-              onPressed: () {},
+              onPressed: () => fhcApiUnavailable(
+                context,
+                action: fhcT(
+                  context,
+                  'mission.sharingCrusade',
+                  fallback: 'Sharing this crusade',
+                ),
+              ),
               padding: EdgeInsets.zero,
               icon: const Icon(Icons.share_outlined, size: 22),
               color: FhcColors.ink,
-              tooltip: 'Share',
+              tooltip: fhcT(context, 'mission.share', fallback: 'Share'),
             ),
           ),
-          Expanded(
-            child: Column(
-              children: [
-                const _CrusadeHero(),
-                const Padding(
-                  padding: EdgeInsets.fromLTRB(16, 12, 16, 0),
-                  child: _TitleBlock(),
+          Expanded(child: _body()),
+          if (_crusade != null)
+            _FooterActions(
+              onAddSoul: _openAddSoul,
+              onFollowUp: _openSouls,
+              onViewSouls: _openSouls,
+              onShare: () => fhcApiUnavailable(
+                context,
+                action: fhcT(
+                  context,
+                  'mission.sharingCrusade',
+                  fallback: 'Sharing this crusade',
                 ),
-                const Padding(
-                  padding: EdgeInsets.fromLTRB(16, 12, 16, 12),
-                  child: _StatsRow(),
-                ),
-                ColoredBox(
-                  color: FhcColors.white,
-                  child: Row(
-                    children: [
-                      for (var i = 0; i < _tabs.length; i++)
-                        Expanded(
-                          child: _TabLabel(
-                            label: _tabs[i],
-                            active: _tab == i,
-                            onTap: () => setState(() => _tab = i),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-                Expanded(
-                  child: switch (_tab) {
-                    1 => _SoulsTab(onViewSouls: _openSouls),
-                    2 => const _ScheduleTab(),
-                    3 => const _TeamTab(),
-                    _ => const _OverviewTab(),
+              ),
+            ),
+          const FhcBottomNavigation(selected: 1),
+        ],
+      ),
+    );
+  }
+
+  Widget _body() {
+    if (_loading) {
+      return const Center(child: CircularProgressIndicator.adaptive());
+    }
+    if (_error != null) {
+      return FhcErrorState(
+        title: fhcT(
+          context,
+          'mission.unableToLoadCrusades',
+          fallback: 'Unable to load crusades',
+        ),
+        message: _error!,
+        onRetry: _load,
+      );
+    }
+    if (_crusade != null) {
+      return _CrusadeDetailBody(
+        crusade: _crusade!,
+        tab: _tab,
+        tabs: [
+          fhcT(context, 'common.overview', fallback: 'Overview'),
+          fhcT(context, 'mission.souls', fallback: 'Souls'),
+          fhcT(context, 'mission.schedule', fallback: 'Schedule'),
+          fhcT(context, 'mission.team', fallback: 'Team'),
+        ],
+        onTab: (i) => setState(() => _tab = i),
+        onViewSouls: _openSouls,
+        onCaptureSoul: _openAddSoul,
+      );
+    }
+    if (_catalogue.isEmpty) {
+      return FhcEmptyState(
+        icon: Icons.campaign_outlined,
+        title: fhcT(
+          context,
+          'mission.noCrusadesYet',
+          fallback: 'No crusades yet',
+        ),
+        message: fhcT(
+          context,
+          'mission.noCrusadesCopy',
+          fallback:
+              'Published mission crusades from the public catalogue will appear here.',
+        ),
+      );
+    }
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 18),
+      children: [
+        Text(
+          fhcT(context, 'mission.selectACrusade', fallback: 'Select a crusade'),
+          style: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            color: FhcColors.ink,
+          ),
+        ),
+        const SizedBox(height: 8),
+        FhcSurfaceCard(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Column(
+            children: [
+              for (var i = 0; i < _catalogue.length; i++) ...[
+                if (i > 0) const Divider(height: 1, color: FhcColors.border),
+                _CatalogueRow(
+                  crusade: _catalogue[i],
+                  onTap: () {
+                    final id = (_catalogue[i]['id'] as String?)?.trim();
+                    if (id == null || id.isEmpty) return;
+                    _openCrusade(id);
                   },
                 ),
               ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _CrusadeDetailBody extends StatelessWidget {
+  const _CrusadeDetailBody({
+    required this.crusade,
+    required this.tab,
+    required this.tabs,
+    required this.onTab,
+    required this.onViewSouls,
+    required this.onCaptureSoul,
+  });
+
+  final JsonObject crusade;
+  final int tab;
+  final List<String> tabs;
+  final ValueChanged<int> onTab;
+  final VoidCallback onViewSouls;
+  final VoidCallback onCaptureSoul;
+
+  @override
+  Widget build(BuildContext context) {
+    final name = (crusade['name'] as String?)?.trim() ??
+        fhcT(context, 'mission.crusade', fallback: 'Crusade');
+    final location = crusade['location'] is Map
+        ? Map<String, Object?>.from(
+            (crusade['location'] as Map).map(
+              (key, value) => MapEntry(key.toString(), value),
             ),
+          )
+        : null;
+    final dateLine = formatMissionDateRange(
+      startsAt: crusade['starts_at'] as String?,
+      endsAt: crusade['ends_at'] as String?,
+    );
+    final placeLine = formatMissionLocation(location);
+    final subtitle = '$dateLine  •  $placeLine';
+
+    return Column(
+      children: [
+        const _CrusadeHero(),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+          child: _TitleBlock(title: name, subtitle: subtitle),
+        ),
+        const Padding(
+          padding: EdgeInsets.fromLTRB(16, 12, 16, 12),
+          child: _StatsRow(),
+        ),
+        ColoredBox(
+          color: FhcColors.white,
+          child: Row(
+            children: [
+              for (var i = 0; i < tabs.length; i++)
+                Expanded(
+                  child: _TabLabel(
+                    label: tabs[i],
+                    active: tab == i,
+                    onTap: () => onTab(i),
+                  ),
+                ),
+            ],
           ),
-          _FooterActions(
-            onAddSoul: () {},
-            onFollowUp: _openSouls,
-            onViewSouls: _openSouls,
-            onShare: () {},
-          ),
-          const FhcBottomNavigation(selected: 1),
-        ],
+        ),
+        Expanded(
+          child: switch (tab) {
+            1 => _GatedTab(
+                title: fhcT(
+                  context,
+                  'mission.soulsFollowUp',
+                  fallback: 'Soul follow-up',
+                ),
+                message: fhcT(
+                  context,
+                  'mission.soulsFollowUpCopy',
+                  fallback:
+                      'Review soul journeys for this crusade, assign mentors, and record follow-up from the admin list.',
+                ),
+                actionLabel: fhcT(
+                  context,
+                  'mission.viewFollowUp',
+                  fallback: 'View follow-up',
+                ),
+                onAction: onViewSouls,
+                secondaryLabel: fhcT(
+                  context,
+                  'mission.captureSoul',
+                  fallback: 'Capture soul',
+                ),
+                onSecondary: onCaptureSoul,
+              ),
+            2 => _GatedTab(
+                title: fhcT(
+                  context,
+                  'mission.eventWindow',
+                  fallback: 'Event window',
+                ),
+                message:
+                    '${fhcT(context, 'mission.runs', fallback: 'Runs')} $dateLine · $placeLine. '
+                    '${fhcT(context, 'mission.scheduleDetailCopy', fallback: 'A detailed day-by-day agenda will appear here when organizers publish one.')}',
+              ),
+            3 => _GatedTab(
+                title: fhcT(
+                  context,
+                  'mission.fieldTeam',
+                  fallback: 'Field team',
+                ),
+                message: fhcT(
+                  context,
+                  'mission.fieldTeamCopy',
+                  fallback:
+                      'Mentor assignments and volunteer teams are managed from Mission → Team tools for authorized workers.',
+                ),
+                actionLabel: fhcT(
+                  context,
+                  'mission.openTeamTools',
+                  fallback: 'Open team tools',
+                ),
+                onAction: () => fhcPush(context, FhcRoutes.mentorAssignment),
+              ),
+            _ => _OverviewTab(
+                description: fhcT(
+                  context,
+                  'mission.crusadeOverviewCopy',
+                  fallback:
+                      'A published Family House mission crusade. Capture souls against this crusade ULID when authorized.',
+                ),
+                locationLabel: placeLine,
+                startsAt: crusade['starts_at'] as String?,
+                endsAt: crusade['ends_at'] as String?,
+                crusadeId: (crusade['id'] as String?) ?? '',
+              ),
+          },
+        ),
+      ],
+    );
+  }
+}
+
+class _CatalogueRow extends StatelessWidget {
+  const _CatalogueRow({required this.crusade, required this.onTap});
+
+  final JsonObject crusade;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final name = (crusade['name'] as String?)?.trim() ??
+        fhcT(context, 'mission.crusade', fallback: 'Crusade');
+    final location = crusade['location'] is Map
+        ? Map<String, Object?>.from(
+            (crusade['location'] as Map).map(
+              (key, value) => MapEntry(key.toString(), value),
+            ),
+          )
+        : null;
+    final subtitle =
+        '${formatMissionDateRange(startsAt: crusade['starts_at'] as String?, endsAt: crusade['ends_at'] as String?)} • ${formatMissionLocation(location)}';
+
+    return InkWell(
+      onTap: onTap,
+      child: SizedBox(
+        height: 60,
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: FhcColors.mint,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: const Icon(
+                Icons.campaign_outlined,
+                color: FhcColors.green,
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: FhcColors.ink,
+                    ),
+                  ),
+                  Text(
+                    subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: FhcColors.muted,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right, color: FhcColors.muted),
+          ],
+        ),
       ),
     );
   }
@@ -133,30 +517,33 @@ class _CrusadeHero extends StatelessWidget {
 }
 
 class _TitleBlock extends StatelessWidget {
-  const _TitleBlock();
+  const _TitleBlock({required this.title, required this.subtitle});
+
+  final String title;
+  final String subtitle;
 
   @override
   Widget build(BuildContext context) {
-    return const Column(
+    return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Abuja City Crusade',
+          title,
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
-          style: TextStyle(
+          style: const TextStyle(
             fontSize: 20,
             fontWeight: FontWeight.w700,
             height: 1.2,
             color: FhcColors.ink,
           ),
         ),
-        SizedBox(height: 6),
+        const SizedBox(height: 6),
         Text(
-          'May 20 – 23, 2025  •  Eagle Square, Abuja',
-          maxLines: 1,
+          subtitle,
+          maxLines: 2,
           overflow: TextOverflow.ellipsis,
-          style: TextStyle(
+          style: const TextStyle(
             fontSize: 12,
             height: 1.3,
             color: FhcColors.muted,
@@ -172,18 +559,39 @@ class _StatsRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Row(
+    return Row(
       children: [
         Expanded(
-          child: _StatCard(label: 'Souls Reached', value: '1,250'),
+          child: _StatCard(
+            label: fhcT(
+              context,
+              'mission.soulsReached',
+              fallback: 'Souls Reached',
+            ),
+            value: '—',
+          ),
         ),
-        SizedBox(width: 8),
+        const SizedBox(width: 8),
         Expanded(
-          child: _StatCard(label: 'New Conversions', value: '124'),
+          child: _StatCard(
+            label: fhcT(
+              context,
+              'mission.newConversions',
+              fallback: 'New Conversions',
+            ),
+            value: '—',
+          ),
         ),
-        SizedBox(width: 8),
+        const SizedBox(width: 8),
         Expanded(
-          child: _StatCard(label: 'Volunteers', value: '85'),
+          child: _StatCard(
+            label: fhcT(
+              context,
+              'mission.volunteers',
+              fallback: 'Volunteers',
+            ),
+            value: '—',
+          ),
         ),
       ],
     );
@@ -277,18 +685,30 @@ class _TabLabel extends StatelessWidget {
 }
 
 class _OverviewTab extends StatelessWidget {
-  const _OverviewTab();
+  const _OverviewTab({
+    required this.description,
+    required this.locationLabel,
+    required this.startsAt,
+    required this.endsAt,
+    required this.crusadeId,
+  });
+
+  final String description;
+  final String locationLabel;
+  final String? startsAt;
+  final String? endsAt;
+  final String crusadeId;
 
   @override
   Widget build(BuildContext context) {
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 18),
       children: [
-        const Text(
-          'Description',
+        Text(
+          fhcT(context, 'mission.description', fallback: 'Description'),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: TextStyle(
+          style: const TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w700,
             color: FhcColors.ink,
@@ -296,20 +716,20 @@ class _OverviewTab extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 6),
-        const Text(
-          'A city-wide evangelism outreach in Abuja focused on winning souls and raising strong disciples.',
-          style: TextStyle(
+        Text(
+          description,
+          style: const TextStyle(
             fontSize: 12,
             height: 1.4,
             color: FhcColors.muted,
           ),
         ),
         const SizedBox(height: 14),
-        const Text(
-          'Location',
+        Text(
+          fhcT(context, 'common.location', fallback: 'Location'),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: TextStyle(
+          style: const TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w700,
             color: FhcColors.ink,
@@ -317,22 +737,22 @@ class _OverviewTab extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 6),
-        const Text(
-          'Eagle Square, Abuja',
-          maxLines: 1,
+        Text(
+          locationLabel,
+          maxLines: 2,
           overflow: TextOverflow.ellipsis,
-          style: TextStyle(
+          style: const TextStyle(
             fontSize: 12,
             height: 1.4,
             color: FhcColors.muted,
           ),
         ),
         const SizedBox(height: 14),
-        const Text(
-          'Lead Pastor',
+        Text(
+          fhcT(context, 'mission.dates', fallback: 'Dates'),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: TextStyle(
+          style: const TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w700,
             color: FhcColors.ink,
@@ -340,221 +760,81 @@ class _OverviewTab extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 6),
-        const Text(
-          'Pastor John David',
+        Text(
+          formatMissionDateRange(startsAt: startsAt, endsAt: endsAt),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: TextStyle(
+          style: const TextStyle(
             fontSize: 12,
             height: 1.4,
             color: FhcColors.muted,
           ),
         ),
-      ],
-    );
-  }
-}
-
-class _SoulsTab extends StatelessWidget {
-  const _SoulsTab({required this.onViewSouls});
-
-  final VoidCallback onViewSouls;
-
-  static const _souls = <(String, String, String)>[
-    ('Mary A. Okafor', 'New convert', 'May 23'),
-    ('Daniel Dandeli', 'Follow-up', 'May 22'),
-    ('Joy Naro', 'New convert', 'May 21'),
-    ('Tunde Adeboyo', 'Mentor assigned', 'May 20'),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 18),
-      children: [
-        FhcSurfaceCard(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: Column(
-            children: [
-              for (var i = 0; i < _souls.length; i++) ...[
-                if (i > 0) const Divider(height: 1, color: FhcColors.border),
-                _PersonRow(
-                  title: _souls[i].$1,
-                  subtitle: _souls[i].$2,
-                  value: _souls[i].$3,
-                  icon: Icons.favorite_outline,
-                ),
-              ],
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
-        FhcPrimaryButton(label: 'View Souls', onPressed: onViewSouls),
-      ],
-    );
-  }
-}
-
-class _ScheduleTab extends StatelessWidget {
-  const _ScheduleTab();
-
-  static const _days = <(String, String, String)>[
-    ('Day 1 • Opening Rally', 'May 20, 2025 • 6:00 PM', 'Eagle Square, Abuja'),
-    ('Day 2 • City Outreach', 'May 21, 2025 • 6:00 PM', 'Garki & Wuse'),
-    (
-      'Day 3 • Healing Service',
-      'May 22, 2025 • 6:00 PM',
-      'Eagle Square, Abuja',
-    ),
-    ('Day 4 • Thanksgiving', 'May 23, 2025 • 5:00 PM', 'Eagle Square, Abuja'),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 18),
-      children: [
-        FhcSurfaceCard(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: Column(
-            children: [
-              for (var i = 0; i < _days.length; i++) ...[
-                if (i > 0) const Divider(height: 1, color: FhcColors.border),
-                _PersonRow(
-                  title: _days[i].$1,
-                  subtitle: '${_days[i].$2} • ${_days[i].$3}',
-                  value: i == 0 ? 'Next' : '',
-                  icon: Icons.event_outlined,
-                ),
-              ],
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _TeamTab extends StatelessWidget {
-  const _TeamTab();
-
-  static const _team = <(String, String, String)>[
-    ('Pastor John David', 'Crusade Lead', 'Lead'),
-    ('Sister Mary', 'Follow-up', 'Mentor'),
-    ('Bro John', 'Soul capture', 'Worker'),
-    ('Pastor Grace', 'Counselling', 'Lead'),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 18),
-      children: [
-        const Padding(
-          padding: EdgeInsets.only(bottom: 8),
-          child: Text(
-            '85 volunteers serving this crusade',
+        if (crusadeId.isNotEmpty) ...[
+          const SizedBox(height: 14),
+          Text(
+            fhcT(context, 'mission.crusadeId', fallback: 'Crusade ID'),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(fontSize: 12, color: FhcColors.muted, height: 1.2),
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: FhcColors.ink,
+              height: 1.2,
+            ),
           ),
-        ),
-        FhcSurfaceCard(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: Column(
-            children: [
-              for (var i = 0; i < _team.length; i++) ...[
-                if (i > 0) const Divider(height: 1, color: FhcColors.border),
-                _PersonRow(
-                  title: _team[i].$1,
-                  subtitle: _team[i].$2,
-                  value: _team[i].$3,
-                  icon: Icons.groups_outlined,
-                ),
-              ],
-            ],
+          const SizedBox(height: 6),
+          Text(
+            crusadeId,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 11,
+              height: 1.4,
+              color: FhcColors.muted,
+              fontFamily: 'monospace',
+            ),
           ),
-        ),
+        ],
       ],
     );
   }
 }
 
-class _PersonRow extends StatelessWidget {
-  const _PersonRow({
+class _GatedTab extends StatelessWidget {
+  const _GatedTab({
     required this.title,
-    required this.subtitle,
-    required this.value,
-    required this.icon,
+    required this.message,
+    this.actionLabel,
+    this.onAction,
+    this.secondaryLabel,
+    this.onSecondary,
   });
 
   final String title;
-  final String subtitle;
-  final String value;
-  final IconData icon;
+  final String message;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+  final String? secondaryLabel;
+  final VoidCallback? onSecondary;
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 60,
-      child: Row(
-        children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: FhcColors.mint,
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Icon(icon, color: FhcColors.green, size: 20),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: FhcColors.ink,
-                    height: 1.2,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  subtitle,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 9,
-                    color: FhcColors.muted,
-                    height: 1.2,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          if (value.isNotEmpty) ...[
-            const SizedBox(width: 6),
-            Text(
-              value,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontSize: 10,
-                color: FhcColors.green,
-                fontWeight: FontWeight.w700,
-                height: 1.2,
-              ),
-            ),
-          ],
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 24, 16, 18),
+      children: [
+        FhcEmptyState(
+          icon: Icons.lock_outline,
+          title: title,
+          message: message,
+          actionLabel: actionLabel,
+          onAction: onAction,
+        ),
+        if (secondaryLabel != null && onSecondary != null) ...[
+          const SizedBox(height: 12),
+          FhcPrimaryButton(label: secondaryLabel!, onPressed: onSecondary),
         ],
-      ),
+      ],
     );
   }
 }
@@ -574,22 +854,18 @@ class _FooterActions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        color: FhcColors.white,
-        border: Border(top: BorderSide(color: FhcColors.border)),
-      ),
+    return ColoredBox(
+      color: FhcColors.white,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
         child: Column(
-          mainAxisSize: MainAxisSize.min,
           children: [
             Row(
               children: [
                 Expanded(
                   child: _OutlinedAction(
-                    icon: Icons.person_add_alt_1,
-                    label: 'Add Soul',
+                    icon: Icons.person_add_alt,
+                    label: fhcT(context, 'mission.addSoul', fallback: 'Add Soul'),
                     onTap: onAddSoul,
                   ),
                 ),
@@ -597,7 +873,11 @@ class _FooterActions extends StatelessWidget {
                 Expanded(
                   child: _OutlinedAction(
                     icon: Icons.assignment_outlined,
-                    label: 'Follow-up',
+                    label: fhcT(
+                      context,
+                      'mission.followUp',
+                      fallback: 'Follow-up',
+                    ),
                     onTap: onFollowUp,
                   ),
                 ),
@@ -605,7 +885,11 @@ class _FooterActions extends StatelessWidget {
                 Expanded(
                   child: _OutlinedAction(
                     icon: Icons.groups_outlined,
-                    label: 'View Souls',
+                    label: fhcT(
+                      context,
+                      'mission.viewSouls',
+                      fallback: 'View Souls',
+                    ),
                     onTap: onViewSouls,
                   ),
                 ),
@@ -613,14 +897,28 @@ class _FooterActions extends StatelessWidget {
                 Expanded(
                   child: _OutlinedAction(
                     icon: Icons.ios_share,
-                    label: 'Share',
+                    label: fhcT(context, 'mission.share', fallback: 'Share'),
                     onTap: onShare,
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 10),
-            FhcPrimaryButton(label: 'Create Report', onPressed: () {}),
+            FhcPrimaryButton(
+              label: fhcT(
+                context,
+                'mission.createReport',
+                fallback: 'Create Report',
+              ),
+              onPressed: () => fhcApiUnavailable(
+                context,
+                action: fhcT(
+                  context,
+                  'mission.creatingCrusadeReport',
+                  fallback: 'Creating a crusade report',
+                ),
+              ),
+            ),
           ],
         ),
       ),

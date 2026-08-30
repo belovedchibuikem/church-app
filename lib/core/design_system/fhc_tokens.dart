@@ -5,8 +5,9 @@ abstract final class FhcColors {
   static const greenDark = Color(0xFF004B36);
   static const greenDeep = Color(0xFF003D2D);
   static const mint = Color(0xFFEAF4EF);
-  static const navy = Color(0xFF061B3D);
+  static const navy = Color(0xFF1D3D81);
   static const midnight = Color(0xFF001823);
+  static const teal = Color(0xFF2F8F9A);
   static const gold = Color(0xFFF0A900);
   static const purple = Color(0xFF49347E);
   static const blue = Color(0xFF063E70);
@@ -89,6 +90,7 @@ abstract final class FhcTypography {
     color: FhcColors.muted,
   );
   static const button = TextStyle(
+    fontFamily: 'FhcRoboto',
     fontSize: 15,
     fontWeight: FontWeight.w700,
     color: FhcColors.white,
@@ -173,6 +175,24 @@ ThemeData buildFhcTheme() {
           borderRadius: BorderRadius.circular(FhcRadius.button),
         ),
         textStyle: FhcTypography.button,
+      ),
+    ),
+    outlinedButtonTheme: OutlinedButtonThemeData(
+      style: OutlinedButton.styleFrom(
+        textStyle: const TextStyle(
+          fontFamily: 'FhcRoboto',
+          fontSize: 13,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    ),
+    textButtonTheme: TextButtonThemeData(
+      style: TextButton.styleFrom(
+        textStyle: const TextStyle(
+          fontFamily: 'FhcRoboto',
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     ),
     inputDecorationTheme: InputDecorationTheme(

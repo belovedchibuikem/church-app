@@ -1,46 +1,185 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/api/app_failure.dart';
 import '../../../../core/design_system/fhc_tokens.dart';
+import '../../../../core/di/app_services_scope.dart';
+import '../../../../core/l10n/locale_scope.dart';
+import '../../../../shared/widgets/async_state.dart';
 import '../../../../shared/widgets/fhc_components.dart';
 import '../../../foundation/presentation/fhc_nav.dart';
+import '../../../maps/presentation/widgets/interactive_church_map.dart';
+import '../../data/church_repository.dart';
 
-class FindChurchesScreen extends StatelessWidget {
-  const FindChurchesScreen({super.key});
+class FindChurchesScreen extends StatefulWidget {
+  const FindChurchesScreen({super.key, this.repository});
+
+  final ChurchRepositoryImpl? repository;
+
+  @override
+  State<FindChurchesScreen> createState() => _FindChurchesScreenState();
+}
+
+class _FindChurchesScreenState extends State<FindChurchesScreen> {
+  late final TextEditingController _searchController;
+  FhcAsyncValue<List<ChurchSummary>> _state = const FhcAsyncValue.loading();
+  String? _locationLabel;
+  bool _started = false;
+
+  ChurchRepositoryImpl? get _repository {
+    final injected = widget.repository;
+    if (injected != null) return injected;
+    final fromServices = AppServicesScope.maybeOf(context)?.churchRepository;
+    return fromServices is ChurchRepositoryImpl ? fromServices : null;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _searchController = TextEditingController();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_started) {
+      _started = true;
+      _load();
+    }
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load({String? name}) async {
+    final repo = _repository;
+    if (repo == null) {
+      setState(() {
+        _locationLabel = null;
+        _state = FhcAsyncValue.unavailable(
+          message: fhcT(
+            context,
+            'errors.churchSearchWaiting',
+            fallback:
+                'Church search is waiting on AppServices churchRepository. '
+                'No fixture list is shown.',
+          ),
+        );
+      });
+      return;
+    }
+
+    setState(() => _state = const FhcAsyncValue.loading());
+
+    final result = await repo.listChurches(name: name);
+    if (!mounted) return;
+
+    switch (result) {
+      case AppSuccess(:final value):
+        if (value.items.isEmpty) {
+          setState(() {
+            _locationLabel = null;
+            _state = FhcAsyncValue.empty(
+              message: fhcT(
+                context,
+                'errors.publishedChurchesWillAppear',
+                fallback:
+                    'Published churches will appear here when available.',
+              ),
+            );
+          });
+          return;
+        }
+        setState(() {
+          _locationLabel = value.items.first.location.placeLabel;
+          _state = FhcAsyncValue.data(value.items);
+        });
+      case AppError(:final failure):
+        if (failure is IntegrationUnavailableFailure) {
+          setState(() {
+            _locationLabel = null;
+            _state = FhcAsyncValue.unavailable(message: failure.message);
+          });
+          return;
+        }
+        setState(() {
+          _locationLabel = null;
+          _state = FhcAsyncValue.error(failure);
+        });
+    }
+  }
+
+  void _openChurch(ChurchSummary church) {
+    fhcPush(context, '/discover/church/${church.id}');
+  }
 
   @override
   Widget build(BuildContext context) {
     return FhcDevicePage(
-      backgroundColor: FhcColors.canvas,
+      backgroundColor: FhcColors.white,
       child: Column(
         children: [
-          const _LocationHeader(),
-          const Padding(
-            padding: EdgeInsets.fromLTRB(16, 0, 16, 10),
-            child: _SearchField(),
-          ),
+          _LocationHeader(label: _locationLabel),
           Expanded(
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 18),
-              children: [
-                const _DiscoverHero(),
-                const SizedBox(height: 16),
-                const _SectionHeader(
-                  title: 'Top Categories',
-                  action: 'See All',
-                ),
-                const SizedBox(height: 10),
-                const _CategoryRow(),
-                const SizedBox(height: 16),
-                const _SectionHeader(title: 'Recommended For You'),
-                const SizedBox(height: 10),
-                _RecommendedCard(
-                  onOpen: () => fhcPush(context, FhcRoutes.churchDetail),
-                  onJoinLive: () => fhcPush(context, FhcRoutes.live),
-                ),
-              ],
+            child: RefreshIndicator(
+              onRefresh: () => _load(name: _searchController.text),
+              child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 18),
+                children: [
+                  _ChurchSearch(
+                    controller: _searchController,
+                    onSubmitted: (value) => _load(name: value),
+                  ),
+                  const SizedBox(height: 12),
+                  const InteractiveChurchMap(height: 260),
+                  const SizedBox(height: 12),
+                  _DiscoverHero(
+                    onExplore: () => _load(name: _searchController.text),
+                  ),
+                  const SizedBox(height: 20),
+                  _SectionTitle(
+                    title: fhcT(
+                      context,
+                      'church.churches',
+                      fallback: 'Churches',
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  FhcAsyncBody<List<ChurchSummary>>(
+                    value: _state,
+                    onRetry: () => _load(name: _searchController.text),
+                    emptyTitle: fhcT(
+                      context,
+                      'errors.noChurchesFound',
+                      fallback: 'No churches found',
+                    ),
+                    unavailableTitle: fhcT(
+                      context,
+                      'errors.churchesUnavailable',
+                      fallback: 'Churches unavailable',
+                    ),
+                    builder: (context, churches) {
+                      return Column(
+                        children: [
+                          for (var i = 0; i < churches.length; i++) ...[
+                            if (i > 0) const SizedBox(height: 10),
+                            _ChurchCard(
+                              church: churches[i],
+                              onOpen: () => _openChurch(churches[i]),
+                            ),
+                          ],
+                        ],
+                      );
+                    },
+                  ),
+                ],
+              ),
             ),
           ),
-          const FhcBottomNavigation(selected: 2),
+          const FhcBottomNavigation(selected: 1),
         ],
       ),
     );
@@ -48,32 +187,41 @@ class FindChurchesScreen extends StatelessWidget {
 }
 
 class _LocationHeader extends StatelessWidget {
-  const _LocationHeader();
+  const _LocationHeader({this.label});
+
+  final String? label;
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: FhcSizes.topBarHeight,
+      height: 60,
       child: Padding(
         padding: const EdgeInsets.only(left: 16, right: 4),
         child: Row(
           children: [
-            const Icon(Icons.location_on, size: 18, color: FhcColors.green),
-            const SizedBox(width: 6),
-            const Expanded(
+            const Icon(Icons.location_on_outlined, size: 20),
+            const SizedBox(width: 8),
+            Expanded(
               child: Text(
-                'Lagos, Nigeria',
+                label ??
+                    fhcT(
+                      context,
+                      'church.findAChurch',
+                      fallback: 'Find a church',
+                    ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: FhcTypography.titleSmall,
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
               ),
             ),
             IconButton(
               onPressed: () => fhcPush(context, FhcRoutes.notifications),
-              padding: EdgeInsets.zero,
-              icon: const Icon(Icons.notifications_none, size: 22),
-              color: FhcColors.ink,
-              tooltip: 'Notifications',
+              tooltip: fhcT(
+                context,
+                'common.notifications',
+                fallback: 'Notifications',
+              ),
+              icon: const Icon(Icons.notifications_none_rounded, size: 24),
             ),
           ],
         ),
@@ -82,43 +230,40 @@ class _LocationHeader extends StatelessWidget {
   }
 }
 
-class _SearchField extends StatelessWidget {
-  const _SearchField();
+class _ChurchSearch extends StatelessWidget {
+  const _ChurchSearch({
+    required this.controller,
+    required this.onSubmitted,
+  });
+
+  final TextEditingController controller;
+  final ValueChanged<String> onSubmitted;
 
   @override
   Widget build(BuildContext context) {
-    final radius = BorderRadius.circular(FhcRadius.md);
     return SizedBox(
-      height: 44,
+      height: 46,
       child: TextField(
-        style: FhcTypography.body,
+        controller: controller,
         textInputAction: TextInputAction.search,
+        onSubmitted: onSubmitted,
+        style: FhcTypography.body,
         decoration: InputDecoration(
-          hintText: 'Search churches, locations...',
-          hintStyle: FhcTypography.hint,
-          prefixIcon: const Icon(
-            Icons.search,
-            size: 20,
-            color: FhcColors.muted,
+          hintText: fhcT(
+            context,
+            'church.searchHint',
+            fallback: 'Search churches, locations...',
           ),
-          isDense: true,
+          prefixIcon: const Icon(Icons.search, size: 20),
           filled: true,
-          fillColor: FhcColors.white,
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 14,
-            vertical: 12,
-          ),
+          fillColor: FhcColors.canvas,
           border: OutlineInputBorder(
             borderSide: BorderSide.none,
-            borderRadius: radius,
+            borderRadius: BorderRadius.circular(12),
           ),
           enabledBorder: OutlineInputBorder(
             borderSide: BorderSide.none,
-            borderRadius: radius,
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderSide: const BorderSide(color: FhcColors.green, width: 1.5),
-            borderRadius: radius,
+            borderRadius: BorderRadius.circular(12),
           ),
         ),
       ),
@@ -127,219 +272,113 @@ class _SearchField extends StatelessWidget {
 }
 
 class _DiscoverHero extends StatelessWidget {
-  const _DiscoverHero();
+  const _DiscoverHero({required this.onExplore});
+
+  final VoidCallback onExplore;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 148,
-      decoration: BoxDecoration(
-        color: FhcColors.greenDark,
-        borderRadius: BorderRadius.circular(FhcRadius.card),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Stack(
-        children: [
-          const Positioned(
-            right: -6,
-            top: -8,
-            bottom: -8,
-            width: 148,
-            child: _HeroGlobe(),
-          ),
-          const Positioned.fill(
-            child: DecoratedBox(
+    return AspectRatio(
+      aspectRatio: 1.42,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(15),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            const ColoredBox(color: Color(0xFF003D2D)),
+            Positioned(
+              right: -2,
+              top: 0,
+              bottom: 0,
+              width: 205,
+              child: Image.asset(
+                'assets/images/discover_hero_globe.png',
+                fit: BoxFit.cover,
+                alignment: Alignment.centerRight,
+                semanticLabel: fhcT(
+                  context,
+                  'church.worldMap',
+                  fallback: 'World map',
+                ),
+              ),
+            ),
+            const DecoratedBox(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.centerLeft,
                   end: Alignment.centerRight,
                   colors: [
-                    FhcColors.greenDark,
-                    Color(0xCC004B36),
-                    Color(0x00004B36),
+                    Color(0xFF003D2D),
+                    Color(0xF2003D2D),
+                    Color(0x7A003D2D),
+                    Color(0x00003D2D),
                   ],
-                  stops: [0.0, 0.52, 0.88],
+                  stops: [0, .48, .75, 1],
                 ),
               ),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(14, 12, 108, 12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'DISCOVER GREAT CHURCHES NEAR YOU',
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    height: 1.15,
-                    letterSpacing: 0.2,
-                    color: FhcColors.white,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                const Text(
-                  'Find a place to worship, grow and belong.',
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 11,
-                    height: 1.3,
-                    color: FhcColors.white,
-                  ),
-                ),
-                const Spacer(),
-                SizedBox(
-                  height: 30,
-                  child: OutlinedButton(
-                    onPressed: () {},
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: FhcColors.white,
-                      backgroundColor: Colors.transparent,
-                      side: const BorderSide(
-                        color: FhcColors.white,
-                        width: 1.4,
-                      ),
-                      minimumSize: Size.zero,
-                      padding: const EdgeInsets.symmetric(horizontal: 14),
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      visualDensity: VisualDensity.compact,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(FhcRadius.button),
-                      ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 18, 132, 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    fhcT(
+                      context,
+                      'church.discoverHeadline',
+                      fallback: 'DISCOVER\nGREAT CHURCHES\nNEAR YOU',
                     ),
-                    child: const Text(
-                      'Explore Now',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        height: 1.1,
-                        color: FhcColors.white,
-                      ),
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 20,
+                      height: 1.16,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _HeroGlobe extends StatelessWidget {
-  const _HeroGlobe();
-
-  @override
-  Widget build(BuildContext context) {
-    return Image.asset(
-      'assets/images/discover_hero_globe.png',
-      fit: BoxFit.cover,
-      alignment: Alignment.centerRight,
-      errorBuilder:
-          (_, __, ___) => Image.asset(
-            'assets/images/discover_globe.png',
-            fit: BoxFit.cover,
-            alignment: Alignment.centerRight,
-            errorBuilder:
-                (_, __, ___) => const ColoredBox(color: FhcColors.greenDark),
-          ),
-    );
-  }
-}
-
-class _SectionHeader extends StatelessWidget {
-  const _SectionHeader({required this.title, this.action});
-
-  final String title;
-  final String? action;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: Text(
-            title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              color: FhcColors.ink,
-            ),
-          ),
-        ),
-        if (action != null)
-          Text(
-            action!,
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: FhcColors.green,
-            ),
-          ),
-      ],
-    );
-  }
-}
-
-class _CategoryRow extends StatelessWidget {
-  const _CategoryRow();
-
-  static const _items = <(IconData, String)>[
-    (Icons.location_on_outlined, 'Nearby'),
-    (Icons.thumb_up_alt_outlined, 'Popular'),
-    (Icons.play_circle_outline, 'Live Services'),
-    (Icons.favorite_border, 'Youth'),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        for (var i = 0; i < _items.length; i++) ...[
-          if (i > 0) const SizedBox(width: 8),
-          Expanded(
-            child: _CategoryTile(icon: _items[i].$1, label: _items[i].$2),
-          ),
-        ],
-      ],
-    );
-  }
-}
-
-class _CategoryTile extends StatelessWidget {
-  const _CategoryTile({required this.icon, required this.label});
-
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      button: true,
-      label: label,
-      child: FhcSurfaceCard(
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
-        child: Column(
-          children: [
-            Icon(icon, size: 22, color: FhcColors.green),
-            const SizedBox(height: 6),
-            Text(
-              label,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w600,
-                color: FhcColors.ink,
-                height: 1.15,
+                  const SizedBox(height: 8),
+                  Text(
+                    fhcT(
+                      context,
+                      'church.discoverCopy',
+                      fallback: 'Find a place to worship,\ngrow and belong.',
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      height: 1.3,
+                    ),
+                  ),
+                  const Spacer(),
+                  SizedBox(
+                    height: 34,
+                    child: FilledButton(
+                      onPressed: onExplore,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        foregroundColor: FhcColors.greenDark,
+                        padding: const EdgeInsets.symmetric(horizontal: 18),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      child: Text(
+                        fhcT(
+                          context,
+                          'church.exploreNow',
+                          fallback: 'Explore Now',
+                        ),
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -349,213 +388,89 @@ class _CategoryTile extends StatelessWidget {
   }
 }
 
-class _RecommendedCard extends StatelessWidget {
-  const _RecommendedCard({required this.onOpen, required this.onJoinLive});
+class _SectionTitle extends StatelessWidget {
+  const _SectionTitle({required this.title});
 
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      title,
+      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+    );
+  }
+}
+
+class _ChurchCard extends StatelessWidget {
+  const _ChurchCard({required this.church, required this.onOpen});
+
+  final ChurchSummary church;
   final VoidCallback onOpen;
-  final VoidCallback onJoinLive;
-
-  @override
-  Widget build(BuildContext context) {
-    return FhcSurfaceCard(
-      padding: EdgeInsets.zero,
-      child: Column(
-        children: [
-          Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: onOpen,
-              child: const Padding(
-                padding: EdgeInsets.fromLTRB(12, 12, 12, 10),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _ChurchThumb(),
-                    SizedBox(width: 12),
-                    Expanded(child: _ChurchInfo()),
-                    SizedBox(width: 8),
-                    _LiveBadge(),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: onJoinLive,
-              child: const Padding(
-                padding: EdgeInsets.fromLTRB(12, 0, 12, 12),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Join Live Service',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700,
-                              color: FhcColors.green,
-                              height: 1.2,
-                            ),
-                          ),
-                          SizedBox(height: 3),
-                          Text(
-                            'Sunday 9:00 AM',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 11,
-                              height: 1.2,
-                              color: FhcColors.muted,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    _JoinLiveButton(),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ChurchThumb extends StatelessWidget {
-  const _ChurchThumb();
-
-  static const _fallback = ColoredBox(
-    color: FhcColors.mint,
-    child: Center(
-      child: Icon(Icons.church_outlined, size: 26, color: FhcColors.green),
-    ),
-  );
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(FhcRadius.sm),
-      child: SizedBox(
-        width: 64,
-        height: 64,
-        child: Image.asset(
-          'assets/images/church_grace_hero.png',
-          fit: BoxFit.cover,
-          alignment: Alignment.center,
-          errorBuilder:
-              (_, __, ___) => Image.asset(
-                'assets/images/church_building.png',
-                fit: BoxFit.cover,
-                alignment: Alignment.center,
-                errorBuilder:
-                    (_, __, ___) => Image.asset(
-                      'assets/images/church_house.png',
-                      fit: BoxFit.cover,
-                      alignment: Alignment.center,
-                      errorBuilder: (_, __, ___) => _fallback,
-                    ),
-              ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ChurchInfo extends StatelessWidget {
-  const _ChurchInfo();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Grace Home Church',
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w700,
-            color: FhcColors.ink,
-            height: 1.2,
-          ),
-        ),
-        SizedBox(height: 4),
-        Text(
-          'Ikeja, Lagos',
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            fontSize: 11,
-            height: 1.2,
-            color: FhcColors.muted,
-          ),
-        ),
-        SizedBox(height: 2),
-        Text(
-          '1.2 km away',
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            fontSize: 11,
-            height: 1.2,
-            color: FhcColors.muted,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _LiveBadge extends StatelessWidget {
-  const _LiveBadge();
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: FhcColors.red,
-        borderRadius: BorderRadius.circular(20),
+        color: Colors.white,
+        border: Border.all(color: FhcColors.border),
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: FhcElevation.card,
       ),
-      child: const Text(
-        'LIVE',
-        style: TextStyle(
-          color: FhcColors.white,
-          fontSize: 9,
-          fontWeight: FontWeight.w700,
-          letterSpacing: 0.6,
-          height: 1.1,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onOpen,
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.asset(
+                    'assets/images/church_grace_hero.png',
+                    width: 66,
+                    height: 66,
+                    fit: BoxFit.cover,
+                    semanticLabel: church.name,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        church.name,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 5),
+                      Text(
+                        church.location.placeLabel,
+                        style: FhcTypography.caption,
+                      ),
+                      if (church.location.administrativeUnitName != null) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          church.location.administrativeUnitName!,
+                          style: FhcTypography.caption,
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const Icon(Icons.chevron_right, color: FhcColors.muted),
+              ],
+            ),
+          ),
         ),
-      ),
-    );
-  }
-}
-
-class _JoinLiveButton extends StatelessWidget {
-  const _JoinLiveButton();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 32,
-      height: 32,
-      decoration: const BoxDecoration(
-        color: FhcColors.green,
-        shape: BoxShape.circle,
-      ),
-      child: const Icon(
-        Icons.chevron_right,
-        size: 20,
-        color: FhcColors.white,
       ),
     );
   }

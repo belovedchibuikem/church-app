@@ -1,17 +1,162 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/api/app_failure.dart';
+import '../../../../core/contracts/mobile_repository_contracts.dart';
 import '../../../../core/design_system/fhc_tokens.dart';
+import '../../../../core/di/app_services_scope.dart';
+import '../../../../core/l10n/locale_scope.dart';
+import '../../../../core/l10n/supported_locales.dart';
+import '../../../../core/launch/app_launch_scope.dart';
 import '../../../../shared/widgets/fhc_components.dart';
 import '../../../foundation/presentation/fhc_nav.dart';
+import '../../data/profile_repository.dart';
 
-class SettingsScreen extends StatelessWidget {
-  const SettingsScreen({super.key});
+class SettingsScreen extends StatefulWidget {
+  const SettingsScreen({super.key, this.repository});
 
-  void _goBack(BuildContext context) {
-    if (Navigator.of(context).canPop()) {
-      Navigator.of(context).pop();
-    } else {
-      fhcGo(context, FhcRoutes.profile);
+  final ProfileRepository? repository;
+
+  @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends State<SettingsScreen> {
+  LaravelProfileRepository? _repository;
+
+  bool _loading = true;
+  String? _error;
+  String _localeLabel = 'English';
+  String _timezone = 'Africa/Lagos';
+  List<String> _channels = const ['email', 'in_app'];
+  bool _started = false;
+
+  List<(String, String)> get _localeChoices => [
+    for (final code in kFhcSupportedLocales)
+      (code, kFhcLocaleMeta[code]!.endonym),
+  ];
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final fromServices = AppServicesScope.maybeOf(context)?.profileRepository;
+    _repository ??=
+        widget.repository is LaravelProfileRepository
+            ? widget.repository as LaravelProfileRepository
+            : fromServices is LaravelProfileRepository
+            ? fromServices
+            : createProfileRepository() as LaravelProfileRepository;
+    if (!_started) {
+      _started = true;
+      _load();
+    }
+  }
+
+  Future<void> _load() async {
+    final repository = _repository;
+    if (repository == null) return;
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    final result = await repository.getProfile();
+    if (!mounted) return;
+    switch (result) {
+      case AppSuccess(:final value):
+        final preferences = value['preferences'];
+        if (preferences is Map) {
+          final locale = preferences['locale'] as String? ?? 'en';
+          final timezone =
+              preferences['timezone'] as String? ?? 'Africa/Lagos';
+          final rawChannels = preferences['notification_channels'];
+          setState(() {
+            _localeLabel = _labelForLocale(locale);
+            _timezone = timezone;
+            _channels = [
+              if (rawChannels is List)
+                for (final item in rawChannels) '$item',
+            ];
+            if (_channels.isEmpty) {
+              _channels = const ['email', 'in_app'];
+            }
+            _loading = false;
+          });
+        } else {
+          setState(() => _loading = false);
+        }
+      case AppError(:final failure):
+        setState(() {
+          _error = failure.message;
+          _loading = false;
+        });
+    }
+  }
+
+  String _labelForLocale(String locale) {
+    for (final choice in _localeChoices) {
+      if (choice.$1 == locale) return choice.$2;
+    }
+    return locale;
+  }
+
+  String _codeForLocaleLabel(String label) {
+    for (final choice in _localeChoices) {
+      if (choice.$2 == label) return choice.$1;
+    }
+    return 'en';
+  }
+
+  Future<void> _changeLanguage() async {
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        return SafeArea(
+          child: ListView(
+            shrinkWrap: true,
+            children: [
+              for (final choice in _localeChoices)
+                ListTile(
+                  title: Text(choice.$2),
+                  trailing:
+                      _localeLabel == choice.$2
+                          ? const Icon(Icons.check, color: FhcColors.green)
+                          : null,
+                  onTap: () => Navigator.of(sheetContext).pop(choice.$2),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+    if (selected == null || selected == _localeLabel || !mounted) return;
+
+    final repository = _repository;
+    if (repository == null) return;
+    final previous = _localeLabel;
+    setState(() => _localeLabel = selected);
+    final result = await repository.updatePreferences({
+      'locale': _codeForLocaleLabel(selected),
+      'timezone': _timezone,
+      'notification_channels': _channels,
+    });
+    if (!mounted) return;
+    switch (result) {
+      case AppSuccess(:final value):
+        final locale = value['locale'] as String? ?? selected;
+        setState(() => _localeLabel = _labelForLocale(locale));
+        await AppLaunchScope.maybeOf(context)?.setLanguage(
+          languageCode: locale,
+          languageLabel: _labelForLocale(locale),
+        );
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(fhcT(context, 'account.languagePreferenceSaved'))),
+        );
+      case AppError(:final failure):
+        setState(() => _localeLabel = previous);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(failure.message)),
+        );
     }
   }
 
@@ -21,175 +166,122 @@ class SettingsScreen extends StatelessWidget {
       backgroundColor: FhcColors.canvas,
       child: Column(
         children: [
-          FhcTopBar(title: 'Settings', onBack: () => _goBack(context)),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-              child: Column(
-                children: [
-                  Expanded(
-                    child: ListView(
-                      physics: const ClampingScrollPhysics(),
-                      children: [
-                        _MenuList(
-                          items: [
-                            _MenuItem(
-                              icon: Icons.person_outline,
-                              label: 'Account Settings',
-                              onTap: () =>
-                                  fhcPush(context, FhcRoutes.profile),
-                            ),
-                            _MenuItem(
-                              icon: Icons.notifications_outlined,
-                              label: 'Notification Preferences',
-                              onTap: () =>
-                                  fhcPush(context, FhcRoutes.notifications),
-                            ),
-                            const _MenuItem(
-                              icon: Icons.security,
-                              label: 'Privacy & Security',
-                            ),
-                            const _MenuItem(
-                              icon: Icons.language,
-                              label: 'Language',
-                              trailing: 'English',
-                            ),
-                            const _MenuItem(
-                              icon: Icons.dark_mode_outlined,
-                              label: 'Theme',
-                              trailing: 'System Default',
-                            ),
-                            const _MenuItem(
-                              icon: Icons.info_outline,
-                              label: 'About Family House Connect',
-                              trailing: 'Version 1.0.0',
-                              showChevron: false,
-                            ),
-                            const _MenuItem(
-                              icon: Icons.help_outline,
-                              label: 'Help & Support',
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  FhcPrimaryButton(
-                    label: 'Log Out',
-                    color: FhcColors.red,
-                    onPressed: () => fhcGo(context, '/sign-in'),
-                  ),
-                ],
+          SizedBox(
+            height: FhcSizes.topBarHeight,
+            child: Center(
+              child: Text(
+                fhcT(context, 'settings.title'),
+                style: FhcTypography.titleSmall,
               ),
             ),
           ),
+          Expanded(child: _body(context)),
           const FhcBottomNavigation(selected: 4),
         ],
       ),
     );
   }
-}
 
-class _MenuItem {
-  const _MenuItem({
-    required this.icon,
-    required this.label,
-    this.trailing,
-    this.showChevron = true,
-    this.onTap,
-  });
+  Widget _body(BuildContext context) {
+    if (_loading) {
+      return const Center(child: CircularProgressIndicator.adaptive());
+    }
+    if (_error != null) {
+      return FhcErrorState(
+        title: fhcT(context, 'settings.couldNotLoad'),
+        message: _error!,
+        onRetry: _load,
+      );
+    }
 
-  final IconData icon;
-  final String label;
-  final String? trailing;
-  final bool showChevron;
-  final VoidCallback? onTap;
-}
-
-class _MenuList extends StatelessWidget {
-  const _MenuList({required this.items});
-
-  final List<_MenuItem> items;
-
-  @override
-  Widget build(BuildContext context) {
-    return FhcSurfaceCard(
-      padding: EdgeInsets.zero,
-      child: Column(
-        children: [
-          for (var i = 0; i < items.length; i++) ...[
-            if (i > 0) const Divider(height: 1, color: FhcColors.border),
-            _MenuRow(item: items[i]),
+    return ListView(
+      physics: const ClampingScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+      children: [
+        FhcMenuGroup(
+          title: fhcT(context, 'settings.account'),
+          children: [
+            FhcMenuTile(
+              icon: Icons.person_outline,
+              title: fhcT(context, 'settings.accountSettings'),
+              subtitle: fhcT(context, 'settings.accountSettingsCopy'),
+              showDivider: true,
+              onTap: () => fhcPush(context, FhcRoutes.editProfile),
+            ),
+            FhcMenuTile(
+              icon: Icons.notifications_outlined,
+              title: fhcT(context, 'settings.notificationPreferences'),
+              subtitle: fhcT(context, 'settings.notificationPreferencesCopy'),
+              showDivider: true,
+              onTap: () => fhcPush(context, '/settings/notifications'),
+            ),
+            FhcMenuTile(
+              icon: Icons.lock_outline,
+              title: fhcT(context, 'settings.privacySecurity'),
+              subtitle: fhcT(context, 'settings.privacySecurityCopy'),
+              onTap: () => fhcPush(context, '/settings/privacy'),
+            ),
           ],
-        ],
-      ),
+        ),
+        const SizedBox(height: 14),
+        FhcMenuGroup(
+          title: fhcT(context, 'settings.preferences'),
+          children: [
+            FhcMenuTile(
+              icon: Icons.language,
+              title: fhcT(context, 'settings.language'),
+              subtitle: _localeLabel,
+              showDivider: true,
+              onTap: _changeLanguage,
+            ),
+            FhcMenuTile(
+              icon: Icons.dark_mode_outlined,
+              title: fhcT(context, 'settings.theme'),
+              subtitle: fhcT(context, 'settings.themeSystem'),
+              onTap:
+                  () => fhcApiUnavailable(context, action: 'Changing theme'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        FhcMenuGroup(
+          title: fhcT(context, 'settings.support'),
+          children: [
+            FhcMenuTile(
+              icon: Icons.info_outline,
+              title: fhcT(context, 'settings.about'),
+              subtitle: fhcT(
+                context,
+                'settings.version',
+                args: {'version': '1.0.0'},
+              ),
+              showDivider: true,
+              onTap: () => fhcPush(context, FhcRoutes.help),
+            ),
+            FhcMenuTile(
+              icon: Icons.help_outline,
+              title: fhcT(context, 'settings.help'),
+              subtitle: fhcT(context, 'settings.helpCopy'),
+              onTap: () => fhcPush(context, FhcRoutes.help),
+            ),
+          ],
+        ),
+        const SizedBox(height: 20),
+        FhcPrimaryButton(
+          label: fhcT(context, 'settings.logOut'),
+          color: const Color(0xFFEF4444),
+          onPressed: () => _logOut(context),
+        ),
+      ],
     );
   }
-}
 
-class _MenuRow extends StatelessWidget {
-  const _MenuRow({required this.item});
-
-  final _MenuItem item;
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      button: item.onTap != null || item.showChevron,
-      label:
-          item.trailing == null
-              ? item.label
-              : '${item.label}, ${item.trailing}',
-      child: InkWell(
-        onTap: item.onTap,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: FhcSizes.minTap),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            child: Row(
-              children: [
-                FhcCircleIcon(icon: item.icon, size: 36),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    item.label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      height: 1.2,
-                      color: FhcColors.ink,
-                    ),
-                  ),
-                ),
-                if (item.trailing != null) ...[
-                  const SizedBox(width: 8),
-                  Text(
-                    item.trailing!,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      height: 1.2,
-                      color: FhcColors.muted,
-                    ),
-                  ),
-                ],
-                if (item.showChevron) ...[
-                  const SizedBox(width: 4),
-                  const Icon(
-                    Icons.chevron_right,
-                    size: 20,
-                    color: FhcColors.muted,
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
+  Future<void> _logOut(BuildContext context) async {
+    final auth = AppServicesScope.maybeOf(context)?.authRepository;
+    if (auth != null) {
+      await auth.signOut();
+    }
+    if (!context.mounted) return;
+    fhcGo(context, '/sign-in');
   }
 }

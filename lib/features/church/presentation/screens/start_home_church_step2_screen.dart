@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/design_system/fhc_tokens.dart';
+import '../../../../core/l10n/locale_scope.dart';
 import '../../../../shared/widgets/fhc_components.dart';
 import '../../../foundation/presentation/fhc_nav.dart';
+import '../../data/home_church_repository.dart';
 
 class StartHomeChurchStep2Screen extends StatefulWidget {
   const StartHomeChurchStep2Screen({super.key});
@@ -48,6 +50,55 @@ class _StartHomeChurchStep2ScreenState
     });
   }
 
+  String _dayLabel(BuildContext context, String day) {
+    return switch (day) {
+      'Mon' => fhcT(context, 'homeChurch.dayMon', fallback: 'Mon'),
+      'Tue' => fhcT(context, 'homeChurch.dayTue', fallback: 'Tue'),
+      'Wed' => fhcT(context, 'homeChurch.dayWed', fallback: 'Wed'),
+      'Thu' => fhcT(context, 'homeChurch.dayThu', fallback: 'Thu'),
+      'Fri' => fhcT(context, 'homeChurch.dayFri', fallback: 'Fri'),
+      'Sat' => fhcT(context, 'homeChurch.daySat', fallback: 'Sat'),
+      'Sun' => fhcT(context, 'homeChurch.daySun', fallback: 'Sun'),
+      _ => day,
+    };
+  }
+
+  String _timeLabel(BuildContext context, String time) {
+    return switch (time) {
+      '5:00 PM' => fhcT(context, 'homeChurch.time5pm', fallback: '5:00 PM'),
+      '6:00 PM' => fhcT(context, 'homeChurch.time6pm', fallback: '6:00 PM'),
+      '7:00 PM' => fhcT(context, 'homeChurch.time7pm', fallback: '7:00 PM'),
+      '8:00 PM' => fhcT(context, 'homeChurch.time8pm', fallback: '8:00 PM'),
+      _ => time,
+    };
+  }
+
+  String _participantsLabel(BuildContext context, String range) {
+    return switch (range) {
+      '10-20' => fhcT(
+        context,
+        'homeChurch.participants10to20',
+        fallback: '10-20',
+      ),
+      '21-30' => fhcT(
+        context,
+        'homeChurch.participants21to30',
+        fallback: '21-30',
+      ),
+      '31-50' => fhcT(
+        context,
+        'homeChurch.participants31to50',
+        fallback: '31-50',
+      ),
+      '50+' => fhcT(
+        context,
+        'homeChurch.participants50plus',
+        fallback: '50+',
+      ),
+      _ => range,
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
     return FhcDevicePage(
@@ -68,10 +119,14 @@ class _StartHomeChurchStep2ScreenState
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        const Text(
-                          'Start a Church\nin Your Home',
+                        Text(
+                          fhcT(
+                            context,
+                            'homeChurch.startTitle',
+                            fallback: 'Start a Church\nin Your Home',
+                          ),
                           textAlign: TextAlign.center,
-                          style: TextStyle(
+                          style: const TextStyle(
                             fontSize: 22,
                             height: 1.18,
                             fontWeight: FontWeight.w700,
@@ -79,50 +134,89 @@ class _StartHomeChurchStep2ScreenState
                           ),
                         ),
                         const SizedBox(height: 10),
-                        const _StepBanner(),
+                        const _StepBanner(step: 2),
                         const SizedBox(height: 10),
                         const _StepProgress(step: 2),
                         SizedBox(height: compact ? 16 : 22),
-                        const FhcField(
-                          label: 'Home Address',
-                          hint: 'Enter your home address',
+                        FhcField(
+                          label: fhcT(
+                            context,
+                            'homeChurch.homeAddress',
+                            fallback: 'Home Address',
+                          ),
+                          hint: fhcT(
+                            context,
+                            'homeChurch.homeAddressHint',
+                            fallback: 'Enter your home address',
+                          ),
                           suffixIcon: Icons.location_on_outlined,
                           keyboardType: TextInputType.streetAddress,
                         ),
                         SizedBox(height: compact ? 14 : 18),
                         Text(
-                          'Preferred Meeting Days',
+                          fhcT(
+                            context,
+                            'homeChurch.preferredMeetingDays',
+                            fallback: 'Preferred Meeting Days',
+                          ),
                           style: FhcTypography.label,
                         ),
                         const SizedBox(height: 8),
                         _DayChips(
                           days: _days,
                           selected: _selectedDays,
+                          labelFor: (day) => _dayLabel(context, day),
                           onToggle: _toggleDay,
                         ),
                         SizedBox(height: compact ? 14 : 18),
                         _DropdownField(
-                          label: 'Meeting Time',
+                          label: fhcT(
+                            context,
+                            'homeChurch.meetingTime',
+                            fallback: 'Meeting Time',
+                          ),
                           value: _meetingTime,
                           options: _times,
+                          optionLabel: (time) => _timeLabel(context, time),
                           onChanged:
                               (value) => setState(() => _meetingTime = value),
                         ),
                         const SizedBox(height: 12),
                         _DropdownField(
-                          label: 'Expected Participants',
+                          label: fhcT(
+                            context,
+                            'homeChurch.expectedParticipants',
+                            fallback: 'Expected Participants',
+                          ),
                           value: _participantsRange,
                           options: _participants,
+                          optionLabel: (range) =>
+                              _participantsLabel(context, range),
                           onChanged:
                               (value) =>
                                   setState(() => _participantsRange = value),
                         ),
                         SizedBox(height: compact ? 20 : 28),
                         FhcPrimaryButton(
-                          label: 'Continue',
-                          onPressed:
-                              () =>
-                                  fhcPush(context, FhcRoutes.homeChurchStart3),
+                          label: fhcT(
+                            context,
+                            'common.continue',
+                            fallback: 'Continue',
+                          ),
+                          onPressed: () {
+                            final draft = HomeChurchApplicationSession.draft;
+                            final day = _selectedDays.isEmpty
+                                ? 'Sun'
+                                : _selectedDays.first;
+                            draft.meetingDay = meetingDayApiValue(day);
+                            draft.meetingTime =
+                                meetingTimeApiValue(_meetingTime);
+                            draft.expectedParticipants =
+                                expectedParticipantsApiValue(
+                              _participantsRange,
+                            );
+                            fhcPush(context, FhcRoutes.homeChurchStart3);
+                          },
                         ),
                       ],
                     ),
@@ -138,25 +232,32 @@ class _StartHomeChurchStep2ScreenState
 }
 
 class _StepBanner extends StatelessWidget {
-  const _StepBanner();
+  const _StepBanner({required this.step});
+
+  final int step;
 
   @override
   Widget build(BuildContext context) {
-    return const Row(
+    return Row(
       children: [
-        Expanded(child: Divider(color: FhcColors.border, height: 1)),
+        const Expanded(child: Divider(color: FhcColors.border, height: 1)),
         Padding(
-          padding: EdgeInsets.symmetric(horizontal: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 12),
           child: Text(
-            'Step 2 of 4',
-            style: TextStyle(
+            fhcT(
+              context,
+              'homeChurch.stepOf',
+              args: {'current': '$step', 'total': '4'},
+              fallback: 'Step {current} of {total}',
+            ),
+            style: const TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w600,
               color: FhcColors.muted,
             ),
           ),
         ),
-        Expanded(child: Divider(color: FhcColors.border, height: 1)),
+        const Expanded(child: Divider(color: FhcColors.border, height: 1)),
       ],
     );
   }
@@ -191,11 +292,13 @@ class _DayChips extends StatelessWidget {
   const _DayChips({
     required this.days,
     required this.selected,
+    required this.labelFor,
     required this.onToggle,
   });
 
   final List<String> days;
   final Set<String> selected;
+  final String Function(String day) labelFor;
   final ValueChanged<String> onToggle;
 
   @override
@@ -206,7 +309,7 @@ class _DayChips extends StatelessWidget {
           if (i > 0) const SizedBox(width: 6),
           Expanded(
             child: _DayChip(
-              label: days[i],
+              label: labelFor(days[i]),
               selected: selected.contains(days[i]),
               onTap: () => onToggle(days[i]),
             ),
@@ -271,12 +374,14 @@ class _DropdownField extends StatelessWidget {
     required this.label,
     required this.value,
     required this.options,
+    required this.optionLabel,
     required this.onChanged,
   });
 
   final String label;
   final String value;
   final List<String> options;
+  final String Function(String value) optionLabel;
   final ValueChanged<String> onChanged;
 
   @override
@@ -311,7 +416,10 @@ class _DropdownField extends StatelessWidget {
               ),
               items: [
                 for (final option in options)
-                  DropdownMenuItem<String>(value: option, child: Text(option)),
+                  DropdownMenuItem<String>(
+                    value: option,
+                    child: Text(optionLabel(option)),
+                  ),
               ],
               onChanged: (next) {
                 if (next != null) onChanged(next);

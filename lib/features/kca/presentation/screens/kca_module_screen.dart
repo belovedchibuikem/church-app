@@ -1,13 +1,20 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/api/app_failure.dart';
+import '../../../../core/contracts/mobile_repository_contracts.dart';
 import '../../../../core/design_system/fhc_tokens.dart';
+import '../../../../core/di/app_services_scope.dart';
+import '../../../../core/l10n/locale_scope.dart';
+import '../../../../core/routing/fhc_route_args.dart';
+import '../../../../shared/widgets/async_state.dart';
 import '../../../../shared/widgets/fhc_components.dart';
 import '../../../foundation/presentation/fhc_nav.dart';
 
-enum _LessonState { completed, inProgress, locked }
-
 class KcaModuleScreen extends StatefulWidget {
-  const KcaModuleScreen({super.key});
+  const KcaModuleScreen({super.key, this.moduleId, this.kcaRepository});
+
+  final String? moduleId;
+  final KcaRepository? kcaRepository;
 
   @override
   State<KcaModuleScreen> createState() => _KcaModuleScreenState();
@@ -15,34 +22,93 @@ class KcaModuleScreen extends StatefulWidget {
 
 class _KcaModuleScreenState extends State<KcaModuleScreen> {
   int _tab = 0;
+  FhcAsyncValue<_ModuleDetail> _state = const FhcAsyncValue.loading();
 
-  static const _tabs = ['Lessons', 'Resources', 'Assignments'];
+  KcaRepository? get _repo =>
+      widget.kcaRepository ??
+      AppServicesScope.maybeOf(context)?.kcaRepository;
 
-  static const _lessons = <_LessonSpec>[
-    _LessonSpec(1, "Created in God's Image", _LessonState.completed),
-    _LessonSpec(2, 'Who You Are in Christ', _LessonState.completed),
-    _LessonSpec(3, 'Discovering Your Calling', _LessonState.completed),
-    _LessonSpec(4, 'Walking in Purpose', _LessonState.inProgress),
-    _LessonSpec(5, 'Spiritual Gifts', _LessonState.locked),
-    _LessonSpec(6, 'Kingdom Identity', _LessonState.locked),
-    _LessonSpec(7, 'False Identities', _LessonState.locked),
-    _LessonSpec(8, 'Purpose in Community', _LessonState.locked),
-    _LessonSpec(9, 'Stewarding Your Call', _LessonState.locked),
-    _LessonSpec(10, 'Living on Mission', _LessonState.locked),
-  ];
+  String? get _resolvedId {
+    final explicit = widget.moduleId?.trim();
+    if (explicit != null && explicit.isNotEmpty) return explicit;
 
-  static const _resources = <(IconData, String, String)>[
-    (Icons.picture_as_pdf_outlined, 'Identity Workbook', 'PDF · 18 pages'),
-    (Icons.menu_book_outlined, 'Key Scriptures', 'Study notes'),
-    (Icons.headphones_outlined, 'Session Audio', '42 min'),
-    (Icons.person_outline, 'Mentor Guide', 'PDF · 6 pages'),
-  ];
+    final fromArgs = FhcRouteArgs.entityIdOf(context);
+    if (fromArgs != null && fromArgs.trim().isNotEmpty) return fromArgs.trim();
 
-  static const _assignments = <(String, String, String)>[
-    ('Practical Assignment', 'Share your testimony this week', 'Due Fri'),
-    ('Written Assessment', 'Write your identity statement', 'Due Sun'),
-    ('Spiritual Assignment', 'Pray through Module 5 scriptures', 'Due Sun'),
-  ];
+    final args = ModalRoute.of(context)?.settings.arguments;
+    if (args is FhcRouteArgs && args.extra is String) {
+      final extra = (args.extra as String).trim();
+      if (extra.isNotEmpty) return extra;
+    }
+    if (args is String && args.trim().isNotEmpty) return args.trim();
+    if (args is Map) {
+      final id = args['id'] ?? args['moduleId'] ?? args['entityId'];
+      if (id is String && id.trim().isNotEmpty) return id.trim();
+    }
+
+    final name = ModalRoute.of(context)?.settings.name ?? '';
+    final uri = Uri.tryParse(name);
+    final queryId = uri?.queryParameters['id'];
+    if (queryId != null && queryId.trim().isNotEmpty) return queryId.trim();
+
+    final parts = name.split('/').where((p) => p.isNotEmpty).toList();
+    if (parts.length >= 3 && parts[0] == 'kca' && parts[1] == 'module') {
+      return parts[2].split('?').first;
+    }
+    return null;
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_state is FhcAsyncLoading) {
+      _load();
+    }
+  }
+
+  Future<void> _load() async {
+    final repo = _repo;
+    if (repo == null) {
+      setState(() {
+        _state = FhcAsyncValue.unavailable(
+          message: fhcT(
+            context,
+            'member.kca.moduleRequireApi',
+            fallback:
+                'KCA module detail requires the member curriculum API. '
+                'No design fixtures are shown.',
+          ),
+        );
+      });
+      return;
+    }
+
+    final id = _resolvedId;
+    if (id == null || id.isEmpty) {
+      setState(() {
+        _state = FhcAsyncValue.unavailable(
+          message: fhcT(
+            context,
+            'member.kca.openModuleFromList',
+            fallback:
+                'Open a module from the KCA modules list so its public id can be loaded.',
+          ),
+        );
+      });
+      return;
+    }
+
+    setState(() => _state = const FhcAsyncValue.loading());
+    final result = await repo.getModule(id);
+    if (!mounted) return;
+
+    switch (result) {
+      case AppSuccess(:final value):
+        setState(() => _state = FhcAsyncValue.data(_ModuleDetail.fromJson(value)));
+      case AppError(:final failure):
+        setState(() => _state = FhcAsyncValue.error(failure));
+    }
+  }
 
   void _back() {
     if (Navigator.of(context).canPop()) {
@@ -52,53 +118,86 @@ class _KcaModuleScreenState extends State<KcaModuleScreen> {
     }
   }
 
-  void _openLesson() => fhcPush(context, FhcRoutes.kcaLesson);
-
   void _openAssignments() => fhcPush(context, FhcRoutes.kcaAssignments);
 
   @override
   Widget build(BuildContext context) {
+    final moduleLabel = fhcT(
+      context,
+      'member.kca.module',
+      fallback: 'Module',
+    );
+    final tabs = [
+      fhcT(context, 'member.kca.lessons', fallback: 'Lessons'),
+      fhcT(context, 'member.kca.resources', fallback: 'Resources'),
+      fhcT(context, 'member.kca.assignments', fallback: 'Assignments'),
+    ];
+
     return FhcDevicePage(
       backgroundColor: FhcColors.canvas,
       child: Column(
         children: [
-          FhcTopBar(title: 'Module 5', onBack: _back),
+          FhcTopBar(
+            title: switch (_state) {
+              FhcAsyncData(:final value) =>
+                value.sequence == null
+                    ? moduleLabel
+                    : fhcT(
+                      context,
+                      'member.kca.moduleN',
+                      args: {'n': '${value.sequence}'},
+                      fallback: 'Module {n}',
+                    ),
+              _ => moduleLabel,
+            },
+            onBack: _back,
+          ),
           Expanded(
-            child: Column(
-              children: [
-                const Padding(
-                  padding: EdgeInsets.fromLTRB(16, 0, 16, 12),
-                  child: _ModuleProgressCard(),
-                ),
-                ColoredBox(
-                  color: FhcColors.white,
-                  child: Row(
-                    children: [
-                      for (var i = 0; i < _tabs.length; i++)
-                        Expanded(
-                          child: _TabLabel(
-                            label: _tabs[i],
-                            active: _tab == i,
-                            onTap: () => setState(() => _tab = i),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-                Expanded(
-                  child: switch (_tab) {
-                    1 => _ResourcesTab(items: _resources),
-                    2 => _AssignmentsTab(
-                      items: _assignments,
-                      onOpen: _openAssignments,
+            child: FhcAsyncBody<_ModuleDetail>(
+              value: _state,
+              onRetry: _load,
+              unavailableTitle: fhcT(
+                context,
+                'member.kca.moduleUnavailable',
+                fallback: 'Module unavailable',
+              ),
+              emptyTitle: fhcT(
+                context,
+                'member.kca.moduleNotFound',
+                fallback: 'Module not found',
+              ),
+              builder: (context, detail) {
+                return Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                      child: _ModuleProgressCard(detail: detail),
                     ),
-                    _ => _LessonsTab(
-                      lessons: _lessons,
-                      onContinue: _openLesson,
+                    ColoredBox(
+                      color: FhcColors.white,
+                      child: Row(
+                        children: [
+                          for (var i = 0; i < tabs.length; i++)
+                            Expanded(
+                              child: _TabLabel(
+                                label: tabs[i],
+                                active: _tab == i,
+                                onTap: () => setState(() => _tab = i),
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
-                  },
-                ),
-              ],
+                    Expanded(
+                      child: switch (_tab) {
+                        1 => const _ResourcesTab(),
+                        2 => _AssignmentsTab(onOpen: _openAssignments),
+                        _ => _LessonsTab(lessons: detail.lessons),
+                      },
+                    ),
+                  ],
+                );
+              },
             ),
           ),
           const FhcBottomNavigation(selected: 1),
@@ -108,21 +207,96 @@ class _KcaModuleScreenState extends State<KcaModuleScreen> {
   }
 }
 
+class _ModuleDetail {
+  const _ModuleDetail({
+    required this.id,
+    required this.title,
+    required this.code,
+    required this.sequence,
+    required this.lessons,
+  });
+
+  factory _ModuleDetail.fromJson(Map<String, Object?> json) {
+    final lessonsRaw = json['lessons'];
+    final lessons = <_LessonSpec>[];
+    if (lessonsRaw is List) {
+      for (var i = 0; i < lessonsRaw.length; i++) {
+        final item = lessonsRaw[i];
+        if (item is! Map) continue;
+        final map = Map<String, Object?>.from(
+          item.map((k, v) => MapEntry('$k', v)),
+        );
+        final sequence = map['sequence'];
+        final number =
+            sequence is int
+                ? sequence
+                : sequence is num
+                ? sequence.round()
+                : i + 1;
+        lessons.add(
+          _LessonSpec(
+            id: '${map['id'] ?? ''}',
+            number: number,
+            title: '${map['title'] ?? map['code'] ?? 'Lesson'}',
+          ),
+        );
+      }
+    }
+    final sequence = json['sequence'];
+    return _ModuleDetail(
+      id: '${json['id'] ?? ''}',
+      title: '${json['title'] ?? json['code'] ?? 'Module'}',
+      code: '${json['code'] ?? ''}',
+      sequence:
+          sequence is int
+              ? sequence
+              : sequence is num
+              ? sequence.round()
+              : null,
+      lessons: lessons,
+    );
+  }
+
+  final String id;
+  final String title;
+  final String code;
+  final int? sequence;
+  final List<_LessonSpec> lessons;
+}
+
 class _ModuleProgressCard extends StatelessWidget {
-  const _ModuleProgressCard();
+  const _ModuleProgressCard({required this.detail});
+
+  final _ModuleDetail detail;
 
   @override
   Widget build(BuildContext context) {
+    final count = detail.lessons.length;
+    final sequenceLabel =
+        detail.sequence == null
+            ? (detail.code.isEmpty
+                ? fhcT(
+                  context,
+                  'member.kca.publishedModule',
+                  fallback: 'Published module',
+                )
+                : detail.code)
+            : fhcT(
+              context,
+              'member.kca.moduleN',
+              args: {'n': '${detail.sequence}'},
+              fallback: 'Module {n}',
+            );
     return FhcSurfaceCard(
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Identity & Purpose',
-            maxLines: 1,
+          Text(
+            detail.title,
+            maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(
+            style: const TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w700,
               color: FhcColors.ink,
@@ -130,47 +304,44 @@ class _ModuleProgressCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 4),
-          const Text(
-            'Module 5',
+          Text(
+            detail.sequence == null
+                ? sequenceLabel
+                : '$sequenceLabel${detail.code.isEmpty ? '' : ' · ${detail.code}'}',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(fontSize: 11, color: FhcColors.muted, height: 1.2),
+            style: const TextStyle(
+              fontSize: 11,
+              color: FhcColors.muted,
+              height: 1.2,
+            ),
           ),
           const SizedBox(height: 12),
-          const Row(
-            children: [
-              Text(
-                '60%',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w700,
-                  color: FhcColors.greenDark,
-                  height: 1,
+          Text(
+            count == 0
+                ? fhcT(
+                  context,
+                  'member.kca.noLessonsPublished',
+                  fallback: 'No lessons published yet',
+                )
+                : count == 1
+                ? fhcT(
+                  context,
+                  'member.kca.lessonCountOne',
+                  args: {'count': '$count'},
+                  fallback: '{count} lesson',
+                )
+                : fhcT(
+                  context,
+                  'member.kca.lessonCount',
+                  args: {'count': '$count'},
+                  fallback: '{count} lessons',
                 ),
-              ),
-              SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  '6 of 10 lessons',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: FhcColors.muted,
-                    height: 1.2,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: const LinearProgressIndicator(
-              value: 0.6,
-              minHeight: 8,
-              backgroundColor: FhcColors.border,
-              valueColor: AlwaysStoppedAnimation(FhcColors.green),
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: FhcColors.greenDark,
+              height: 1.2,
             ),
           ),
         ],
@@ -222,180 +393,99 @@ class _TabLabel extends StatelessWidget {
 }
 
 class _LessonSpec {
-  const _LessonSpec(this.number, this.title, this.state);
+  const _LessonSpec({
+    required this.id,
+    required this.number,
+    required this.title,
+  });
 
+  final String id;
   final int number;
   final String title;
-  final _LessonState state;
 }
 
 class _LessonsTab extends StatelessWidget {
-  const _LessonsTab({required this.lessons, required this.onContinue});
+  const _LessonsTab({required this.lessons});
 
   final List<_LessonSpec> lessons;
-  final VoidCallback onContinue;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Expanded(
-          child: ListView.separated(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-            itemCount: lessons.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 8),
-            itemBuilder: (context, index) {
-              final lesson = lessons[index];
-              return _LessonRow(
-                lesson: lesson,
-                onTap:
-                    lesson.state == _LessonState.inProgress ? onContinue : null,
-              );
-            },
-          ),
+    if (lessons.isEmpty) {
+      return FhcEmptyState(
+        title: fhcT(
+          context,
+          'member.kca.noLessonsYet',
+          fallback: 'No lessons yet',
         ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-          child: FhcPrimaryButton(
-            label: 'Continue Lesson 4',
-            onPressed: onContinue,
-          ),
+        message: fhcT(
+          context,
+          'member.kca.lessonsNotPublished',
+          fallback: 'Lessons for this module have not been published.',
         ),
-      ],
+      );
+    }
+
+    return ListView.separated(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+      itemCount: lessons.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 8),
+      itemBuilder: (context, index) {
+        final lesson = lessons[index];
+        return _LessonRow(lesson: lesson);
+      },
     );
   }
 }
 
 class _LessonRow extends StatelessWidget {
-  const _LessonRow({required this.lesson, this.onTap});
+  const _LessonRow({required this.lesson});
 
   final _LessonSpec lesson;
-  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    final locked = lesson.state == _LessonState.locked;
-    final inProgress = lesson.state == _LessonState.inProgress;
-    final icon = switch (lesson.state) {
-      _LessonState.completed => Icons.check_circle,
-      _LessonState.inProgress => Icons.play_circle_fill,
-      _LessonState.locked => Icons.lock_outline,
-    };
-    final iconColor = switch (lesson.state) {
-      _LessonState.completed => FhcColors.green,
-      _LessonState.inProgress => FhcColors.gold,
-      _LessonState.locked => FhcColors.hint,
-    };
-    final status = switch (lesson.state) {
-      _LessonState.completed => 'Completed',
-      _LessonState.inProgress => 'In Progress',
-      _LessonState.locked => 'Locked',
-    };
-
     return Material(
       color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(FhcRadius.card),
-        child: Ink(
-          decoration: BoxDecoration(
-            color: FhcColors.white,
-            borderRadius: BorderRadius.circular(FhcRadius.card),
-            border: Border.all(
-              color: inProgress ? FhcColors.green : FhcColors.border,
-            ),
-            boxShadow: FhcElevation.card,
-          ),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
-            child: Row(
-              children: [
-                Icon(icon, color: iconColor, size: 22),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Lesson ${lesson.number}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 10,
-                          color: locked ? FhcColors.hint : FhcColors.muted,
-                          height: 1.2,
-                        ),
-                      ),
-                      const SizedBox(height: 3),
-                      Text(
-                        lesson.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: locked ? FhcColors.hint : FhcColors.ink,
-                          height: 1.2,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  status,
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                    color:
-                        inProgress
-                            ? FhcColors.green
-                            : locked
-                            ? FhcColors.hint
-                            : FhcColors.muted,
-                    height: 1.2,
-                  ),
-                ),
-                if (inProgress)
-                  const Icon(
-                    Icons.chevron_right,
-                    size: 18,
-                    color: FhcColors.muted,
-                  ),
-              ],
-            ),
-          ),
+      child: Ink(
+        decoration: BoxDecoration(
+          color: FhcColors.white,
+          borderRadius: BorderRadius.circular(FhcRadius.card),
+          border: Border.all(color: FhcColors.border),
+          boxShadow: FhcElevation.card,
         ),
-      ),
-    );
-  }
-}
-
-class _ResourcesTab extends StatelessWidget {
-  const _ResourcesTab({required this.items});
-
-  final List<(IconData, String, String)> items;
-
-  @override
-  Widget build(BuildContext context) {
-    return ListView.separated(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-      itemCount: items.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 8),
-      itemBuilder: (context, index) {
-        final item = items[index];
-        return FhcSurfaceCard(
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
           child: Row(
             children: [
-              FhcCircleIcon(icon: item.$1, size: 40),
-              const SizedBox(width: 12),
+              const Icon(
+                Icons.play_circle_outline,
+                color: FhcColors.green,
+                size: 22,
+              ),
+              const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      item.$2,
+                      fhcT(
+                        context,
+                        'member.kca.lessonN',
+                        args: {'n': '${lesson.number}'},
+                        fallback: 'Lesson {n}',
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 10,
+                        color: FhcColors.muted,
+                        height: 1.2,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      lesson.title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
@@ -405,117 +495,76 @@ class _ResourcesTab extends StatelessWidget {
                         height: 1.2,
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      item.$3,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 11,
-                        color: FhcColors.muted,
-                        height: 1.2,
-                      ),
-                    ),
                   ],
                 ),
               ),
-              const Icon(Icons.chevron_right, size: 18, color: FhcColors.muted),
             ],
           ),
-        );
-      },
+        ),
+      ),
+    );
+  }
+}
+
+class _ResourcesTab extends StatelessWidget {
+  const _ResourcesTab();
+
+  @override
+  Widget build(BuildContext context) {
+    return FhcUnavailableState(
+      title: fhcT(
+        context,
+        'member.kca.resourcesUnavailable',
+        fallback: 'Resources unavailable',
+      ),
+      message: fhcT(
+        context,
+        'member.kca.resourcesUnavailableCopy',
+        fallback:
+            'Module resources are not exposed on the member curriculum API yet. '
+            'No design fixtures are shown.',
+      ),
     );
   }
 }
 
 class _AssignmentsTab extends StatelessWidget {
-  const _AssignmentsTab({required this.items, required this.onOpen});
+  const _AssignmentsTab({required this.onOpen});
 
-  final List<(String, String, String)> items;
   final VoidCallback onOpen;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Expanded(
-          child: ListView.separated(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-            itemCount: items.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 8),
-            itemBuilder: (context, index) {
-              final item = items[index];
-              return Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: onOpen,
-                  borderRadius: BorderRadius.circular(FhcRadius.card),
-                  child: FhcSurfaceCard(
-                    padding: const EdgeInsets.fromLTRB(12, 12, 8, 12),
-                    child: Row(
-                      children: [
-                        const FhcCircleIcon(
-                          icon: Icons.assignment_outlined,
-                          size: 40,
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                item.$1,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w700,
-                                  color: FhcColors.ink,
-                                  height: 1.2,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                item.$2,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  fontSize: 11,
-                                  color: FhcColors.muted,
-                                  height: 1.3,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          item.$3,
-                          style: const TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                            color: FhcColors.green,
-                            height: 1.2,
-                          ),
-                        ),
-                        const Icon(
-                          Icons.chevron_right,
-                          size: 18,
-                          color: FhcColors.muted,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            },
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            fhcT(
+              context,
+              'member.kca.assignmentsTabCopy',
+              fallback:
+                  'Enrollment assignments are listed on the assignments screen. '
+                  'Per-module assignment filtering is not exposed yet.',
+            ),
+            style: const TextStyle(
+              fontSize: 13,
+              color: FhcColors.muted,
+              height: 1.35,
+            ),
           ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-          child: FhcPrimaryButton(label: 'View Assignments', onPressed: onOpen),
-        ),
-      ],
+          const SizedBox(height: 16),
+          FhcPrimaryButton(
+            label: fhcT(
+              context,
+              'member.kca.viewAssignments',
+              fallback: 'View Assignments',
+            ),
+            onPressed: onOpen,
+          ),
+        ],
+      ),
     );
   }
 }

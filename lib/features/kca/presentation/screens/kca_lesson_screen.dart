@@ -1,35 +1,12 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/design_system/fhc_tokens.dart';
+import '../../../../core/l10n/locale_scope.dart';
 import '../../../../shared/widgets/fhc_components.dart';
 import '../../../foundation/presentation/fhc_nav.dart';
 
 class KcaLessonScreen extends StatelessWidget {
   const KcaLessonScreen({super.key});
-
-  static const _items = <_LessonItem>[
-    _LessonItem(
-      icon: Icons.play_arrow_rounded,
-      label: 'Video Lesson',
-      done: true,
-    ),
-    _LessonItem(
-      icon: Icons.description_outlined,
-      label: 'Study Notes',
-      done: true,
-    ),
-    _LessonItem(
-      icon: Icons.menu_book_outlined,
-      label: 'Key Scriptures',
-      done: true,
-    ),
-    _LessonItem(
-      icon: Icons.assignment_outlined,
-      label: 'Practical Assignment',
-      done: false,
-    ),
-    _LessonItem(icon: Icons.quiz_outlined, label: 'Quiz', done: false),
-  ];
 
   void _onBack(BuildContext context) {
     if (Navigator.of(context).canPop()) {
@@ -45,24 +22,73 @@ class KcaLessonScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final items = <_LessonItem>[
+      _LessonItem(
+        icon: Icons.play_arrow_rounded,
+        label: fhcT(
+          context,
+          'member.kca.videoLesson',
+          fallback: 'Video Lesson',
+        ),
+        done: true,
+      ),
+      _LessonItem(
+        icon: Icons.description_outlined,
+        label: fhcT(context, 'member.kca.studyNotes', fallback: 'Study Notes'),
+        done: true,
+      ),
+      _LessonItem(
+        icon: Icons.menu_book_outlined,
+        label: fhcT(
+          context,
+          'member.kca.keyScriptures',
+          fallback: 'Key Scriptures',
+        ),
+        done: true,
+      ),
+      _LessonItem(
+        icon: Icons.assignment_outlined,
+        label: fhcT(
+          context,
+          'member.kca.practicalAssignment',
+          fallback: 'Practical Assignment',
+        ),
+        done: false,
+      ),
+      _LessonItem(
+        icon: Icons.quiz_outlined,
+        label: fhcT(context, 'member.kca.quiz', fallback: 'Quiz'),
+        done: false,
+      ),
+    ];
+
     return FhcDevicePage(
       backgroundColor: FhcColors.canvas,
       child: Column(
         children: [
           FhcTopBar(
-            title: 'LEADERSHIP & INFLUENCE',
+            title: fhcT(
+              context,
+              'member.kca.leadershipInfluence',
+              fallback: 'LEADERSHIP & INFLUENCE',
+            ),
             onBack: () => _onBack(context),
           ),
           Expanded(
             child: ListView(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
               children: [
-                const Text(
-                  'Module 8 of 12',
+                Text(
+                  fhcT(
+                    context,
+                    'member.kca.moduleOf',
+                    args: {'current': '8', 'total': '12'},
+                    fallback: 'Module {current} of {total}',
+                  ),
                   textAlign: TextAlign.center,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w500,
                     color: FhcColors.muted,
@@ -72,11 +98,15 @@ class KcaLessonScreen extends StatelessWidget {
                 const SizedBox(height: 12),
                 const _VideoPlayer(),
                 const SizedBox(height: 18),
-                const Text(
-                  'Lesson Content',
+                Text(
+                  fhcT(
+                    context,
+                    'member.kca.lessonContent',
+                    fallback: 'Lesson Content',
+                  ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w700,
                     color: FhcColors.ink,
@@ -88,10 +118,10 @@ class KcaLessonScreen extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 4),
                   child: Column(
                     children: [
-                      for (var i = 0; i < _items.length; i++) ...[
+                      for (var i = 0; i < items.length; i++) ...[
                         if (i > 0)
                           const Divider(height: 1, color: FhcColors.border),
-                        _ChecklistRow(item: _items[i]),
+                        _ChecklistRow(item: items[i]),
                       ],
                     ],
                   ),
@@ -102,7 +132,7 @@ class KcaLessonScreen extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
             child: FhcPrimaryButton(
-              label: 'Continue',
+              label: fhcT(context, 'common.continue', fallback: 'Continue'),
               onPressed: () => _onContinue(context),
             ),
           ),
@@ -268,11 +298,11 @@ class _ChecklistRow extends StatelessWidget {
             if (item.done)
               const Icon(Icons.check_circle, size: 20, color: FhcColors.green)
             else
-              const Text(
-                'Pending',
+              Text(
+                fhcT(context, 'member.kca.pending', fallback: 'Pending'),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w600,
                   height: 1.2,

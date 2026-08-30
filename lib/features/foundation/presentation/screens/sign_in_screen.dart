@@ -1,11 +1,88 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/api/app_failure.dart';
+import '../../../../core/auth/auth_session.dart';
+import '../../../../core/contracts/mobile_repository_contracts.dart';
 import '../../../../core/design_system/fhc_tokens.dart';
+import '../../../../core/di/app_services_scope.dart';
+import '../../../../core/l10n/locale_scope.dart';
+import '../../../../core/launch/app_launch_scope.dart';
+import '../../../../shared/widgets/fhc_brand_logo.dart';
 import '../../../../shared/widgets/fhc_components.dart';
+import '../../data/auth_repository.dart';
 import '../fhc_nav.dart';
 
-class SignInScreen extends StatelessWidget {
+class SignInScreen extends StatefulWidget {
   const SignInScreen({super.key});
+
+  @override
+  State<SignInScreen> createState() => _SignInScreenState();
+}
+
+class _SignInScreenState extends State<SignInScreen> {
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  bool _submitting = false;
+  String? _error;
+
+  AuthRepository? get _auth =>
+      AppServicesScope.maybeOf(context)?.authRepository;
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (_submitting) return;
+    final auth = _auth;
+    if (auth == null) {
+      setState(() => _error = fhcT(context, 'errors.authNotConfigured'));
+      return;
+    }
+
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+    if (email.isEmpty || password.isEmpty) {
+      setState(() => _error = fhcT(context, 'errors.enterEmailPassword'));
+      return;
+    }
+
+    setState(() {
+      _submitting = true;
+      _error = null;
+    });
+
+    final result = await auth.signIn({
+      'email': email,
+      'password': password,
+    });
+
+    if (!mounted) return;
+
+    switch (result) {
+      case AppSuccess(:final value):
+        setState(() => _submitting = false);
+        final mfaVerifiedAt = AuthCredentials.parseIso8601(
+          value['mfa_verified_at'],
+        );
+        final role = AppLaunchScope.maybeOf(context)?.selectedRole;
+        final next =
+            (role != null && role.isNotEmpty) ? '/hub' : '/role-selection';
+        if (mfaVerifiedAt == null) {
+          fhcGo(context, '/2fa');
+        } else {
+          fhcReset(context, next);
+        }
+      case AppError(:final failure):
+        setState(() {
+          _submitting = false;
+          _error = authFailureMessage(failure);
+        });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -19,13 +96,15 @@ class SignInScreen extends StatelessWidget {
               padding: EdgeInsets.zero,
               icon: const Icon(Icons.chevron_left, size: 28),
               color: FhcColors.ink,
-              tooltip: 'Back',
+              tooltip: fhcT(context, 'common.back'),
             ),
           ),
-          const Text(
-            'Welcome Back! 👋',
+          const FhcBrandLogo(size: 72),
+          const SizedBox(height: 12),
+          Text(
+            fhcT(context, 'auth.welcomeBack'),
             textAlign: TextAlign.center,
-            style: TextStyle(
+            style: const TextStyle(
               fontSize: 22,
               fontWeight: FontWeight.w700,
               height: 1.2,
@@ -33,10 +112,10 @@ class SignInScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 8),
-          const Text(
-            'Sign in to continue your journey.',
+          Text(
+            fhcT(context, 'auth.signInCopy'),
             textAlign: TextAlign.center,
-            style: TextStyle(
+            style: const TextStyle(
               fontSize: 13,
               height: 1.35,
               color: FhcColors.muted,
@@ -52,7 +131,13 @@ class SignInScreen extends StatelessWidget {
                     constraints: BoxConstraints(
                       minHeight: constraints.maxHeight - 34,
                     ),
-                    child: const _SignInBody(),
+                    child: _SignInBody(
+                      emailController: _emailController,
+                      passwordController: _passwordController,
+                      submitting: _submitting,
+                      error: _error,
+                      onSubmit: _submit,
+                    ),
                   ),
                 );
               },
@@ -65,7 +150,19 @@ class SignInScreen extends StatelessWidget {
 }
 
 class _SignInBody extends StatelessWidget {
-  const _SignInBody();
+  const _SignInBody({
+    required this.emailController,
+    required this.passwordController,
+    required this.submitting,
+    required this.error,
+    required this.onSubmit,
+  });
+
+  final TextEditingController emailController;
+  final TextEditingController passwordController;
+  final bool submitting;
+  final String? error;
+  final VoidCallback onSubmit;
 
   @override
   Widget build(BuildContext context) {
@@ -74,50 +171,58 @@ class _SignInBody extends StatelessWidget {
       children: [
         const _AuthTabs(),
         const SizedBox(height: 22),
-        const FhcField(
-          label: 'Email or Phone Number',
+        FhcField(
+          label: fhcT(context, 'auth.emailAddress'),
           hint: 'you@example.com',
           keyboardType: TextInputType.emailAddress,
+          textInputAction: TextInputAction.next,
+          autofillHints: const [AutofillHints.email],
+          controller: emailController,
         ),
         const SizedBox(height: 16),
-        const FhcField(
-          label: 'Password',
+        FhcField(
+          label: fhcT(context, 'auth.password'),
           hint: 'Enter your password',
-          suffixIcon: Icons.visibility_outlined,
           obscureText: true,
+          textInputAction: TextInputAction.done,
+          autofillHints: const [AutofillHints.password],
+          controller: passwordController,
         ),
         Align(
           alignment: Alignment.centerRight,
           child: TextButton(
-            onPressed: () {},
+            onPressed: () => fhcGo(context, '/forgot-password'),
             style: TextButton.styleFrom(
               foregroundColor: FhcColors.green,
               padding: const EdgeInsets.symmetric(vertical: 4),
               minimumSize: const Size(0, 36),
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
             ),
-            child: const Text(
-              'Forgot Password?',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+            child: Text(
+              fhcT(context, 'auth.forgotPassword'),
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
             ),
           ),
         ),
+        if (error != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            error!,
+            style: const TextStyle(
+              color: FhcColors.red,
+              fontSize: 13,
+              height: 1.35,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
         const SizedBox(height: 6),
         FhcPrimaryButton(
-          label: 'Sign In',
-          onPressed: () => fhcGo(context, '/verify-phone'),
-        ),
-        const SizedBox(height: 20),
-        const _OrContinueDivider(),
-        const SizedBox(height: 14),
-        const _SocialButton(
-          label: 'Continue with Google',
-          leading: _GoogleMark(),
-        ),
-        const SizedBox(height: 10),
-        const _SocialButton(
-          label: 'Continue with Apple',
-          leading: _AppleMark(),
+          label:
+              submitting
+                  ? fhcT(context, 'auth.signingIn')
+                  : fhcT(context, 'auth.signIn'),
+          onPressed: submitting ? null : onSubmit,
         ),
       ],
     );
@@ -129,14 +234,20 @@ class _AuthTabs extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const DecoratedBox(
+    return DecoratedBox(
       decoration: BoxDecoration(
         border: Border(bottom: BorderSide(color: FhcColors.border)),
       ),
       child: Row(
         children: [
-          Expanded(child: _TabItem(label: 'Sign In', active: true)),
-          Expanded(child: _TabItem(label: 'Create Account', active: false)),
+          Expanded(child: _TabItem(label: fhcT(context, 'auth.signIn'), active: true)),
+          Expanded(
+            child: _TabItem(
+              label: fhcT(context, 'auth.createAccount'),
+              active: false,
+              onTap: () => fhcGo(context, '/sign-up'),
+            ),
+          ),
         ],
       ),
     );
@@ -144,89 +255,36 @@ class _AuthTabs extends StatelessWidget {
 }
 
 class _TabItem extends StatelessWidget {
-  const _TabItem({required this.label, required this.active});
+  const _TabItem({required this.label, required this.active, this.onTap});
 
   final String label;
   final bool active;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(bottom: 10),
-          child: Text(
-            label,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: active ? FontWeight.w700 : FontWeight.w600,
-              color: active ? FhcColors.green : FhcColors.muted,
-            ),
-          ),
-        ),
-        Container(
-          height: 2,
-          color: active ? FhcColors.green : Colors.transparent,
-        ),
-      ],
-    );
-  }
-}
-
-class _OrContinueDivider extends StatelessWidget {
-  const _OrContinueDivider();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Row(
-      children: [
-        Expanded(child: Divider(color: FhcColors.border, height: 1)),
-        Padding(
-          padding: EdgeInsets.symmetric(horizontal: 10),
-          child: Text(
-            'or continue with',
-            style: TextStyle(fontSize: 11, color: FhcColors.muted),
-          ),
-        ),
-        Expanded(child: Divider(color: FhcColors.border, height: 1)),
-      ],
-    );
-  }
-}
-
-class _SocialButton extends StatelessWidget {
-  const _SocialButton({required this.label, required this.leading});
-
-  final String label;
-  final Widget leading;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: double.infinity,
-      height: 48,
-      child: OutlinedButton(
-        onPressed: () {},
-        style: OutlinedButton.styleFrom(
-          foregroundColor: FhcColors.ink,
-          side: const BorderSide(color: FhcColors.border),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(FhcRadius.sm),
-          ),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
+    return Semantics(
+      button: onTap != null,
+      selected: active,
+      child: InkWell(
+        onTap: onTap,
+        child: Column(
           children: [
-            leading,
-            const SizedBox(width: 12),
-            Text(
-              label,
-              style: const TextStyle(
-                color: FhcColors.ink,
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Text(
+                label,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: active ? FontWeight.w700 : FontWeight.w600,
+                  color: active ? FhcColors.green : FhcColors.muted,
+                ),
               ),
+            ),
+            Container(
+              height: 2,
+              color: active ? FhcColors.green : Colors.transparent,
             ),
           ],
         ),
@@ -235,74 +293,3 @@ class _SocialButton extends StatelessWidget {
   }
 }
 
-class _GoogleMark extends StatelessWidget {
-  const _GoogleMark();
-
-  @override
-  Widget build(BuildContext context) {
-    return const SizedBox(
-      width: 18,
-      child: Text(
-        'G',
-        textAlign: TextAlign.center,
-        style: TextStyle(
-          color: FhcColors.red,
-          fontSize: 18,
-          height: 1,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-    );
-  }
-}
-
-class _AppleMark extends StatelessWidget {
-  const _AppleMark();
-
-  @override
-  Widget build(BuildContext context) {
-    return const SizedBox(
-      width: 18,
-      height: 18,
-      child: CustomPaint(painter: _AppleMarkPainter()),
-    );
-  }
-}
-
-class _AppleMarkPainter extends CustomPainter {
-  const _AppleMarkPainter();
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint =
-        Paint()
-          ..color = const Color(0xFF111111)
-          ..style = PaintingStyle.fill;
-    final w = size.width;
-    final h = size.height;
-
-    final leaf =
-        Path()
-          ..moveTo(w * 0.50, h * 0.22)
-          ..cubicTo(w * 0.58, h * -0.02, w * 0.86, h * 0.04, w * 0.68, h * 0.28)
-          ..cubicTo(w * 0.58, h * 0.32, w * 0.50, h * 0.28, w * 0.50, h * 0.22);
-    canvas.drawPath(leaf, paint);
-
-    final body =
-        Path()
-          ..moveTo(w * 0.50, h * 0.28)
-          ..cubicTo(w * 0.36, h * 0.28, w * 0.08, h * 0.40, w * 0.10, h * 0.66)
-          ..cubicTo(w * 0.12, h * 0.92, w * 0.34, h * 1.04, w * 0.50, h * 0.88)
-          ..cubicTo(w * 0.66, h * 1.04, w * 0.88, h * 0.92, w * 0.90, h * 0.66)
-          ..cubicTo(w * 0.92, h * 0.40, w * 0.64, h * 0.28, w * 0.50, h * 0.28)
-          ..close();
-    final bite =
-        Path()..addOval(
-          Rect.fromCircle(center: Offset(w * 0.94, h * 0.42), radius: w * 0.15),
-        );
-    canvas.drawPath(Path.combine(PathOperation.difference, body, bite), paint);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}

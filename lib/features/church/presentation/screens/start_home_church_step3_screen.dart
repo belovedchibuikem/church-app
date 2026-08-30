@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/design_system/fhc_tokens.dart';
+import '../../../../core/l10n/locale_scope.dart';
 import '../../../../shared/widgets/fhc_components.dart';
 import '../../../foundation/presentation/fhc_nav.dart';
+import '../../data/home_church_repository.dart';
 
 class StartHomeChurchStep3Screen extends StatefulWidget {
   const StartHomeChurchStep3Screen({super.key});
@@ -26,15 +28,27 @@ class _StartHomeChurchStep3ScreenState
   late final TextEditingController _whyController;
   bool _hasMinistryExperience = true;
   String _heardFrom = 'A Friend / Member';
+  bool _whySeeded = false;
 
   @override
   void initState() {
     super.initState();
-    _whyController = TextEditingController(
-      text:
-          'I have a burden to see my family, friends and neighbors '
-          'come to know Jesus and grow in His word.',
-    );
+    _whyController = TextEditingController();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_whySeeded) {
+      _whySeeded = true;
+      _whyController.text = fhcT(
+        context,
+        'homeChurch.whyStartDefault',
+        fallback:
+            'I have a burden to see my family, friends and neighbors '
+            'come to know Jesus Christ and grow in His word.',
+      );
+    }
   }
 
   @override
@@ -51,12 +65,91 @@ class _StartHomeChurchStep3ScreenState
     }
   }
 
+  void _continue() {
+    final draft = HomeChurchApplicationSession.draft;
+    if (draft.churchId == null ||
+        draft.locationId == null ||
+        draft.administrativeUnitId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            fhcT(
+              context,
+              'homeChurch.returnToStep1',
+              fallback: 'Return to step 1 and select a parent church.',
+            ),
+          ),
+        ),
+      );
+      return;
+    }
+    if (draft.meetingDay == null ||
+        draft.meetingTime == null ||
+        draft.expectedParticipants == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            fhcT(
+              context,
+              'homeChurch.returnToStep2',
+              fallback: 'Return to step 2 and set meeting details.',
+            ),
+          ),
+        ),
+      );
+      return;
+    }
+
+    // Narrative fields are not part of the public API payload; keep local only.
+    draft.preferredName ??= draft.churchName;
+    fhcPush(context, FhcRoutes.homeChurchStart4);
+  }
+
+  String _hearLabel(BuildContext context, String value) {
+    return switch (value) {
+      'A Friend / Member' => fhcT(
+        context,
+        'homeChurch.hearFriend',
+        fallback: 'A Friend / Member',
+      ),
+      'Church / Pastor' => fhcT(
+        context,
+        'homeChurch.hearChurch',
+        fallback: 'Church / Pastor',
+      ),
+      'Social Media' => fhcT(
+        context,
+        'homeChurch.hearSocial',
+        fallback: 'Social Media',
+      ),
+      'Online Search' => fhcT(
+        context,
+        'homeChurch.hearSearch',
+        fallback: 'Online Search',
+      ),
+      'Event or Crusade' => fhcT(
+        context,
+        'homeChurch.hearEvent',
+        fallback: 'Event or Crusade',
+      ),
+      'Other' => fhcT(context, 'homeChurch.hearOther', fallback: 'Other'),
+      _ => value,
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
     return FhcDevicePage(
       child: Column(
         children: [
-          FhcTopBar(title: 'Start a Church in Your Home', onBack: _pop),
+          FhcTopBar(
+            title: fhcT(
+              context,
+              'homeChurch.startTitleInline',
+              fallback: 'Start a Church in Your Home',
+            ),
+            onBack: _pop,
+          ),
           Expanded(
             child: LayoutBuilder(
               builder: (context, constraints) {
@@ -70,13 +163,17 @@ class _StartHomeChurchStep3ScreenState
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        const _StepBanner(),
+                        const _StepBanner(step: 3),
                         const SizedBox(height: 10),
                         const _StepProgress(step: 3),
                         const SizedBox(height: 22),
-                        const Text(
-                          'Tell us about your heart',
-                          style: TextStyle(
+                        Text(
+                          fhcT(
+                            context,
+                            'homeChurch.tellUsAboutHeart',
+                            fallback: 'Tell us about your heart',
+                          ),
+                          style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w700,
                             height: 1.2,
@@ -86,13 +183,21 @@ class _StartHomeChurchStep3ScreenState
                         const SizedBox(height: 16),
                         _WhyField(controller: _whyController),
                         const SizedBox(height: 18),
-                        const Text(
-                          'Do you have any experience in ministry?',
+                        Text(
+                          fhcT(
+                            context,
+                            'homeChurch.ministryExperience',
+                            fallback: 'Do you have any experience in ministry?',
+                          ),
                           style: FhcTypography.label,
                         ),
                         const SizedBox(height: 10),
                         _ExperienceOption(
-                          label: 'Yes, I have served before',
+                          label: fhcT(
+                            context,
+                            'homeChurch.servedBefore',
+                            fallback: 'Yes, I have served before',
+                          ),
                           selected: _hasMinistryExperience,
                           onTap:
                               () =>
@@ -100,7 +205,11 @@ class _StartHomeChurchStep3ScreenState
                         ),
                         const SizedBox(height: 10),
                         _ExperienceOption(
-                          label: "No, I'm new to ministry",
+                          label: fhcT(
+                            context,
+                            'homeChurch.newToMinistry',
+                            fallback: "No, I'm new to ministry",
+                          ),
                           selected: !_hasMinistryExperience,
                           onTap:
                               () => setState(
@@ -111,6 +220,7 @@ class _StartHomeChurchStep3ScreenState
                         _HearDropdown(
                           value: _heardFrom,
                           options: _hearOptions,
+                          optionLabel: (value) => _hearLabel(context, value),
                           onChanged:
                               (value) => setState(() => _heardFrom = value),
                         ),
@@ -121,12 +231,12 @@ class _StartHomeChurchStep3ScreenState
                             const SizedBox(width: 10),
                             Expanded(
                               child: FhcPrimaryButton(
-                                label: 'Continue',
-                                onPressed:
-                                    () => fhcPush(
-                                      context,
-                                      FhcRoutes.homeChurchStart4,
-                                    ),
+                                label: fhcT(
+                                  context,
+                                  'common.continue',
+                                  fallback: 'Continue',
+                                ),
+                                onPressed: _continue,
                               ),
                             ),
                           ],
@@ -145,25 +255,32 @@ class _StartHomeChurchStep3ScreenState
 }
 
 class _StepBanner extends StatelessWidget {
-  const _StepBanner();
+  const _StepBanner({required this.step});
+
+  final int step;
 
   @override
   Widget build(BuildContext context) {
-    return const Row(
+    return Row(
       children: [
-        Expanded(child: Divider(color: FhcColors.border, height: 1)),
+        const Expanded(child: Divider(color: FhcColors.border, height: 1)),
         Padding(
-          padding: EdgeInsets.symmetric(horizontal: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 12),
           child: Text(
-            'Step 3 of 4',
-            style: TextStyle(
+            fhcT(
+              context,
+              'homeChurch.stepOf',
+              args: {'current': '$step', 'total': '4'},
+              fallback: 'Step {current} of {total}',
+            ),
+            style: const TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w600,
               color: FhcColors.muted,
             ),
           ),
         ),
-        Expanded(child: Divider(color: FhcColors.border, height: 1)),
+        const Expanded(child: Divider(color: FhcColors.border, height: 1)),
       ],
     );
   }
@@ -205,8 +322,12 @@ class _WhyField extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Why do you want to start a home church?',
+        Text(
+          fhcT(
+            context,
+            'homeChurch.whyStart',
+            fallback: 'Why do you want to start a home church?',
+          ),
           style: FhcTypography.label,
         ),
         const SizedBox(height: 7),
@@ -217,7 +338,11 @@ class _WhyField extends StatelessWidget {
           keyboardType: TextInputType.multiline,
           style: FhcTypography.body,
           decoration: InputDecoration(
-            hintText: 'Share why you want to start gathering in your home…',
+            hintText: fhcT(
+              context,
+              'homeChurch.whyStartHint',
+              fallback: 'Share why you want to start gathering in your home…',
+            ),
             hintStyle: FhcTypography.hint,
             isDense: true,
             contentPadding: const EdgeInsets.fromLTRB(14, 14, 14, 16),
@@ -308,11 +433,13 @@ class _HearDropdown extends StatelessWidget {
   const _HearDropdown({
     required this.value,
     required this.options,
+    required this.optionLabel,
     required this.onChanged,
   });
 
   final String value;
   final List<String> options;
+  final String Function(String value) optionLabel;
   final ValueChanged<String> onChanged;
 
   @override
@@ -321,8 +448,12 @@ class _HearDropdown extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'How did you hear about Family House?',
+        Text(
+          fhcT(
+            context,
+            'homeChurch.howDidYouHear',
+            fallback: 'How did you hear about Family House?',
+          ),
           style: FhcTypography.label,
         ),
         const SizedBox(height: 7),
@@ -350,7 +481,10 @@ class _HearDropdown extends StatelessWidget {
               ),
               items: [
                 for (final option in options)
-                  DropdownMenuItem<String>(value: option, child: Text(option)),
+                  DropdownMenuItem<String>(
+                    value: option,
+                    child: Text(optionLabel(option)),
+                  ),
               ],
               onChanged: (next) {
                 if (next != null) onChanged(next);
@@ -384,9 +518,9 @@ class _BackButton extends StatelessWidget {
             borderRadius: BorderRadius.circular(FhcRadius.button),
           ),
         ),
-        child: const Text(
-          'Back',
-          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+        child: Text(
+          fhcT(context, 'common.back', fallback: 'Back'),
+          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
         ),
       ),
     );

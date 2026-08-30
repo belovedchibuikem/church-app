@@ -1,13 +1,18 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/api/app_failure.dart';
+import '../../../../core/contracts/mobile_repository_contracts.dart';
 import '../../../../core/design_system/fhc_tokens.dart';
+import '../../../../core/di/app_services_scope.dart';
+import '../../../../core/l10n/locale_scope.dart';
+import '../../../../shared/widgets/async_state.dart';
 import '../../../../shared/widgets/fhc_components.dart';
 import '../../../foundation/presentation/fhc_nav.dart';
 
-enum _Priority { high, medium, low }
-
 class KcaAssignmentsScreen extends StatefulWidget {
-  const KcaAssignmentsScreen({super.key});
+  const KcaAssignmentsScreen({super.key, this.kcaRepository});
+
+  final KcaRepository? kcaRepository;
 
   @override
   State<KcaAssignmentsScreen> createState() => _KcaAssignmentsScreenState();
@@ -15,131 +20,72 @@ class KcaAssignmentsScreen extends StatefulWidget {
 
 class _KcaAssignmentsScreenState extends State<KcaAssignmentsScreen> {
   int _tab = 0;
+  FhcAsyncValue<List<_Assignment>> _state = const FhcAsyncValue.loading();
 
-  static const _tabs = <(String, int)>[
-    ('Pending', 2),
-    ('Submitted', 4),
-    ('Completed', 6),
-  ];
+  KcaRepository? get _repo =>
+      widget.kcaRepository ??
+      AppServicesScope.maybeOf(context)?.kcaRepository;
 
-  static const _pending = <_Assignment>[
-    _Assignment(
-      title: 'Leadership Reflection',
-      module: 8,
-      dateLabel: 'Due May 30, 2025',
-      priority: _Priority.high,
-      icon: Icons.description_outlined,
-      iconColor: FhcColors.orange,
-    ),
-    _Assignment(
-      title: 'Ministry Project Plan',
-      module: 9,
-      dateLabel: 'Due Jun 2, 2025',
-      priority: _Priority.medium,
-      icon: Icons.assignment_outlined,
-      iconColor: FhcColors.greenDark,
-    ),
-    _Assignment(
-      title: 'Community Outreach Report',
-      module: 7,
-      dateLabel: 'Due Jun 5, 2025',
-      priority: _Priority.low,
-      icon: Icons.work_outline,
-      iconColor: FhcColors.green,
-    ),
-  ];
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_state is FhcAsyncLoading) {
+      _load();
+    }
+  }
 
-  static const _submitted = <_Assignment>[
-    _Assignment(
-      title: 'Discipleship Journal',
-      module: 6,
-      dateLabel: 'Submitted May 22, 2025',
-      priority: _Priority.medium,
-      icon: Icons.menu_book_outlined,
-      iconColor: FhcColors.purple,
-    ),
-    _Assignment(
-      title: 'Prayer Walk Evidence',
-      module: 7,
-      dateLabel: 'Submitted May 20, 2025',
-      priority: _Priority.high,
-      icon: Icons.directions_walk_outlined,
-      iconColor: FhcColors.orange,
-    ),
-    _Assignment(
-      title: 'Servant Leadership Essay',
-      module: 6,
-      dateLabel: 'Submitted May 18, 2025',
-      priority: _Priority.low,
-      icon: Icons.description_outlined,
-      iconColor: FhcColors.blue,
-    ),
-    _Assignment(
-      title: 'Home Visit Notes',
-      module: 5,
-      dateLabel: 'Submitted May 16, 2025',
-      priority: _Priority.medium,
-      icon: Icons.home_work_outlined,
-      iconColor: FhcColors.green,
-    ),
-  ];
+  Future<void> _load() async {
+    final repo = _repo;
+    if (repo == null) {
+      setState(() {
+        _state = FhcAsyncValue.unavailable(
+          message: fhcT(
+            context,
+            'member.kca.assignmentsRequireApi',
+            fallback:
+                'KCA assignments require the member curriculum API. '
+                'No design fixtures are shown.',
+          ),
+        );
+      });
+      return;
+    }
 
-  static const _completed = <_Assignment>[
-    _Assignment(
-      title: 'Identity Statement',
-      module: 5,
-      dateLabel: 'Completed May 10, 2025',
-      priority: _Priority.high,
-      icon: Icons.check_circle_outline,
-      iconColor: FhcColors.green,
-    ),
-    _Assignment(
-      title: 'Calling Map',
-      module: 5,
-      dateLabel: 'Completed May 8, 2025',
-      priority: _Priority.medium,
-      icon: Icons.map_outlined,
-      iconColor: FhcColors.blue,
-    ),
-    _Assignment(
-      title: 'Spiritual Gifts Inventory',
-      module: 4,
-      dateLabel: 'Completed May 4, 2025',
-      priority: _Priority.low,
-      icon: Icons.card_giftcard_outlined,
-      iconColor: FhcColors.purple,
-    ),
-    _Assignment(
-      title: 'Testimony Script',
-      module: 4,
-      dateLabel: 'Completed May 1, 2025',
-      priority: _Priority.medium,
-      icon: Icons.record_voice_over_outlined,
-      iconColor: FhcColors.orange,
-    ),
-    _Assignment(
-      title: 'Kingdom Values Reflection',
-      module: 3,
-      dateLabel: 'Completed Apr 24, 2025',
-      priority: _Priority.low,
-      icon: Icons.favorite_border,
-      iconColor: FhcColors.green,
-    ),
-    _Assignment(
-      title: 'Mentoring Agreement',
-      module: 2,
-      dateLabel: 'Completed Apr 18, 2025',
-      priority: _Priority.high,
-      icon: Icons.handshake_outlined,
-      iconColor: FhcColors.blue,
-    ),
-  ];
+    setState(() => _state = const FhcAsyncValue.loading());
+    final result = await repo.listAssignments();
+    if (!mounted) return;
 
-  List<_Assignment> get _items => switch (_tab) {
-    1 => _submitted,
-    2 => _completed,
-    _ => _pending,
-  };
+    switch (result) {
+      case AppSuccess(:final value):
+        if (value.isEmpty) {
+          setState(() {
+            _state = FhcAsyncValue.empty(
+              message: fhcT(
+                context,
+                'member.kca.noAssignmentsEnrollment',
+                fallback: 'No assignments for your enrollment yet.',
+              ),
+            );
+          });
+          return;
+        }
+        setState(() {
+          _state = FhcAsyncValue.data([
+            for (final item in value) _Assignment.fromJson(item),
+          ]);
+        });
+      case AppError(:final failure):
+        setState(() => _state = FhcAsyncValue.error(failure));
+    }
+  }
+
+  List<_Assignment> _filter(List<_Assignment> all) {
+    return switch (_tab) {
+      1 => all.where((a) => a.bucket == _Bucket.submitted).toList(),
+      2 => all.where((a) => a.bucket == _Bucket.completed).toList(),
+      _ => all.where((a) => a.bucket == _Bucket.pending).toList(),
+    };
+  }
 
   void _back() {
     if (Navigator.of(context).canPop()) {
@@ -149,26 +95,52 @@ class _KcaAssignmentsScreenState extends State<KcaAssignmentsScreen> {
     }
   }
 
-  void _openLesson() => fhcPush(context, FhcRoutes.kcaLesson);
-
   @override
   Widget build(BuildContext context) {
-    final items = _items;
+    final counts = switch (_state) {
+      FhcAsyncData(:final value) => (
+        pending: value.where((a) => a.bucket == _Bucket.pending).length,
+        submitted: value.where((a) => a.bucket == _Bucket.submitted).length,
+        completed: value.where((a) => a.bucket == _Bucket.completed).length,
+      ),
+      _ => (pending: 0, submitted: 0, completed: 0),
+    };
+    final tabs = <(String, int)>[
+      (
+        fhcT(context, 'member.kca.pending', fallback: 'Pending'),
+        counts.pending,
+      ),
+      (
+        fhcT(context, 'member.kca.submitted', fallback: 'Submitted'),
+        counts.submitted,
+      ),
+      (
+        fhcT(context, 'member.kca.completed', fallback: 'Completed'),
+        counts.completed,
+      ),
+    ];
 
     return FhcDevicePage(
       backgroundColor: FhcColors.canvas,
       child: Column(
         children: [
-          FhcTopBar(title: 'MY ASSIGNMENTS', onBack: _back),
+          FhcTopBar(
+            title: fhcT(
+              context,
+              'member.kca.myAssignments',
+              fallback: 'MY ASSIGNMENTS',
+            ),
+            onBack: _back,
+          ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
             child: Row(
               children: [
-                for (var i = 0; i < _tabs.length; i++) ...[
+                for (var i = 0; i < tabs.length; i++) ...[
                   if (i > 0) const SizedBox(width: 8),
                   Expanded(
                     child: _StatusTab(
-                      label: '${_tabs[i].$1} (${_tabs[i].$2})',
+                      label: '${tabs[i].$1} (${tabs[i].$2})',
                       active: _tab == i,
                       onTap: () => setState(() => _tab = i),
                     ),
@@ -178,15 +150,43 @@ class _KcaAssignmentsScreenState extends State<KcaAssignmentsScreen> {
             ),
           ),
           Expanded(
-            child: ListView.separated(
-              physics: const ClampingScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              itemCount: items.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 8),
-              itemBuilder: (context, index) {
-                return _AssignmentCard(
-                  assignment: items[index],
-                  onTap: _openLesson,
+            child: FhcAsyncBody<List<_Assignment>>(
+              value: _state,
+              onRetry: _load,
+              emptyTitle: fhcT(
+                context,
+                'member.kca.noAssignments',
+                fallback: 'No assignments',
+              ),
+              unavailableTitle: fhcT(
+                context,
+                'member.kca.assignmentsUnavailable',
+                fallback: 'Assignments unavailable',
+              ),
+              builder: (context, all) {
+                final items = _filter(all);
+                if (items.isEmpty) {
+                  return FhcEmptyState(
+                    title: fhcT(
+                      context,
+                      'member.kca.nothingInThisTab',
+                      fallback: 'Nothing in this tab',
+                    ),
+                    message: fhcT(
+                      context,
+                      'member.kca.switchTabsOrRefresh',
+                      fallback: 'Switch tabs or refresh after new assignments.',
+                    ),
+                  );
+                }
+                return ListView.separated(
+                  physics: const ClampingScrollPhysics(),
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  itemCount: items.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 8),
+                  itemBuilder: (context, index) {
+                    return _AssignmentCard(assignment: items[index]);
+                  },
                 );
               },
             ),
@@ -198,20 +198,55 @@ class _KcaAssignmentsScreenState extends State<KcaAssignmentsScreen> {
   }
 }
 
+enum _Bucket { pending, submitted, completed }
+
+enum _Priority { high, medium, low }
+
 class _Assignment {
   const _Assignment({
     required this.title,
-    required this.module,
+    required this.moduleLabel,
     required this.dateLabel,
     required this.priority,
+    required this.bucket,
     required this.icon,
     required this.iconColor,
   });
 
+  factory _Assignment.fromJson(Map<String, Object?> json) {
+    final state = '${json['state'] ?? json['status'] ?? ''}'.toLowerCase();
+    final bucket =
+        state.contains('approved') || state.contains('complete')
+            ? _Bucket.completed
+            : state.contains('submit') || state.contains('review')
+            ? _Bucket.submitted
+            : _Bucket.pending;
+    final module = json['module'];
+    final moduleTitle =
+        module is Map
+            ? '${module['title'] ?? module['code'] ?? 'Module'}'
+            : 'Module';
+    final due = json['due_at'] ?? json['submitted_at'] ?? json['updated_at'];
+    return _Assignment(
+      title: '${json['title'] ?? 'Assignment'}',
+      moduleLabel: moduleTitle,
+      dateLabel: due == null ? '' : due.toString(),
+      priority: switch ('${json['priority'] ?? ''}'.toLowerCase()) {
+        'high' => _Priority.high,
+        'low' => _Priority.low,
+        _ => _Priority.medium,
+      },
+      bucket: bucket,
+      icon: Icons.assignment_outlined,
+      iconColor: FhcColors.greenDark,
+    );
+  }
+
   final String title;
-  final int module;
+  final String moduleLabel;
   final String dateLabel;
   final _Priority priority;
+  final _Bucket bucket;
   final IconData icon;
   final Color iconColor;
 }
@@ -265,92 +300,86 @@ class _StatusTab extends StatelessWidget {
 }
 
 class _AssignmentCard extends StatelessWidget {
-  const _AssignmentCard({required this.assignment, required this.onTap});
+  const _AssignmentCard({required this.assignment});
 
   final _Assignment assignment;
-  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final meta = 'Module ${assignment.module} • ${assignment.dateLabel}';
+    final date =
+        assignment.dateLabel.isEmpty
+            ? fhcT(
+              context,
+              'member.kca.noDueDate',
+              fallback: 'No due date',
+            )
+            : assignment.dateLabel;
+    final meta = '${assignment.moduleLabel} • $date';
 
     return Semantics(
-      button: true,
       label: '${assignment.title}, $meta',
       child: Material(
         color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(FhcRadius.card),
-          child: Ink(
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-            decoration: BoxDecoration(
-              color: FhcColors.white,
-              borderRadius: BorderRadius.circular(FhcRadius.card),
-              border: Border.all(color: FhcColors.border),
-              boxShadow: FhcElevation.card,
-            ),
-            child: Row(
-              children: [
-                _ColorIcon(icon: assignment.icon, color: assignment.iconColor),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        assignment.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: FhcColors.ink,
-                          height: 1.2,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        meta,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: FhcColors.muted,
-                          height: 1.2,
-                        ),
-                      ),
-                    ],
-                  ),
+        child: Ink(
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+          decoration: BoxDecoration(
+            color: FhcColors.white,
+            borderRadius: BorderRadius.circular(FhcRadius.card),
+            border: Border.all(color: FhcColors.border),
+            boxShadow: FhcElevation.card,
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: assignment.iconColor,
+                  borderRadius: BorderRadius.circular(FhcRadius.sm),
                 ),
-                const SizedBox(width: 8),
-                _PriorityPill(priority: assignment.priority),
-              ],
-            ),
+                child: Icon(
+                  assignment.icon,
+                  size: 20,
+                  color: FhcColors.white,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      assignment.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: FhcColors.ink,
+                        height: 1.2,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      meta,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: FhcColors.muted,
+                        height: 1.2,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              _PriorityPill(priority: assignment.priority),
+            ],
           ),
         ),
       ),
-    );
-  }
-}
-
-class _ColorIcon extends StatelessWidget {
-  const _ColorIcon({required this.icon, required this.color});
-
-  final IconData icon;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 40,
-      height: 40,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(FhcRadius.sm),
-      ),
-      child: Icon(icon, size: 20, color: FhcColors.white),
     );
   }
 }
@@ -363,9 +392,18 @@ class _PriorityPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (label, color) = switch (priority) {
-      _Priority.high => ('High', FhcColors.red),
-      _Priority.medium => ('Medium', FhcColors.gold),
-      _Priority.low => ('Low', FhcColors.green),
+      _Priority.high => (
+        fhcT(context, 'member.kca.priorityHigh', fallback: 'High'),
+        FhcColors.red,
+      ),
+      _Priority.medium => (
+        fhcT(context, 'member.kca.priorityMedium', fallback: 'Medium'),
+        FhcColors.gold,
+      ),
+      _Priority.low => (
+        fhcT(context, 'member.kca.priorityLow', fallback: 'Low'),
+        FhcColors.green,
+      ),
     };
 
     return Container(

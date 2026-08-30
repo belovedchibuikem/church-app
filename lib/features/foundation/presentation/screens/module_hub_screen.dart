@@ -1,49 +1,175 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/api/app_failure.dart';
+import '../../../../core/contracts/mobile_repository_contracts.dart';
 import '../../../../core/design_system/fhc_tokens.dart';
+import '../../../../core/di/app_services_scope.dart';
+import '../../../../core/l10n/locale_scope.dart';
 import '../../../../shared/widgets/fhc_components.dart';
+import '../../../account/data/profile_repository.dart';
 import '../fhc_nav.dart';
 
-class ModuleHubScreen extends StatelessWidget {
-  const ModuleHubScreen({super.key});
+class ModuleHubScreen extends StatefulWidget {
+  const ModuleHubScreen({super.key, this.profileRepository});
 
+  final ProfileRepository? profileRepository;
+
+  @override
+  State<ModuleHubScreen> createState() => _ModuleHubScreenState();
+}
+
+class _ModuleHubScreenState extends State<ModuleHubScreen> {
   static const _modules = <_ModuleSpec>[
     _ModuleSpec(
       icon: Icons.church_outlined,
-      title: 'CHURCH',
-      subtitle: 'Connect, Grow, Serve',
+      titleKey: 'auth.moduleChurch',
+      titleFallback: 'CHURCH',
+      subtitleKey: 'auth.moduleChurchCopy',
+      subtitleFallback: 'Connect, Grow, Serve',
       color: FhcColors.green,
       route: FhcRoutes.churchHome,
     ),
     _ModuleSpec(
       icon: Icons.public,
-      title: 'MISSION',
-      subtitle: 'Go, Preach, Disciple',
+      titleKey: 'nav.mission',
+      titleFallback: 'MISSION',
+      subtitleKey: 'member.missionTagline',
+      subtitleFallback: 'Go, Preach, Disciple',
       color: FhcColors.purple,
       route: FhcRoutes.mission,
     ),
     _ModuleSpec(
       icon: Icons.school,
-      title: 'KCA',
-      subtitle: 'Grow, Learn, Lead',
+      titleKey: 'nav.kca',
+      titleFallback: 'KCA',
+      subtitleKey: 'member.kcaTagline',
+      subtitleFallback: 'Grow, Learn, Lead',
       color: FhcColors.blue,
       route: FhcRoutes.kcaGate,
     ),
     _ModuleSpec(
       icon: Icons.menu_book,
-      title: 'PRESS',
-      subtitle: 'Publish, Teach, Inspire',
+      titleKey: 'nav.press',
+      titleFallback: 'PRESS',
+      subtitleKey: 'member.pressTagline',
+      subtitleFallback: 'Publish, Teach, Inspire',
       color: FhcColors.wine,
       route: FhcRoutes.press,
     ),
   ];
 
-  static const _actions = <(IconData, String, String)>[
-    (Icons.pan_tool_outlined, 'Prayer', FhcRoutes.prayer),
-    (Icons.event_outlined, 'Events', FhcRoutes.events),
-    (Icons.favorite_border, 'Give', FhcRoutes.give),
-    (Icons.chat_bubble_outline, 'Messages', FhcRoutes.messages),
+  static const _actions = <(IconData, String, String, String)>[
+    (Icons.pan_tool_outlined, 'member.prayer', 'Prayer', FhcRoutes.prayer),
+    (Icons.event_outlined, 'member.events', 'Events', FhcRoutes.events),
+    (Icons.favorite_border, 'nav.give', 'Give', FhcRoutes.give),
+    (
+      Icons.chat_bubble_outline,
+      'member.messages',
+      'Messages',
+      FhcRoutes.messages,
+    ),
   ];
+
+  JsonObject? _dashboard;
+  String? _error;
+  bool _repoMissing = false;
+  bool _started = false;
+
+  ProfileRepository? get _repo =>
+      widget.profileRepository ??
+      AppServicesScope.maybeOf(context)?.profileRepository ??
+      createProfileRepository();
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_started) return;
+    _started = true;
+    _load();
+  }
+
+  Future<void> _load() async {
+    final repo = _repo;
+    if (repo == null) {
+      setState(() {
+        _repoMissing = true;
+        _error = null;
+        _dashboard = null;
+      });
+      return;
+    }
+    final result = await repo.getDashboard();
+    if (!mounted) return;
+    switch (result) {
+      case AppSuccess(:final value):
+        setState(() {
+          _dashboard = value;
+          _error = null;
+          _repoMissing = false;
+        });
+      case AppError(:final failure):
+        setState(() {
+          _dashboard = null;
+          _error = failure.message;
+          _repoMissing = false;
+        });
+    }
+  }
+
+  String get _welcomeName {
+    final root = _dashboard?['profile'];
+    final profile = root is Map ? root['profile'] : null;
+    if (profile is Map) {
+      final preferred = '${profile['preferred_name'] ?? ''}'.trim();
+      if (preferred.isNotEmpty) return preferred;
+      final given = '${profile['given_name'] ?? ''}'.trim();
+      if (given.isNotEmpty) return given;
+    }
+    if (root is Map) {
+      final email = '${root['email'] ?? ''}'.trim();
+      if (email.isNotEmpty) return email;
+    }
+    return '';
+  }
+
+  String _subtitle(BuildContext context) {
+    if (_repoMissing) {
+      return fhcT(
+        context,
+        'errors.profileNotWired',
+        fallback: 'Profile repository is not wired.',
+      );
+    }
+    if (_error != null) return _error!;
+    if (_dashboard == null) {
+      return fhcT(
+        context,
+        'member.selectModule',
+        fallback: 'Select a module to enter and start operating.',
+      );
+    }
+    final unread = _dashboard!['unread_notification_count'] ?? 0;
+    final prayers = _dashboard!['open_prayer_count'] ?? 0;
+    return fhcT(
+      context,
+      'auth.hubStats',
+      args: {'unread': '$unread', 'prayers': '$prayers'},
+      fallback: 'Unread notifications: {unread} · Open prayers: {prayers}',
+    );
+  }
+
+  String _welcome(BuildContext context) {
+    final name = _welcomeName;
+    if (name.isEmpty) {
+      return fhcT(context, 'member.welcome', fallback: 'Welcome');
+    }
+    return fhcT(
+      context,
+      'member.welcomeName',
+      args: {'name': name},
+      fallback: 'Welcome, {name}',
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -51,26 +177,26 @@ class ModuleHubScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Padding(
-            padding: EdgeInsets.fromLTRB(20, 16, 20, 0),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Welcome, Chibuikem 👋',
+                  _welcome(context),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.w700,
                     height: 1.2,
                     color: FhcColors.ink,
                   ),
                 ),
-                SizedBox(height: 8),
+                const SizedBox(height: 8),
                 Text(
-                  'Select a module to enter and start operating.',
-                  style: TextStyle(
+                  _subtitle(context),
+                  style: const TextStyle(
                     fontSize: 13,
                     height: 1.4,
                     color: FhcColors.muted,
@@ -110,11 +236,15 @@ class ModuleHubScreen extends StatelessWidget {
               ),
             ),
           ),
-          const Padding(
-            padding: EdgeInsets.fromLTRB(20, 4, 20, 10),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 10),
             child: Text(
-              'Quick Actions',
-              style: TextStyle(
+              fhcT(
+                context,
+                'common.quickActions',
+                fallback: 'Quick Actions',
+              ),
+              style: const TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w700,
                 color: FhcColors.ink,
@@ -130,9 +260,13 @@ class ModuleHubScreen extends StatelessWidget {
                   Expanded(
                     child: _QuickAction(
                       icon: _actions[i].$1,
-                      label: _actions[i].$2,
+                      label: fhcT(
+                        context,
+                        _actions[i].$2,
+                        fallback: _actions[i].$3,
+                      ),
                       onTap: () {
-                        final route = _actions[i].$3;
+                        final route = _actions[i].$4;
                         if (route == FhcRoutes.messages) {
                           fhcGo(context, route);
                         } else {
@@ -158,15 +292,19 @@ class ModuleHubScreen extends StatelessWidget {
 class _ModuleSpec {
   const _ModuleSpec({
     required this.icon,
-    required this.title,
-    required this.subtitle,
+    required this.titleKey,
+    required this.titleFallback,
+    required this.subtitleKey,
+    required this.subtitleFallback,
     required this.color,
     this.route,
   });
 
   final IconData icon;
-  final String title;
-  final String subtitle;
+  final String titleKey;
+  final String titleFallback;
+  final String subtitleKey;
+  final String subtitleFallback;
   final Color color;
   final String? route;
 }
@@ -203,7 +341,11 @@ class _ModuleTile extends StatelessWidget {
               Icon(spec.icon, color: FhcColors.white, size: 42),
               const SizedBox(height: 10),
               Text(
-                spec.title,
+                fhcT(
+                  context,
+                  spec.titleKey,
+                  fallback: spec.titleFallback,
+                ).toUpperCase(),
                 style: const TextStyle(
                   color: FhcColors.white,
                   fontSize: 15,
@@ -215,7 +357,11 @@ class _ModuleTile extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 10),
                 child: Text(
-                  spec.subtitle,
+                  fhcT(
+                    context,
+                    spec.subtitleKey,
+                    fallback: spec.subtitleFallback,
+                  ),
                   textAlign: TextAlign.center,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,

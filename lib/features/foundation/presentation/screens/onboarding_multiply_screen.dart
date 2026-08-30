@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/design_system/fhc_tokens.dart';
+import '../../../../core/l10n/locale_scope.dart';
+import '../../../../shared/widgets/fhc_brand_logo.dart';
 import '../../../../shared/widgets/fhc_components.dart';
-import '../fhc_nav.dart';
+import '../onboarding_actions.dart';
 
 class OnboardingMultiplyScreen extends StatelessWidget {
   const OnboardingMultiplyScreen({super.key});
@@ -15,10 +17,10 @@ class OnboardingMultiplyScreen extends StatelessWidget {
       child: Column(
         children: [
           const SizedBox(height: 22),
-          const Text(
-            'MULTIPLY',
+          Text(
+            fhcT(context, 'mobile.multiply', fallback: 'MULTIPLY'),
             textAlign: TextAlign.center,
-            style: TextStyle(
+            style: const TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.w700,
               letterSpacing: 1.4,
@@ -27,12 +29,16 @@ class OnboardingMultiplyScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 8),
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 28),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 28),
             child: Text(
-              'Start a Church\nin Your Home',
+              fhcT(
+                context,
+                'onboarding.startChurchInHome',
+                fallback: 'Start a Church\nin Your Home',
+              ),
               textAlign: TextAlign.center,
-              style: TextStyle(
+              style: const TextStyle(
                 fontSize: 24,
                 height: 1.12,
                 fontWeight: FontWeight.w700,
@@ -41,14 +47,19 @@ class OnboardingMultiplyScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 10),
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 32),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32),
             child: Text(
-              'You can begin gathering people in the name of '
-              'Jesus right where you are. We will guide, support '
-              'and equip you every step of the way.',
+              fhcT(
+                context,
+                'onboarding.multiplyCopy',
+                fallback:
+                    'You can begin gathering people in the name of '
+                    'Jesus Christ right where you are. We will guide, support '
+                    'and equip you every step of the way.',
+              ),
               textAlign: TextAlign.center,
-              style: TextStyle(
+              style: const TextStyle(
                 fontSize: 13,
                 height: 1.45,
                 color: FhcColors.ink,
@@ -75,7 +86,7 @@ class OnboardingMultiplyScreen extends StatelessWidget {
                     ),
                   ),
                 ),
-                const Center(child: _GoldLogoOverlay()),
+                const Center(child: FhcBrandLogo(size: 92, hero: true)),
                 Positioned(
                   left: 20,
                   right: 20,
@@ -84,8 +95,7 @@ class OnboardingMultiplyScreen extends StatelessWidget {
                     height: 52,
                     width: double.infinity,
                     child: FilledButton(
-                      onPressed:
-                          () => fhcGo(context, FhcRoutes.homeChurchStart),
+                      onPressed: () => fhcCompleteOnboarding(context),
                       style: FilledButton.styleFrom(
                         backgroundColor: FhcColors.green,
                         foregroundColor: FhcColors.white,
@@ -95,13 +105,17 @@ class OnboardingMultiplyScreen extends StatelessWidget {
                           borderRadius: BorderRadius.circular(FhcRadius.button),
                         ),
                       ),
-                      child: const FittedBox(
+                      child: FittedBox(
                         fit: BoxFit.scaleDown,
                         child: Text(
-                          'START A CHURCH IN YOUR HOME',
+                          fhcT(
+                            context,
+                            'onboarding.getStarted',
+                            fallback: 'GET STARTED',
+                          ),
                           maxLines: 1,
                           textAlign: TextAlign.center,
-                          style: TextStyle(
+                          style: const TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w700,
                             letterSpacing: 0.35,
@@ -141,71 +155,6 @@ class _LivingRoomPhoto extends StatelessWidget {
   }
 }
 
-class _GoldLogoOverlay extends StatelessWidget {
-  const _GoldLogoOverlay();
-
-  @override
-  Widget build(BuildContext context) {
-    const size = 92.0;
-    return const IgnorePointer(
-      child: Opacity(
-        opacity: 0.78,
-        child: SizedBox.square(
-          dimension: size,
-          child: CustomPaint(
-            size: Size.square(size),
-            painter: _GoldHouseLogoPainter(),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _GoldHouseLogoPainter extends CustomPainter {
-  const _GoldHouseLogoPainter();
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final stroke =
-        Paint()
-          ..color = FhcColors.gold.withValues(alpha: 0.92)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = size.width * 0.062
-          ..strokeCap = StrokeCap.round
-          ..strokeJoin = StrokeJoin.round;
-
-    final w = size.width;
-    final h = size.height;
-    final cx = w / 2;
-    canvas.drawCircle(Offset(cx, h / 2), w * 0.46, stroke);
-
-    final roofRun = w * 0.28;
-    final peak = Offset(cx, h * 0.22);
-    final leftEave = Offset(cx - roofRun, h * 0.42);
-    final rightEave = Offset(cx + roofRun, h * 0.42);
-    final floorY = h * 0.78;
-    final house =
-        Path()
-          ..moveTo(peak.dx, peak.dy)
-          ..lineTo(rightEave.dx, rightEave.dy)
-          ..lineTo(rightEave.dx, floorY)
-          ..lineTo(leftEave.dx, floorY)
-          ..lineTo(leftEave.dx, leftEave.dy)
-          ..close();
-    canvas.drawPath(house, stroke);
-    canvas.drawLine(Offset(cx, h * 0.48), Offset(cx, h * 0.70), stroke);
-    canvas.drawLine(
-      Offset(cx - w * 0.10, h * 0.56),
-      Offset(cx + w * 0.10, h * 0.56),
-      stroke,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
 class _MultiplyFooter extends StatelessWidget {
   const _MultiplyFooter();
 
@@ -216,10 +165,10 @@ class _MultiplyFooter extends StatelessWidget {
       child: Row(
         children: [
           TextButton(
-            onPressed: () => fhcGo(context, '/language'),
-            child: const Text(
-              'Skip',
-              style: TextStyle(
+            onPressed: () => fhcCompleteOnboarding(context),
+            child: Text(
+              fhcT(context, 'common.skip', fallback: 'Skip'),
+              style: const TextStyle(
                 color: FhcColors.muted,
                 fontSize: 15,
                 fontWeight: FontWeight.w500,
@@ -227,7 +176,7 @@ class _MultiplyFooter extends StatelessWidget {
             ),
           ),
           const Spacer(),
-          for (var i = 0; i < 4; i++)
+          for (var i = 0; i < 3; i++)
             Container(
               width: i == 2 ? 9 : 7,
               height: i == 2 ? 9 : 7,
@@ -239,7 +188,8 @@ class _MultiplyFooter extends StatelessWidget {
             ),
           const Spacer(),
           IconButton.filled(
-            onPressed: () => fhcGo(context, FhcRoutes.homeChurchStart),
+            onPressed: () => fhcCompleteOnboarding(context),
+            tooltip: fhcT(context, 'common.next', fallback: 'Next'),
             style: IconButton.styleFrom(
               backgroundColor: FhcColors.green,
               foregroundColor: FhcColors.white,

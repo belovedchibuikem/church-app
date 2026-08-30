@@ -1,22 +1,191 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/api/app_failure.dart';
 import '../../../../core/design_system/fhc_tokens.dart';
+import '../../../../core/di/app_services_scope.dart';
+import '../../../../core/l10n/locale_scope.dart';
+import '../../../../core/routing/fhc_route_args.dart';
+import '../../../../shared/widgets/async_state.dart';
 import '../../../../shared/widgets/fhc_components.dart';
 import '../../../foundation/presentation/fhc_nav.dart';
+import '../../data/church_repository.dart';
 
 class ChurchDetailScreen extends StatefulWidget {
-  const ChurchDetailScreen({super.key});
+  const ChurchDetailScreen({
+    super.key,
+    this.churchId,
+    this.repository,
+  });
+
+  final String? churchId;
+  final ChurchRepositoryImpl? repository;
 
   @override
   State<ChurchDetailScreen> createState() => _ChurchDetailScreenState();
 }
 
 class _ChurchDetailScreenState extends State<ChurchDetailScreen> {
-  static const _isLive = true;
+  FhcAsyncValue<ChurchSummary> _state = const FhcAsyncValue.loading();
+  bool _membershipBusy = false;
+  bool _started = false;
 
-  bool _following = false;
+  ChurchRepositoryImpl? get _repository {
+    final injected = widget.repository;
+    if (injected != null) return injected;
+    final fromServices = AppServicesScope.maybeOf(context)?.churchRepository;
+    return fromServices is ChurchRepositoryImpl ? fromServices : null;
+  }
 
-  void _goBack() {
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_started) {
+      _started = true;
+      _resolveAndLoad();
+    }
+  }
+
+  String? _resolveChurchId() {
+    final fromProp = widget.churchId?.trim();
+    if (fromProp != null && fromProp.isNotEmpty) return fromProp;
+
+    final args = ModalRoute.of(context)?.settings.arguments;
+    if (args is FhcRouteArgs &&
+        args.entityId != null &&
+        args.entityId!.trim().isNotEmpty) {
+      return args.entityId!.trim();
+    }
+    if (args is String && args.trim().isNotEmpty) return args.trim();
+    if (args is Map) {
+      final mapped = args['entityId'] ?? args['churchId'] ?? args['id'];
+      if (mapped is String && mapped.trim().isNotEmpty) return mapped.trim();
+    }
+
+    final routeName = ModalRoute.of(context)?.settings.name ?? '';
+    for (final prefix in const ['/discover/church/', '/church/detail/']) {
+      if (routeName.startsWith(prefix)) {
+        final id = routeName.substring(prefix.length).split('/').first.trim();
+        if (id.isNotEmpty) return id;
+      }
+    }
+    return null;
+  }
+
+  String get _membershipAction => fhcT(
+        context,
+        'church.membershipAction',
+        fallback: 'Membership for this church',
+      );
+
+  Future<void> _resolveAndLoad() async {
+    final id = _resolveChurchId();
+    if (id == null) {
+      setState(() {
+        _state = FhcAsyncValue.unavailable(
+          message: fhcT(
+            context,
+            'errors.churchIdMissing',
+            fallback: 'Church id is missing from this route.',
+          ),
+        );
+      });
+      return;
+    }
+    await _load(id);
+  }
+
+  Future<void> _load(String id) async {
+    final repo = _repository;
+    if (repo == null) {
+      setState(() {
+        _state = FhcAsyncValue.unavailable(
+          message: fhcT(
+            context,
+            'errors.churchDetailWaiting',
+            fallback:
+                'Church detail is waiting on AppServices churchRepository. '
+                'No fixture profile is shown.',
+          ),
+        );
+      });
+      return;
+    }
+
+    setState(() => _state = const FhcAsyncValue.loading());
+
+    final result = await repo.getChurchById(id);
+    if (!mounted) return;
+
+    switch (result) {
+      case AppSuccess(:final value):
+        setState(() => _state = FhcAsyncValue.data(value));
+      case AppError(:final failure):
+        if (failure is IntegrationUnavailableFailure) {
+          setState(() {
+            _state = FhcAsyncValue.unavailable(message: failure.message);
+          });
+          return;
+        }
+        if (failure is NotFoundFailure) {
+          setState(() {
+            _state = FhcAsyncValue.empty(
+              message: fhcT(
+                context,
+                'errors.churchUnpublished',
+                fallback: 'This church is unavailable or unpublished.',
+              ),
+            );
+          });
+          return;
+        }
+        setState(() => _state = FhcAsyncValue.error(failure));
+    }
+  }
+
+  Future<void> _requestMembership(ChurchSummary church) async {
+    if (_membershipBusy) return;
+    final repo = _repository;
+    if (repo == null) {
+      await fhcApiUnavailable(
+        context,
+        action: _membershipAction,
+      );
+      return;
+    }
+
+    setState(() => _membershipBusy = true);
+    final result = await repo.requestMembership(church.id);
+    if (!mounted) return;
+    setState(() => _membershipBusy = false);
+
+    switch (result) {
+      case AppSuccess():
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              fhcT(
+                context,
+                'church.membershipStarted',
+                fallback: 'Membership started.',
+              ),
+            ),
+          ),
+        );
+      case AppError(:final failure):
+        if (failure is IntegrationUnavailableFailure) {
+          await fhcApiUnavailable(
+            context,
+            action: _membershipAction,
+          );
+          return;
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(failure.message)),
+        );
+    }
+  }
+
+  void back() {
     if (Navigator.of(context).canPop()) {
       Navigator.of(context).pop();
     } else {
@@ -24,553 +193,324 @@ class _ChurchDetailScreenState extends State<ChurchDetailScreen> {
     }
   }
 
-  void _toggleFollow() => setState(() => _following = !_following);
-
-  void _joinLive() => fhcPush(context, FhcRoutes.live);
-
   @override
   Widget build(BuildContext context) {
     return FhcDevicePage(
       backgroundColor: FhcColors.white,
       child: Column(
         children: [
+          _Header(onBack: back),
           Expanded(
-            child: ListView(
-              padding: EdgeInsets.zero,
-              children: [
-                _HeroHeader(onBack: _goBack, onShare: () {}),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 18),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _TitleFollowRow(
-                        following: _following,
-                        onFollow: _toggleFollow,
-                      ),
-                      const SizedBox(height: 14),
-                      const _StatsCard(),
-                      const SizedBox(height: 18),
-                      const Text(
-                        'About Us',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          height: 1.2,
-                          color: FhcColors.ink,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      const Text(
-                        'We are a Bible-believing church committed to raising disciples and transforming lives.',
-                        style: TextStyle(
-                          fontSize: 13,
-                          height: 1.4,
-                          color: FhcColors.muted,
-                        ),
-                      ),
-                      const SizedBox(height: 18),
-                      const Text(
-                        'Service Times',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          height: 1.2,
-                          color: FhcColors.ink,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      const _ServiceTimeRow(
-                        label: 'Sunday Service',
-                        time: '9:00 AM',
-                      ),
-                      const SizedBox(height: 8),
-                      const _ServiceTimeRow(
-                        label: 'Bible Study (Wed)',
-                        time: '6:00 PM',
-                      ),
-                      const SizedBox(height: 8),
-                      const _ServiceTimeRow(
-                        label: 'Prayer Meeting (Fri)',
-                        time: '6:00 PM',
-                      ),
-                      const SizedBox(height: 16),
-                      const _ActionRow(),
-                      if (_isLive) ...[
-                        const SizedBox(height: 12),
-                        FhcPrimaryButton(
-                          label: 'Join Live',
-                          onPressed: _joinLive,
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          FhcBottomNavigation(
-            selected: 2,
-            onSelected: (index) => fhcTab(context, index),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _HeroHeader extends StatelessWidget {
-  const _HeroHeader({required this.onBack, required this.onShare});
-
-  final VoidCallback onBack;
-  final VoidCallback onShare;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-      child: SizedBox(
-        height: 176,
-        width: double.infinity,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            const ClipRRect(
-              borderRadius: BorderRadius.all(Radius.circular(FhcRadius.lg)),
-              child: _HeroPhoto(),
-            ),
-            Positioned(
-              left: 4,
-              top: 4,
-              child: _RoundIconButton(
-                icon: Icons.chevron_left,
-                tooltip: 'Back',
-                onTap: onBack,
-              ),
-            ),
-            Positioned(
-              right: 4,
-              top: 4,
-              child: _RoundIconButton(
-                icon: Icons.ios_share,
-                tooltip: 'Share',
-                onTap: onShare,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _HeroPhoto extends StatelessWidget {
-  const _HeroPhoto();
-
-  static const _fallback = ColoredBox(
-    color: FhcColors.mint,
-    child: Center(
-      child: Icon(Icons.church_outlined, size: 64, color: FhcColors.green),
-    ),
-  );
-
-  @override
-  Widget build(BuildContext context) {
-    return Image.asset(
-      'assets/images/church_grace_hero.png',
-      fit: BoxFit.cover,
-      alignment: Alignment.center,
-      errorBuilder: (context, error, stackTrace) {
-        return Image.asset(
-          'assets/images/church_hero.png',
-          fit: BoxFit.cover,
-          alignment: Alignment.center,
-          errorBuilder: (context, error, stackTrace) {
-            return Image.asset(
-              'assets/images/church_building.png',
-              fit: BoxFit.cover,
-              alignment: Alignment.center,
-              errorBuilder: (context, error, stackTrace) => _fallback,
-            );
-          },
-        );
-      },
-    );
-  }
-}
-
-class _RoundIconButton extends StatelessWidget {
-  const _RoundIconButton({
-    required this.icon,
-    required this.onTap,
-    required this.tooltip,
-  });
-
-  final IconData icon;
-  final VoidCallback onTap;
-  final String tooltip;
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      button: true,
-      label: tooltip,
-      child: Material(
-        color: FhcColors.white.withValues(alpha: 0.94),
-        shape: const CircleBorder(),
-        child: InkWell(
-          customBorder: const CircleBorder(),
-          onTap: onTap,
-          child: SizedBox(
-            width: FhcSizes.minTap,
-            height: FhcSizes.minTap,
-            child: Icon(icon, size: 22, color: FhcColors.ink),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _TitleFollowRow extends StatelessWidget {
-  const _TitleFollowRow({required this.following, required this.onFollow});
-
-  final bool following;
-  final VoidCallback onFollow;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Grace Home Church',
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w700,
-                  height: 1.2,
-                  color: FhcColors.ink,
-                ),
-              ),
-              SizedBox(height: 6),
-              Row(
+            child: RefreshIndicator(
+              onRefresh: () async {
+                final id = _resolveChurchId();
+                if (id != null) await _load(id);
+              },
+              child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                 children: [
-                  Icon(Icons.location_on, size: 14, color: FhcColors.muted),
-                  SizedBox(width: 4),
-                  Expanded(
-                    child: Text(
-                      'Ikeja, Lagos, Nigeria',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 12,
-                        height: 1.2,
-                        color: FhcColors.muted,
-                      ),
+                  FhcAsyncBody<ChurchSummary>(
+                    value: _state,
+                    onRetry: () {
+                      final id = _resolveChurchId();
+                      if (id != null) _load(id);
+                    },
+                    emptyTitle: fhcT(
+                      context,
+                      'errors.churchNotFound',
+                      fallback: 'Church not found',
                     ),
+                    unavailableTitle: fhcT(
+                      context,
+                      'errors.churchUnavailable',
+                      fallback: 'Church unavailable',
+                    ),
+                    builder: (context, church) {
+                      final country = church.location.countryName;
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(15),
+                            child: AspectRatio(
+                              aspectRatio: 1.63,
+                              child: Image.asset(
+                                'assets/images/church_grace_hero.png',
+                                fit: BoxFit.cover,
+                                semanticLabel: fhcT(
+                                  context,
+                                  'church.buildingA11y',
+                                  args: {'name': church.name},
+                                  fallback: '{name} building',
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 15),
+                          Text(
+                            church.name,
+                            style: const TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Row(
+                            children: [
+                              const Icon(
+                                Icons.location_on_outlined,
+                                size: 15,
+                                color: FhcColors.green,
+                              ),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: Text(
+                                  church.location.placeLabel,
+                                  style: FhcTypography.caption,
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (church.location.administrativeUnitName !=
+                              null) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              church.location.administrativeUnitName!,
+                              style: FhcTypography.caption,
+                            ),
+                          ],
+                          const SizedBox(height: 22),
+                          _Heading(
+                            fhcT(context, 'common.about', fallback: 'About'),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            country == null
+                                ? fhcT(
+                                    context,
+                                    'church.community',
+                                    fallback:
+                                        'A Family House church community.',
+                                  )
+                                : fhcT(
+                                    context,
+                                    'church.communityIn',
+                                    args: {'country': country},
+                                    fallback:
+                                        'A Family House church community in {country}.',
+                                  ),
+                            style: const TextStyle(fontSize: 13, height: 1.45),
+                          ),
+                          if (church.publishedAt != null) ...[
+                            const SizedBox(height: 20),
+                            _Heading(
+                              fhcT(
+                                context,
+                                'church.published',
+                                fallback: 'Published',
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              _formatPublishedDate(church.publishedAt!),
+                              style: const TextStyle(fontSize: 13, height: 1.45),
+                            ),
+                          ],
+                          const SizedBox(height: 20),
+                          _Heading(
+                            fhcT(
+                              context,
+                              'church.membershipGroups',
+                              fallback: 'Membership & groups',
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            fhcT(
+                              context,
+                              'church.membershipGroupsCopy',
+                              fallback:
+                                  'Request membership to connect with this church. '
+                                  'Groups and documents open once your membership is active.',
+                            ),
+                            style: const TextStyle(
+                              fontSize: 13,
+                              height: 1.45,
+                              color: FhcColors.muted,
+                            ),
+                          ),
+                        ],
+                      );
+                    },
                   ),
                 ],
               ),
-            ],
+            ),
           ),
-        ),
-        const SizedBox(width: 10),
-        _FollowButton(following: following, onPressed: onFollow),
-      ],
-    );
-  }
-}
-
-class _FollowButton extends StatelessWidget {
-  const _FollowButton({required this.following, required this.onPressed});
-
-  final bool following;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    final label = following ? 'Following' : 'Follow';
-    return Semantics(
-      button: true,
-      label: label,
-      child: SizedBox(
-        height: 36,
-        child: following
-            ? OutlinedButton(
-                onPressed: onPressed,
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: FhcColors.green,
-                  side: const BorderSide(color: FhcColors.green, width: 1.4),
-                  minimumSize: Size.zero,
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  visualDensity: VisualDensity.compact,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(FhcRadius.button),
-                  ),
-                ),
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    height: 1.1,
-                  ),
-                ),
-              )
-            : FilledButton(
-                onPressed: onPressed,
-                style: FilledButton.styleFrom(
-                  backgroundColor: FhcColors.green,
-                  foregroundColor: FhcColors.white,
-                  elevation: 0,
-                  shadowColor: Colors.transparent,
-                  minimumSize: Size.zero,
-                  padding: const EdgeInsets.symmetric(horizontal: 18),
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  visualDensity: VisualDensity.compact,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(FhcRadius.button),
-                  ),
-                ),
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    height: 1.1,
-                    color: FhcColors.white,
-                  ),
-                ),
+          if (_state case FhcAsyncData<ChurchSummary>(:final value))
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: _Actions(
+                membershipBusy: _membershipBusy,
+                onMembership: () => _requestMembership(value),
               ),
-      ),
-    );
-  }
-}
-
-class _StatsCard extends StatelessWidget {
-  const _StatsCard();
-
-  @override
-  Widget build(BuildContext context) {
-    return FhcSurfaceCard(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-      child: const Row(
-        children: [
-          Expanded(
-            child: _StatCell(value: '1.2K', label: 'Members'),
-          ),
-          _StatDivider(),
-          Expanded(
-            child: _StatCell(value: '24', label: 'Ministries'),
-          ),
-          _StatDivider(),
-          Expanded(
-            child: _StatCell(value: '4.8', label: 'Rating', showStar: true),
-          ),
+            ),
         ],
       ),
     );
   }
+
+  String _formatPublishedDate(String raw) {
+    final parsed = DateTime.tryParse(raw);
+    if (parsed == null) return raw;
+    const months = <String>[
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
+    ];
+    final local = parsed.toLocal();
+    return '${months[local.month - 1]} ${local.day}, ${local.year}';
+  }
 }
 
-class _StatDivider extends StatelessWidget {
-  const _StatDivider();
+class _Header extends StatelessWidget {
+  const _Header({required this.onBack});
+  final VoidCallback onBack;
 
   @override
   Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.symmetric(horizontal: 4),
-      child: SizedBox(
-        width: 1,
-        height: 36,
-        child: ColoredBox(color: FhcColors.border),
+    return SizedBox(
+      height: 58,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            IconButton(
+              onPressed: onBack,
+              tooltip: fhcT(context, 'common.back', fallback: 'Back'),
+              icon: const Icon(Icons.chevron_left, size: 28),
+            ),
+            IconButton(
+              onPressed:
+                  () => fhcApiUnavailable(
+                    context,
+                    action: fhcT(
+                      context,
+                      'church.shareAction',
+                      fallback: 'Sharing this church profile',
+                    ),
+                  ),
+              tooltip: fhcT(context, 'church.share', fallback: 'Share'),
+              icon: const Icon(Icons.ios_share_outlined, size: 23),
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
-class _StatCell extends StatelessWidget {
-  const _StatCell({
-    required this.value,
-    required this.label,
-    this.showStar = false,
+class _Heading extends StatelessWidget {
+  const _Heading(this.text);
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => Text(
+        text,
+        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+      );
+}
+
+class _Actions extends StatelessWidget {
+  const _Actions({
+    required this.onMembership,
+    required this.membershipBusy,
   });
 
-  final String value;
-  final String label;
-  final bool showStar;
+  final VoidCallback onMembership;
+  final bool membershipBusy;
 
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Flexible(
-              child: Text(
-                value,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  height: 1.2,
-                  color: FhcColors.ink,
-                ),
-              ),
-            ),
-            if (showStar) ...[
-              const SizedBox(width: 3),
-              const Icon(Icons.star_rounded, size: 14, color: FhcColors.gold),
-            ],
-          ],
-        ),
-        const SizedBox(height: 4),
-        Text(
-          label,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
-            fontSize: 11,
-            height: 1.2,
-            color: FhcColors.muted,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _ServiceTimeRow extends StatelessWidget {
-  const _ServiceTimeRow({required this.label, required this.time});
-
-  final String label;
-  final String time;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              height: 1.2,
-              color: FhcColors.ink,
-            ),
-          ),
-        ),
-        const SizedBox(width: 8),
-        Text(
-          time,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
-            fontSize: 13,
-            height: 1.2,
-            color: FhcColors.muted,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _ActionRow extends StatelessWidget {
-  const _ActionRow();
-
-  static const _actions = <(IconData, String)>[
-    (Icons.call_outlined, 'Call'),
-    (Icons.directions_outlined, 'Directions'),
-    (Icons.language_outlined, 'Website'),
+  static const _secondary = <(IconData, String, String)>[
+    (Icons.groups_outlined, 'church.groups', 'Groups'),
+    (Icons.description_outlined, 'church.documents', 'Documents'),
   ];
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
-        for (var i = 0; i < _actions.length; i++) ...[
-          if (i > 0) const SizedBox(width: 8),
+        Expanded(
+          child: SizedBox(
+            height: 44,
+            child: OutlinedButton.icon(
+              onPressed: membershipBusy ? null : onMembership,
+              icon: membershipBusy
+                  ? const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.group_add_outlined, size: 16),
+              label: Text(
+                fhcT(context, 'church.membership', fallback: 'Membership'),
+                style: const TextStyle(fontSize: 11),
+              ),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: FhcColors.greenDark,
+                side: const BorderSide(color: FhcColors.green),
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+            ),
+          ),
+        ),
+        for (final item in _secondary) ...[
+          const SizedBox(width: 8),
           Expanded(
-            child: _OutlinedAction(
-              icon: _actions[i].$1,
-              label: _actions[i].$2,
+            child: SizedBox(
+              height: 44,
+              child: OutlinedButton.icon(
+                onPressed:
+                    () => fhcApiUnavailable(
+                      context,
+                      action: fhcT(
+                        context,
+                        'church.featureAction',
+                        args: {'feature': item.$3},
+                        fallback: '{feature} for this church',
+                      ),
+                    ),
+                icon: Icon(item.$1, size: 16),
+                label: Text(
+                  fhcT(context, item.$2, fallback: item.$3),
+                  style: const TextStyle(fontSize: 11),
+                ),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: FhcColors.greenDark,
+                  side: const BorderSide(color: FhcColors.green),
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+              ),
             ),
           ),
         ],
       ],
-    );
-  }
-}
-
-class _OutlinedAction extends StatelessWidget {
-  const _OutlinedAction({required this.icon, required this.label});
-
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      button: true,
-      label: label,
-      child: SizedBox(
-        height: 40,
-        child: OutlinedButton(
-          onPressed: () {},
-          style: OutlinedButton.styleFrom(
-            foregroundColor: FhcColors.ink,
-            side: const BorderSide(color: FhcColors.border),
-            minimumSize: Size.zero,
-            padding: const EdgeInsets.symmetric(horizontal: 6),
-            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            visualDensity: VisualDensity.compact,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(FhcRadius.button),
-            ),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, size: 15, color: FhcColors.ink),
-              const SizedBox(width: 4),
-              Flexible(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    height: 1.1,
-                    color: FhcColors.ink,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 }

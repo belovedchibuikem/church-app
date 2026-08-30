@@ -1,0 +1,15 @@
+# Copy to android/key.properties and fill with the real upload keystore.
+# Never commit key.properties or the .jks/.keystore file.
+#
+# storePassword=***
+# keyPassword=***
+# keyAlias=upload
+# storeFile=upload-keystore.jks
+#
+# Until this file exists, release builds sign with the debug keystore
+# (convenient for local QA, not Play Store shippable).
+
+storePassword=REPLACE_ME
+keyPassword=REPLACE_ME
+keyAlias=upload
+storeFile=upload-keystore.jks

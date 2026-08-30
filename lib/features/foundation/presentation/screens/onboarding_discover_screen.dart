@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/design_system/fhc_tokens.dart';
+import '../../../../core/l10n/locale_scope.dart';
+import '../../../../shared/widgets/fhc_brand_logo.dart';
 import '../../../../shared/widgets/fhc_components.dart';
 import '../fhc_nav.dart';
+import '../onboarding_actions.dart';
 
 class OnboardingDiscoverScreen extends StatelessWidget {
   const OnboardingDiscoverScreen({super.key});
@@ -10,11 +13,26 @@ class OnboardingDiscoverScreen extends StatelessWidget {
   static const _copy =
       'Find churches, online fellowship,\nevents, resources and more.\nYou are never alone.';
 
-  static const _tiles = <(IconData, String, Color)>[
-    (Icons.location_on, 'Find Churches', FhcColors.green),
-    (Icons.podcasts, 'Online Fellowship', FhcColors.gold),
-    (Icons.calendar_month, 'Events', FhcColors.gold),
-    (Icons.description_outlined, 'Digital Resources', FhcColors.green),
+  static const _tiles = <(IconData, String, String, Color)>[
+    (
+      Icons.location_on,
+      'onboarding.findChurches',
+      'Find Churches',
+      FhcColors.green,
+    ),
+    (
+      Icons.podcasts,
+      'onboarding.onlineFellowship',
+      'Online Fellowship',
+      FhcColors.gold,
+    ),
+    (Icons.calendar_month, 'nav.events', 'Events', FhcColors.gold),
+    (
+      Icons.description_outlined,
+      'onboarding.digitalResources',
+      'Digital Resources',
+      FhcColors.green,
+    ),
   ];
 
   @override
@@ -31,10 +49,10 @@ class OnboardingDiscoverScreen extends StatelessWidget {
             padding: EdgeInsets.fromLTRB(20, h < 760 ? 12 : 20, 20, 8),
             child: Column(
               children: [
-                const Text(
-                  'DISCOVER',
+                Text(
+                  fhcT(context, 'mobile.discover', fallback: 'DISCOVER'),
                   textAlign: TextAlign.center,
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w700,
                     letterSpacing: 1.4,
@@ -42,20 +60,28 @@ class OnboardingDiscoverScreen extends StatelessWidget {
                   ),
                 ),
                 SizedBox(height: gap * 0.7),
-                const Text(
-                  'Family House',
+                Text(
+                  fhcT(
+                    context,
+                    'onboarding.familyHouse',
+                    fallback: 'Family House',
+                  ),
                   textAlign: TextAlign.center,
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.w700,
                     height: 1.15,
                     color: FhcColors.ink,
                   ),
                 ),
-                const Text(
-                  'Anywhere in the World',
+                Text(
+                  fhcT(
+                    context,
+                    'onboarding.anywhereInTheWorld',
+                    fallback: 'Anywhere in the World',
+                  ),
                   textAlign: TextAlign.center,
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.w700,
                     height: 1.15,
@@ -63,10 +89,10 @@ class OnboardingDiscoverScreen extends StatelessWidget {
                   ),
                 ),
                 SizedBox(height: gap),
-                const Text(
-                  _copy,
+                Text(
+                  fhcT(context, 'onboarding.discoverCopy', fallback: _copy),
                   textAlign: TextAlign.center,
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 13,
                     height: 1.45,
                     color: FhcColors.muted,
@@ -82,8 +108,10 @@ class OnboardingDiscoverScreen extends StatelessWidget {
                       'assets/images/discover_globe.png',
                       fit: BoxFit.cover,
                       errorBuilder:
-                          (context, error, stackTrace) =>
-                              const ColoredBox(color: FhcColors.mint),
+                          (context, error, stackTrace) => const ColoredBox(
+                            color: FhcColors.mint,
+                            child: Center(child: FhcBrandLogo(size: 120)),
+                          ),
                     ),
                   ),
                 ),
@@ -128,7 +156,7 @@ class OnboardingDiscoverScreen extends StatelessWidget {
 class _DiscoverTile extends StatelessWidget {
   const _DiscoverTile({required this.tile});
 
-  final (IconData, String, Color) tile;
+  final (IconData, String, String, Color) tile;
 
   @override
   Widget build(BuildContext context) {
@@ -137,10 +165,10 @@ class _DiscoverTile extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(tile.$1, color: tile.$3, size: 28),
+          Icon(tile.$1, color: tile.$4, size: 28),
           const SizedBox(height: 8),
           Text(
-            tile.$2,
+            fhcT(context, tile.$2, fallback: tile.$3),
             textAlign: TextAlign.center,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
@@ -167,16 +195,16 @@ class _DiscoverFooter extends StatelessWidget {
       child: Row(
         children: [
           TextButton(
-            onPressed: () => fhcGo(context, '/language'),
+            onPressed: () => fhcCompleteOnboarding(context),
             style: TextButton.styleFrom(
               foregroundColor: FhcColors.muted,
               padding: const EdgeInsets.symmetric(horizontal: 8),
               minimumSize: const Size(48, 40),
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
             ),
-            child: const Text(
-              'Skip',
-              style: TextStyle(
+            child: Text(
+              fhcT(context, 'common.skip', fallback: 'Skip'),
+              style: const TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w500,
                 color: FhcColors.muted,
@@ -184,7 +212,7 @@ class _DiscoverFooter extends StatelessWidget {
             ),
           ),
           const Spacer(),
-          for (var i = 0; i < 4; i++)
+          for (var i = 0; i < 3; i++)
             Container(
               width: i == 0 ? 9 : 7,
               height: i == 0 ? 9 : 7,
@@ -197,7 +225,7 @@ class _DiscoverFooter extends StatelessWidget {
           const Spacer(),
           IconButton.filled(
             onPressed: () => fhcGo(context, '/onboarding/connect'),
-            tooltip: 'Next',
+            tooltip: fhcT(context, 'common.next', fallback: 'Next'),
             style: IconButton.styleFrom(
               backgroundColor: FhcColors.green,
               foregroundColor: FhcColors.white,
