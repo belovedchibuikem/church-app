@@ -171,9 +171,9 @@ class _FamilyHouseConnectAppState extends State<FamilyHouseConnectApp> {
                 : child;
         final page = switch (route) {
           '/splash' => const SplashScreen(),
-          '/onboarding/discover' => const OnboardingDiscoverScreen(),
-          '/onboarding/connect' => const OnboardingConnectScreen(),
-          '/onboarding/multiply' => const OnboardingMultiplyScreen(),
+          '/onboarding/discover' => const OnboardingPager(initialPage: 0),
+          '/onboarding/connect' => const OnboardingPager(initialPage: 1),
+          '/onboarding/multiply' => const OnboardingPager(initialPage: 2),
           '/language' => const LanguageLocationScreen(),
           '/sign-in' => const SignInScreen(),
           '/sign-up' => const SignUpScreen(),
@@ -526,11 +526,7 @@ class _FamilyHouseConnectAppState extends State<FamilyHouseConnectApp> {
           ),
           '/bible' => const BibleScreen(),
           '/media' => const MediaHubScreen(),
-          '/kca' => PermissionGuard(
-            gateway: authorizationGateway,
-            permission: 'kca.dashboard.view',
-            child: const KcaDashboardScreen(),
-          ),
+          '/kca' => const KcaEntryGate(),
           '/kca/gate' => const KcaEntryGate(),
           '/kca/enroll' => guarded(
             'kca.enrollment.create',
@@ -540,7 +536,9 @@ class _FamilyHouseConnectAppState extends State<FamilyHouseConnectApp> {
           '/kca/module' => KcaModuleScreen(
             moduleId: routeArgs.entityId ?? routeQuery['id'],
           ),
-          '/kca/lesson' => const KcaLessonScreen(),
+          '/kca/lesson' => KcaLessonScreen(
+            lessonId: routeArgs.entityId ?? routeQuery['id'],
+          ),
           '/kca/assignments' => const KcaAssignmentsScreen(),
           '/kca/mentor' => const MentorChatScreen(),
           '/kca/evidence' => PermissionGuard(

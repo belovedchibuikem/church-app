@@ -82,6 +82,8 @@ abstract final class FhcRoutes {
   static const kcaSubmissions = '/kca/submissions';
   static const kcaCertification = '/kca/certification';
   static const kcaAdmission = '/kca/admission';
+  static const kcaAdmissionLetter = '/kca/admission-letter';
+  static const kcaOrientation = '/kca/orientation';
   static const kcaAttendance = '/kca/attendance';
   static const kcaMentees = '/kca/mentees';
   static const kcaReview = '/kca/review';

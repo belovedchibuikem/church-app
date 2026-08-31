@@ -7,16 +7,17 @@ import '../../../../shared/widgets/fhc_components.dart';
 import '../onboarding_actions.dart';
 
 class OnboardingMultiplyScreen extends StatelessWidget {
-  const OnboardingMultiplyScreen({super.key});
+  const OnboardingMultiplyScreen({super.key, this.embedded = false});
+
+  final bool embedded;
 
   static const _photoAsset = 'assets/images/multiply_home.png';
 
   @override
   Widget build(BuildContext context) {
-    return FhcDevicePage(
-      child: Column(
-        children: [
-          const SizedBox(height: 22),
+    final page = Column(
+      children: [
+        const SizedBox(height: 22),
           Text(
             fhcT(context, 'mobile.multiply', fallback: 'MULTIPLY'),
             textAlign: TextAlign.center,
@@ -129,13 +130,15 @@ class OnboardingMultiplyScreen extends StatelessWidget {
               ],
             ),
           ),
-          const Padding(
-            padding: EdgeInsets.fromLTRB(8, 6, 8, 10),
-            child: _MultiplyFooter(),
-          ),
+          if (!embedded)
+            const Padding(
+              padding: EdgeInsets.fromLTRB(8, 6, 8, 10),
+              child: _MultiplyFooter(),
+            ),
         ],
-      ),
-    );
+      );
+    if (embedded) return page;
+    return FhcDevicePage(child: page);
   }
 }
 

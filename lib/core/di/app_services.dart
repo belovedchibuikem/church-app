@@ -310,7 +310,13 @@ final class AppServices {
           withTransport((t) => HttpNeedRepository(transport: t)),
       paymentRepository:
           paymentRepository ??
-          withTransport((t) => HttpPaymentRepository(transport: t)),
+          withTransport(
+            (t) => HttpPaymentRepository(
+              transport: t,
+              tokenStore: store,
+              baseUrl: apiUrl,
+            ),
+          ),
       messageRepository:
           messageRepository ??
           withTransport((t) => HttpMessageRepository(transport: t)),

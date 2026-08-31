@@ -1,3 +1,4 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -20,16 +21,20 @@ class GiveScreen extends StatefulWidget {
 }
 
 class _GiveScreenState extends State<GiveScreen> {
-  String _purpose = 'Tithes & Offerings';
+  String _purpose = 'Tithe';
+  String _settlement = 'card';
   int _amountIndex = 1;
   bool _submitting = false;
   String? _error;
   String? _providerLabel;
   bool _providerActive = false;
+  String? _proofName;
+  List<int>? _proofBytes;
   final TextEditingController _customAmount = TextEditingController();
 
   static const _purposes = <String>[
-    'Tithes & Offerings',
+    'Tithe',
+    'Offering',
     'Missions',
     'Building Project',
     'Seed',
@@ -44,12 +49,10 @@ class _GiveScreenState extends State<GiveScreen> {
 
   String _purposeLabel(String value) {
     switch (value) {
-      case 'Tithes & Offerings':
-        return fhcT(
-          context,
-          'give.purposeTithes',
-          fallback: 'Tithes & Offerings',
-        );
+      case 'Tithe':
+        return fhcT(context, 'give.purposeTithe', fallback: 'Tithe');
+      case 'Offering':
+        return fhcT(context, 'give.purposeOffering', fallback: 'Offering');
       case 'Missions':
         return fhcT(context, 'give.purposeMissions', fallback: 'Missions');
       case 'Building Project':
@@ -63,6 +66,17 @@ class _GiveScreenState extends State<GiveScreen> {
       default:
         return value;
     }
+  }
+
+  String _purposeCode(String value) {
+    return switch (value) {
+      'Tithe' => 'tithe',
+      'Offering' => 'offering',
+      'Missions' => 'missions',
+      'Building Project' => 'projects',
+      'Seed' => 'donation',
+      _ => 'offering',
+    };
   }
 
   @override
@@ -156,6 +170,26 @@ class _GiveScreenState extends State<GiveScreen> {
     return _formatNaira(amount);
   }
 
+  Future<void> _pickProof() async {
+    final picked = await FilePicker.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const ['jpg', 'jpeg', 'png', 'webp', 'pdf'],
+      withData: true,
+      allowMultiple: false,
+    );
+    if (picked == null || picked.files.isEmpty) return;
+    final file = picked.files.first;
+    final bytes = file.bytes ?? const <int>[];
+    if (bytes.isEmpty) return;
+    setState(() {
+      _proofName = file.name;
+      _proofBytes = bytes;
+      _error = null;
+    });
+  }
+
+  bool get _needsProof => _settlement == 'manual';
+
   Future<void> _submit() async {
     final repo = _repo;
     if (repo == null) {
@@ -187,10 +221,44 @@ class _GiveScreenState extends State<GiveScreen> {
       _error = null;
     });
 
+    String? proofId;
+    if (_needsProof || _proofBytes != null) {
+      final bytes = _proofBytes;
+      if (bytes == null || bytes.isEmpty) {
+        setState(() {
+          _submitting = false;
+          _error = fhcT(
+            context,
+            'give.uploadReceiptRequired',
+            fallback:
+                'Upload a photo or PDF of your payment receipt before recording a manual gift.',
+          );
+        });
+        return;
+      }
+      final uploaded = await repo.uploadPaymentProof(
+        bytes: bytes,
+        filename: _proofName ?? 'payment-receipt.jpg',
+      );
+      if (!mounted) return;
+      switch (uploaded) {
+        case AppError(:final failure):
+          setState(() {
+            _submitting = false;
+            _error = paymentFailureMessage(failure);
+          });
+          return;
+        case AppSuccess(:final value):
+          proofId = '${value['id'] ?? value['public_id'] ?? ''}';
+      }
+    }
+
     final amountMinor = amountMajor * 100;
     final result = await repo.initiate({
       'amount_minor': amountMinor,
       'currency': 'NGN',
+      'purpose_code': _purposeCode(_purpose),
+      if (proofId != null && proofId.isNotEmpty) 'proof_file_asset_id': proofId,
     });
 
     if (!mounted) return;
@@ -200,7 +268,23 @@ class _GiveScreenState extends State<GiveScreen> {
         final intentId = '${value['id'] ?? value['ulid'] ?? ''}';
         final provider = '${value['provider_code'] ?? ''}';
         if (provider == 'local_manual' && intentId.isNotEmpty) {
-          final completed = await repo.completeGivingIntent(intentId);
+          if (proofId == null || proofId.isEmpty) {
+            setState(() {
+              _submitting = false;
+              _settlement = 'manual';
+              _error = fhcT(
+                context,
+                'give.uploadReceiptRequired',
+                fallback:
+                    'Upload a photo or PDF of your payment receipt before recording a manual gift.',
+              );
+            });
+            return;
+          }
+          final completed = await repo.completeGivingIntent(
+            intentId,
+            proofFileAssetId: proofId,
+          );
           if (!mounted) return;
           switch (completed) {
             case AppError(:final failure):
@@ -293,6 +377,81 @@ class _GiveScreenState extends State<GiveScreen> {
                   labelOf: _purposeLabel,
                   onSelected: (value) => setState(() => _purpose = value),
                 ),
+                const SizedBox(height: 14),
+                Text(
+                  fhcT(
+                    context,
+                    'give.howAreYouPaying',
+                    fallback: 'How are you paying?',
+                  ),
+                  style: FhcTypography.label,
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _AmountChip(
+                        label: fhcT(context, 'give.cardCheckout', fallback: 'Card'),
+                        selected: _settlement == 'card',
+                        onTap: () => setState(() => _settlement = 'card'),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: _AmountChip(
+                        label: fhcT(
+                          context,
+                          'give.bankTransfer',
+                          fallback: 'Bank transfer',
+                        ),
+                        selected: _settlement == 'manual',
+                        onTap: () => setState(() => _settlement = 'manual'),
+                      ),
+                    ),
+                  ],
+                ),
+                if (_needsProof) ...[
+                  const SizedBox(height: 14),
+                  FhcSurfaceCard(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          fhcT(
+                            context,
+                            'give.paymentReceipt',
+                            fallback: 'Payment receipt',
+                          ),
+                          style: FhcTypography.label,
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          fhcT(
+                            context,
+                            'give.paymentReceiptHint',
+                            fallback:
+                                'Required for manual payment. Tithe and Offering are recorded as separate gifts.',
+                          ),
+                          style: const TextStyle(
+                            fontSize: 12,
+                            height: 1.35,
+                            color: FhcColors.muted,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        FhcPrimaryButton(
+                          label: _proofName ??
+                              fhcT(
+                                context,
+                                'give.uploadReceipt',
+                                fallback: 'Upload receipt',
+                              ),
+                          onPressed: _submitting ? null : _pickProof,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 14),
                 Text(
                   fhcT(context, 'give.amount', fallback: 'Amount'),

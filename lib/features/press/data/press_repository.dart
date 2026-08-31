@@ -48,7 +48,7 @@ final class RemotePressRepository
       if (value == null) continue;
       final key = entry.key;
       // OpenAPI uses filter[language], filter[category], filter[format].
-      if (key == 'language' || key == 'category' || key == 'format') {
+      if (key == 'language' || key == 'category' || key == 'format' || key == 'publication_type') {
         query['filter[$key]'] = '$value';
       } else {
         query[key] = '$value';

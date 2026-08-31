@@ -8,6 +8,7 @@ import '../../../../shared/widgets/async_state.dart';
 import '../../../../shared/widgets/fhc_components.dart';
 import '../../../foundation/presentation/fhc_nav.dart';
 import '../../data/church_repository.dart';
+import '../../data/home_church_name.dart';
 import '../../data/home_church_repository.dart';
 
 class StartHomeChurchStep1Screen extends StatefulWidget {
@@ -27,7 +28,7 @@ class _StartHomeChurchStep1ScreenState
     extends State<StartHomeChurchStep1Screen> {
   FhcAsyncValue<List<ChurchSummary>> _state = const FhcAsyncValue.loading();
   ChurchSummary? _selected;
-  late final TextEditingController _proposedNameController;
+  late final TextEditingController _familyNameController;
   bool _started = false;
 
   ChurchRepositoryImpl? get _churchRepository {
@@ -41,9 +42,12 @@ class _StartHomeChurchStep1ScreenState
   void initState() {
     super.initState();
     final draft = HomeChurchApplicationSession.draft;
-    _proposedNameController = TextEditingController(
-      text: draft.proposedName ?? '',
+    _familyNameController = TextEditingController(
+      text: draft.residenceFamilyName ?? '',
     );
+    _familyNameController.addListener(() {
+      if (mounted) setState(() {});
+    });
   }
 
   @override
@@ -57,7 +61,7 @@ class _StartHomeChurchStep1ScreenState
 
   @override
   void dispose() {
-    _proposedNameController.dispose();
+    _familyNameController.dispose();
     super.dispose();
   }
 
@@ -171,15 +175,15 @@ class _StartHomeChurchStep1ScreenState
       return;
     }
 
-    final proposed = _proposedNameController.text.trim();
-    if (proposed.isEmpty) {
+    final family = _familyNameController.text.trim();
+    if (family.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             fhcT(
               context,
-              'homeChurch.enterProposedName',
-              fallback: 'Enter a proposed home church name.',
+              'homeChurch.enterFamilyName',
+              fallback: 'Enter the family name for this home church.',
             ),
           ),
         ),
@@ -193,7 +197,8 @@ class _StartHomeChurchStep1ScreenState
     draft.administrativeUnitId = unitId;
     draft.churchName = church.name;
     draft.locationLabel = church.location.placeLabel;
-    draft.proposedName = proposed;
+    draft.residenceFamilyName = family;
+    draft.proposedName = composeHomeChurchName(family);
 
     fhcPush(context, FhcRoutes.homeChurchStart2);
   }
@@ -285,18 +290,63 @@ class _StartHomeChurchStep1ScreenState
                                     setState(() => _selected = church),
                               ),
                               const SizedBox(height: 12),
-                              FhcField(
-                                label: fhcT(
+                              Text(
+                                fhcT(
                                   context,
                                   'homeChurch.proposedName',
                                   fallback: 'Proposed home church name',
                                 ),
+                                style: FhcTypography.label,
+                              ),
+                              const SizedBox(height: 7),
+                              DecoratedBox(
+                                decoration: BoxDecoration(
+                                  color: FhcColors.canvas,
+                                  borderRadius: BorderRadius.circular(
+                                    FhcRadius.field,
+                                  ),
+                                  border: Border.all(color: FhcColors.border),
+                                ),
+                                child: const Padding(
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: 14,
+                                    vertical: 14,
+                                  ),
+                                  child: Text(
+                                    kFamilyHouseHomeChurchPrefix,
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w700,
+                                      color: FhcColors.ink,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              FhcField(
+                                label: fhcT(
+                                  context,
+                                  'homeChurch.residenceFamilyName',
+                                  fallback: 'Family name',
+                                ),
                                 hint: fhcT(
                                   context,
-                                  'homeChurch.proposedNameHint',
-                                  fallback: 'e.g. Grace Street Home Church',
+                                  'homeChurch.residenceFamilyNameHint',
+                                  fallback: 'e.g. Onyeuwaoma John',
                                 ),
-                                controller: _proposedNameController,
+                                controller: _familyNameController,
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                composeHomeChurchName(
+                                  _familyNameController.text,
+                                ),
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  height: 1.4,
+                                  fontWeight: FontWeight.w600,
+                                  color: FhcColors.greenDark,
+                                ),
                               ),
                               if (_selected != null) ...[
                                 const SizedBox(height: 10),

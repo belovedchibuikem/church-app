@@ -2,6 +2,7 @@ export 'screens/kingdom_journey_screens.dart';
 export 'screens/language_location_screen.dart';
 export 'screens/module_hub_screen.dart';
 export 'screens/modules_screen.dart';
+export 'screens/onboarding_pager.dart';
 export 'screens/onboarding_connect_screen.dart';
 export 'screens/onboarding_discover_screen.dart';
 export 'screens/onboarding_multiply_screen.dart';

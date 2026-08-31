@@ -57,27 +57,66 @@ class ChurchLocationSummary {
   }
 }
 
+class HomeChurchRef {
+  const HomeChurchRef({
+    required this.id,
+    required this.name,
+    this.status,
+    this.meetingSchedules = const [],
+  });
+
+  final String id;
+  final String name;
+  final String? status;
+  final List<JsonObject> meetingSchedules;
+
+  factory HomeChurchRef.fromJson(Map<String, dynamic> json) {
+    final schedules = json['meeting_schedules'];
+    return HomeChurchRef(
+      id: json['id'] as String? ?? '',
+      name: json['name'] as String? ?? '',
+      status: json['status'] as String?,
+      meetingSchedules: schedules is List
+          ? [
+              for (final item in schedules)
+                if (item is Map) Map<String, Object?>.from(item),
+            ]
+          : const [],
+    );
+  }
+}
+
 class ChurchSummary {
   const ChurchSummary({
     required this.id,
     required this.name,
     required this.location,
     this.publishedAt,
+    this.homeChurches = const [],
   });
 
   final String id;
   final String name;
   final ChurchLocationSummary location;
   final String? publishedAt;
+  final List<HomeChurchRef> homeChurches;
 
   factory ChurchSummary.fromJson(Map<String, dynamic> json) {
     final locationJson =
         json['location'] as Map<String, dynamic>? ?? const {};
+    final homes = json['home_churches'];
     return ChurchSummary(
       id: json['id'] as String? ?? '',
       name: json['name'] as String? ?? '',
       location: ChurchLocationSummary.fromJson(locationJson),
       publishedAt: json['published_at'] as String?,
+      homeChurches: homes is List
+          ? [
+              for (final item in homes)
+                if (item is Map)
+                  HomeChurchRef.fromJson(Map<String, dynamic>.from(item)),
+            ]
+          : const [],
     );
   }
 
@@ -101,6 +140,15 @@ class ChurchSummary {
                   'name': location.administrativeUnitName,
                 },
         },
+        'home_churches': [
+          for (final home in homeChurches)
+            {
+              'id': home.id,
+              'name': home.name,
+              'status': home.status,
+              'meeting_schedules': home.meetingSchedules,
+            },
+        ],
       };
 }
 
@@ -255,7 +303,11 @@ final class ChurchRepositoryImpl
   /// `POST /user/churches/{church}/memberships` (recent MFA). Optional body:
   /// `{home_church_id}`. 422 is mapped honestly (e.g. unlinked person).
   @override
-  Future<AppResult<void>> requestMembership(String churchId) async {
+  Future<AppResult<void>> requestMembership(
+    String churchId, {
+    bool confirmTransfer = false,
+    String? homeChurchId,
+  }) async {
     final transport = _transport;
     if (transport == null) {
       return const AppError(
@@ -271,13 +323,50 @@ final class ChurchRepositoryImpl
       return const AppError(ValidationFailure('Church id is required.'));
     }
 
+    final homeId = homeChurchId?.trim();
     return sendVoid(
       transport,
       ApiRequest(
         method: ApiMethod.post,
         path: '/user/churches/${encodeId(trimmed)}/memberships',
-        body: const <String, Object?>{},
+        body: <String, Object?>{
+          if (confirmTransfer) 'confirm_transfer': true,
+          if (homeId != null && homeId.isNotEmpty) 'home_church_id': homeId,
+        },
         idempotencyKey: newIdempotencyKey('church-mem'),
+      ),
+    );
+  }
+
+  @override
+  Future<AppResult<void>> joinHomeChurch(
+    String homeChurchId, {
+    bool confirmTransfer = false,
+  }) async {
+    final transport = _transport;
+    if (transport == null) {
+      return const AppError(
+        IntegrationUnavailableFailure(
+          'Home church membership requires an authenticated API transport. '
+          'No membership request was submitted.',
+        ),
+      );
+    }
+
+    final trimmed = homeChurchId.trim();
+    if (trimmed.isEmpty) {
+      return const AppError(ValidationFailure('Home church id is required.'));
+    }
+
+    return sendVoid(
+      transport,
+      ApiRequest(
+        method: ApiMethod.post,
+        path: '/user/home-churches/${encodeId(trimmed)}/memberships',
+        body: <String, Object?>{
+          if (confirmTransfer) 'confirm_transfer': true,
+        },
+        idempotencyKey: newIdempotencyKey('home-mem'),
       ),
     );
   }

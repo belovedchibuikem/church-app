@@ -9,6 +9,7 @@ import '../../../../shared/widgets/async_state.dart';
 import '../../../../shared/widgets/fhc_components.dart';
 import '../../../foundation/presentation/fhc_nav.dart';
 import '../../data/church_repository.dart';
+import '../membership_join.dart';
 
 class ChurchDetailScreen extends StatefulWidget {
   const ChurchDetailScreen({
@@ -142,7 +143,11 @@ class _ChurchDetailScreenState extends State<ChurchDetailScreen> {
     }
   }
 
-  Future<void> _requestMembership(ChurchSummary church) async {
+  Future<void> _requestMembership(
+    ChurchSummary church, {
+    String? homeChurchId,
+    bool confirmTransfer = false,
+  }) async {
     if (_membershipBusy) return;
     final repo = _repository;
     if (repo == null) {
@@ -154,7 +159,15 @@ class _ChurchDetailScreenState extends State<ChurchDetailScreen> {
     }
 
     setState(() => _membershipBusy = true);
-    final result = await repo.requestMembership(church.id);
+    final result = homeChurchId == null || homeChurchId.isEmpty
+        ? await repo.requestMembership(
+            church.id,
+            confirmTransfer: confirmTransfer,
+          )
+        : await repo.joinHomeChurch(
+            homeChurchId,
+            confirmTransfer: confirmTransfer,
+          );
     if (!mounted) return;
     setState(() => _membershipBusy = false);
 
@@ -166,17 +179,29 @@ class _ChurchDetailScreenState extends State<ChurchDetailScreen> {
               fhcT(
                 context,
                 'church.membershipStarted',
-                fallback: 'Membership started.',
+                fallback: 'You have joined this church. Open My Church for details and updates.',
               ),
             ),
           ),
         );
+        fhcPush(context, FhcRoutes.myChurch);
       case AppError(:final failure):
         if (failure is IntegrationUnavailableFailure) {
           await fhcApiUnavailable(
             context,
             action: _membershipAction,
           );
+          return;
+        }
+        if (isMembershipTransferRequired(failure)) {
+          final confirmed = await confirmMembershipTransfer(context, failure);
+          if (confirmed && mounted) {
+            await _requestMembership(
+              church,
+              homeChurchId: homeChurchId,
+              confirmTransfer: true,
+            );
+          }
           return;
         }
         ScaffoldMessenger.of(context).showSnackBar(
@@ -317,14 +342,45 @@ class _ChurchDetailScreenState extends State<ChurchDetailScreen> {
                               style: const TextStyle(fontSize: 13, height: 1.45),
                             ),
                           ],
-                          const SizedBox(height: 20),
-                          _Heading(
-                            fhcT(
-                              context,
-                              'church.membershipGroups',
-                              fallback: 'Membership & groups',
+                          if (church.homeChurches.isNotEmpty) ...[
+                            const SizedBox(height: 20),
+                            _Heading(
+                              fhcT(
+                                context,
+                                'church.homeChurchesToJoin',
+                                fallback: 'Home churches',
+                              ),
                             ),
-                          ),
+                            const SizedBox(height: 8),
+                            for (final home in church.homeChurches)
+                              ListTile(
+                                contentPadding: EdgeInsets.zero,
+                                title: Text(home.name),
+                                subtitle: Text(
+                                  home.meetingSchedules.isEmpty
+                                      ? (home.status ?? '')
+                                      : home.meetingSchedules
+                                          .map((row) =>
+                                              '${row['day'] ?? ''} ${row['time'] ?? ''} · ${row['activity'] ?? ''}'
+                                                  .trim())
+                                          .join('\n'),
+                                ),
+                                trailing: IconButton(
+                                  tooltip: fhcT(
+                                    context,
+                                    'church.joinHomeChurch',
+                                    fallback: 'Join this home church',
+                                  ),
+                                  onPressed: _membershipBusy
+                                      ? null
+                                      : () => _requestMembership(
+                                            church,
+                                            homeChurchId: home.id,
+                                          ),
+                                  icon: const Icon(Icons.add_circle_outline),
+                                ),
+                              ),
+                          ],
                           const SizedBox(height: 8),
                           Text(
                             fhcT(
@@ -461,9 +517,9 @@ class _Actions extends StatelessWidget {
                       height: 14,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : const Icon(Icons.group_add_outlined, size: 16),
+                  : const Icon(Icons.add, size: 16),
               label: Text(
-                fhcT(context, 'church.membership', fallback: 'Membership'),
+                fhcT(context, 'church.join', fallback: 'Join'),
                 style: const TextStyle(fontSize: 11),
               ),
               style: OutlinedButton.styleFrom(

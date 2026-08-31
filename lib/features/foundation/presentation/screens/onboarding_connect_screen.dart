@@ -8,7 +8,9 @@ import '../fhc_nav.dart';
 import '../onboarding_actions.dart';
 
 class OnboardingConnectScreen extends StatelessWidget {
-  const OnboardingConnectScreen({super.key});
+  const OnboardingConnectScreen({super.key, this.embedded = false});
+
+  final bool embedded;
 
   static const _copy =
       'Build meaningful relationships,\ngrow in faith, receive prayer\nand serve your community.';
@@ -22,20 +24,19 @@ class OnboardingConnectScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return FhcDevicePage(
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final h = constraints.maxHeight;
-          final compact = h < 760;
-          final photoH = (h * 0.236).clamp(148.0, 198.0);
-          final gap = compact ? 8.0 : 12.0;
+    final page = LayoutBuilder(
+      builder: (context, constraints) {
+        final h = constraints.maxHeight;
+        final compact = h < 760;
+        final photoH = (h * 0.236).clamp(148.0, 198.0);
+        final gap = compact ? 8.0 : 12.0;
 
-          return Padding(
-            padding: EdgeInsets.fromLTRB(20, compact ? 12 : 20, 20, 8),
-            child: Column(
-              children: [
-                Text(
-                  fhcT(context, 'mobile.connect', fallback: 'CONNECT'),
+        return Padding(
+          padding: EdgeInsets.fromLTRB(20, compact ? 12 : 20, 20, 8),
+          child: Column(
+            children: [
+              Text(
+                fhcT(context, 'mobile.connect', fallback: 'CONNECT'),
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                     fontSize: 15,
@@ -110,13 +111,14 @@ class OnboardingConnectScreen extends StatelessWidget {
                     ],
                   ),
                 ),
-                const _ConnectFooter(),
+                if (!embedded) const _ConnectFooter(),
               ],
             ),
           );
         },
-      ),
-    );
+      );
+    if (embedded) return page;
+    return FhcDevicePage(child: page);
   }
 }
 

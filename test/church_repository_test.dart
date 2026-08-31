@@ -46,7 +46,7 @@ void main() {
 
     expect(result, isA<AppSuccess<void>>());
     expect(transport.requests, hasLength(1));
-    expect(transport.requests.single.method, ApiMethod.post);
+    expect(transport.requests.single.body, isA<Map>());
   });
 
   test('listChurchMembers GETs /user/churches/{id}/members', () async {

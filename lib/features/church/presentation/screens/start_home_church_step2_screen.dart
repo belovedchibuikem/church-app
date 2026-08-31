@@ -26,13 +26,84 @@ class _StartHomeChurchStep2ScreenState
     'Sun',
   ];
 
-  static const _times = <String>['5:00 PM', '6:00 PM', '7:00 PM', '8:00 PM'];
+  static const _times = <String>[
+    '9:00 AM',
+    '10:00 AM',
+    '5:00 PM',
+    '6:00 PM',
+    '7:00 PM',
+    '8:00 PM',
+  ];
+
+  static const _activities = <String>[
+    'Main service',
+    'Midweek service',
+    'Prayer meeting',
+    'Fellowship',
+    'Bible study',
+    'Gathering',
+  ];
 
   static const _participants = <String>['10-20', '21-30', '31-50', '50+'];
 
-  final Set<String> _selectedDays = {'Sun'};
-  String _meetingTime = '6:00 PM';
+  final Map<String, _DaySchedule> _schedules = {
+    'Sun': const _DaySchedule(time: '9:00 AM', activity: 'Main service'),
+  };
   String _participantsRange = '10-20';
+
+  @override
+  void initState() {
+    super.initState();
+    final draft = HomeChurchApplicationSession.draft;
+    if (draft.meetingSchedules.isNotEmpty) {
+      _schedules.clear();
+      for (final row in draft.meetingSchedules) {
+        final day = _shortDay(row['day']);
+        final time = _displayTime(row['time']);
+        final activity = row['activity'] ?? 'Gathering';
+        if (day != null && time != null) {
+          _schedules[day] = _DaySchedule(time: time, activity: activity);
+        }
+      }
+    }
+    if (draft.expectedParticipants != null) {
+      final count = draft.expectedParticipants!;
+      _participantsRange = count >= 50
+          ? '50+'
+          : count >= 31
+              ? '31-50'
+              : count >= 21
+                  ? '21-30'
+                  : '10-20';
+    }
+  }
+
+  String? _shortDay(String? api) {
+    return switch (api?.toLowerCase()) {
+      'monday' => 'Mon',
+      'tuesday' => 'Tue',
+      'wednesday' => 'Wed',
+      'thursday' => 'Thu',
+      'friday' => 'Fri',
+      'saturday' => 'Sat',
+      'sunday' => 'Sun',
+      _ => null,
+    };
+  }
+
+  String? _displayTime(String? api) {
+    if (api == null || api.isEmpty) return null;
+    final parsed = meetingTimeApiValue(api);
+    if (parsed == null) return api;
+    final parts = parsed.split(':');
+    if (parts.length < 2) return api;
+    var hour = int.tryParse(parts[0]) ?? 0;
+    final minute = parts[1];
+    final meridiem = hour >= 12 ? 'PM' : 'AM';
+    if (hour == 0) hour = 12;
+    if (hour > 12) hour -= 12;
+    return '$hour:$minute $meridiem';
+  }
 
   void _onBack() {
     if (Navigator.of(context).canPop()) {
@@ -44,8 +115,19 @@ class _StartHomeChurchStep2ScreenState
 
   void _toggleDay(String day) {
     setState(() {
-      if (!_selectedDays.remove(day)) {
-        _selectedDays.add(day);
+      if (_schedules.containsKey(day)) {
+        _schedules.remove(day);
+      } else {
+        _schedules[day] = _DaySchedule(
+          time: day == 'Sun' ? '9:00 AM' : '6:00 PM',
+          activity: switch (day) {
+            'Sun' => 'Main service',
+            'Wed' => 'Midweek service',
+            'Fri' => 'Prayer meeting',
+            'Sat' => 'Fellowship',
+            _ => 'Gathering',
+          },
+        );
       }
     });
   }
@@ -65,6 +147,8 @@ class _StartHomeChurchStep2ScreenState
 
   String _timeLabel(BuildContext context, String time) {
     return switch (time) {
+      '9:00 AM' => fhcT(context, 'homeChurch.time9am', fallback: '9:00 AM'),
+      '10:00 AM' => fhcT(context, 'homeChurch.time10am', fallback: '10:00 AM'),
       '5:00 PM' => fhcT(context, 'homeChurch.time5pm', fallback: '5:00 PM'),
       '6:00 PM' => fhcT(context, 'homeChurch.time6pm', fallback: '6:00 PM'),
       '7:00 PM' => fhcT(context, 'homeChurch.time7pm', fallback: '7:00 PM'),
@@ -164,24 +248,35 @@ class _StartHomeChurchStep2ScreenState
                         const SizedBox(height: 8),
                         _DayChips(
                           days: _days,
-                          selected: _selectedDays,
+                          selected: _schedules.keys.toSet(),
                           labelFor: (day) => _dayLabel(context, day),
                           onToggle: _toggleDay,
                         ),
-                        SizedBox(height: compact ? 14 : 18),
-                        _DropdownField(
-                          label: fhcT(
-                            context,
-                            'homeChurch.meetingTime',
-                            fallback: 'Meeting Time',
-                          ),
-                          value: _meetingTime,
-                          options: _times,
-                          optionLabel: (time) => _timeLabel(context, time),
-                          onChanged:
-                              (value) => setState(() => _meetingTime = value),
-                        ),
-                        const SizedBox(height: 12),
+                        if (_schedules.isNotEmpty) ...[
+                          SizedBox(height: compact ? 12 : 16),
+                          for (final day in _days)
+                            if (_schedules.containsKey(day)) ...[
+                              _ScheduleCard(
+                                dayLabel: _dayLabel(context, day),
+                                time: _schedules[day]!.time,
+                                activity: _schedules[day]!.activity,
+                                times: _times,
+                                activities: _activities,
+                                timeLabel: (time) => _timeLabel(context, time),
+                                onTime: (value) => setState(() {
+                                  _schedules[day] = _schedules[day]!.copyWith(
+                                    time: value,
+                                  );
+                                }),
+                                onActivity: (value) => setState(() {
+                                  _schedules[day] = _schedules[day]!.copyWith(
+                                    activity: value,
+                                  );
+                                }),
+                              ),
+                              const SizedBox(height: 10),
+                            ],
+                        ],
                         _DropdownField(
                           label: fhcT(
                             context,
@@ -204,13 +299,41 @@ class _StartHomeChurchStep2ScreenState
                             fallback: 'Continue',
                           ),
                           onPressed: () {
+                            if (_schedules.isEmpty) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    fhcT(
+                                      context,
+                                      'homeChurch.selectMeetingDay',
+                                      fallback:
+                                          'Select at least one meeting day.',
+                                    ),
+                                  ),
+                                ),
+                              );
+                              return;
+                            }
                             final draft = HomeChurchApplicationSession.draft;
-                            final day = _selectedDays.isEmpty
-                                ? 'Sun'
-                                : _selectedDays.first;
-                            draft.meetingDay = meetingDayApiValue(day);
-                            draft.meetingTime =
-                                meetingTimeApiValue(_meetingTime);
+                            final ordered = [
+                              for (final day in _days)
+                                if (_schedules.containsKey(day)) day,
+                            ];
+                            final primary = ordered.first;
+                            draft.meetingDay = meetingDayApiValue(primary);
+                            draft.meetingTime = meetingTimeApiValue(
+                              _schedules[primary]!.time,
+                            );
+                            draft.meetingSchedules = [
+                              for (final day in ordered)
+                                {
+                                  'day': meetingDayApiValue(day) ?? day,
+                                  'time':
+                                      meetingTimeApiValue(_schedules[day]!.time) ??
+                                          '18:00',
+                                  'activity': _schedules[day]!.activity,
+                                },
+                            ];
                             draft.expectedParticipants =
                                 expectedParticipantsApiValue(
                               _participantsRange,
@@ -284,6 +407,92 @@ class _StepProgress extends StatelessWidget {
             ),
           ),
       ],
+    );
+  }
+}
+
+class _DaySchedule {
+  const _DaySchedule({required this.time, required this.activity});
+
+  final String time;
+  final String activity;
+
+  _DaySchedule copyWith({String? time, String? activity}) {
+    return _DaySchedule(
+      time: time ?? this.time,
+      activity: activity ?? this.activity,
+    );
+  }
+}
+
+class _ScheduleCard extends StatelessWidget {
+  const _ScheduleCard({
+    required this.dayLabel,
+    required this.time,
+    required this.activity,
+    required this.times,
+    required this.activities,
+    required this.timeLabel,
+    required this.onTime,
+    required this.onActivity,
+  });
+
+  final String dayLabel;
+  final String time;
+  final String activity;
+  final List<String> times;
+  final List<String> activities;
+  final String Function(String value) timeLabel;
+  final ValueChanged<String> onTime;
+  final ValueChanged<String> onActivity;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: FhcColors.white,
+        borderRadius: BorderRadius.circular(FhcRadius.sm),
+        border: Border.all(color: FhcColors.border),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              dayLabel,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 8),
+            _DropdownField(
+              label: fhcT(
+                context,
+                'homeChurch.activity',
+                fallback: 'Activity',
+              ),
+              value: activities.contains(activity) ? activity : activities.last,
+              options: activities,
+              optionLabel: (value) => value,
+              onChanged: onActivity,
+            ),
+            const SizedBox(height: 8),
+            _DropdownField(
+              label: fhcT(
+                context,
+                'homeChurch.meetingTime',
+                fallback: 'Meeting Time',
+              ),
+              value: times.contains(time) ? time : times.first,
+              options: times,
+              optionLabel: timeLabel,
+              onChanged: onTime,
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

@@ -1,12 +1,78 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
+import '../../../../core/api/app_failure.dart';
+import '../../../../core/contracts/mobile_repository_contracts.dart';
 import '../../../../core/design_system/fhc_tokens.dart';
+import '../../../../core/di/app_services_scope.dart';
 import '../../../../core/l10n/locale_scope.dart';
+import '../../../../core/routing/fhc_route_args.dart';
 import '../../../../shared/widgets/fhc_components.dart';
 import '../../../foundation/presentation/fhc_nav.dart';
 
-class KcaLessonScreen extends StatelessWidget {
-  const KcaLessonScreen({super.key});
+class KcaLessonScreen extends StatefulWidget {
+  const KcaLessonScreen({super.key, this.lessonId, this.kcaRepository});
+
+  final String? lessonId;
+  final KcaRepository? kcaRepository;
+
+  @override
+  State<KcaLessonScreen> createState() => _KcaLessonScreenState();
+}
+
+class _KcaLessonScreenState extends State<KcaLessonScreen> {
+  bool _busy = false;
+  bool _loading = true;
+  bool _started = false;
+  String? _error;
+  JsonObject? _lesson;
+
+  KcaRepository? get _repo =>
+      widget.kcaRepository ??
+      AppServicesScope.maybeOf(context)?.kcaRepository;
+
+  String? get _lessonId {
+    final explicit = widget.lessonId?.trim();
+    if (explicit != null && explicit.isNotEmpty) return explicit;
+    return FhcRouteArgs.entityIdOf(context);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_started) {
+      _started = true;
+      unawaited(_load());
+    }
+  }
+
+  Future<void> _load() async {
+    final id = _lessonId;
+    final repo = _repo;
+    if (id == null || id.isEmpty || repo == null) {
+      setState(() {
+        _loading = false;
+        _error = 'Lesson id is required.';
+      });
+      return;
+    }
+    await repo.syncQueuedCompletions();
+    final result = await repo.getLesson(id);
+    if (!mounted) return;
+    switch (result) {
+      case AppSuccess(:final value):
+        setState(() {
+          _lesson = value;
+          _loading = false;
+        });
+      case AppError(:final failure):
+        setState(() {
+          _error = failure.message;
+          _loading = false;
+        });
+    }
+  }
 
   void _onBack(BuildContext context) {
     if (Navigator.of(context).canPop()) {
@@ -16,124 +82,91 @@ class KcaLessonScreen extends StatelessWidget {
     }
   }
 
-  void _onContinue(BuildContext context) {
-    fhcPush(context, FhcRoutes.kcaAssignments);
+  Future<void> _onContinue(BuildContext context) async {
+    final id = _lessonId;
+    final repo = _repo;
+    if (id == null || id.isEmpty || repo == null) {
+      fhcPush(context, FhcRoutes.kcaAssignments);
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    final result = await repo.completeLesson(
+      id,
+      acknowledged: true,
+      unlockToken: '${_lesson?['unlock_token'] ?? ''}',
+    );
+    if (!mounted) return;
+    setState(() => _busy = false);
+    switch (result) {
+      case AppSuccess():
+        fhcPush(context, FhcRoutes.kcaAssignments);
+      case AppError(:final failure):
+        setState(() => _error = failure.message);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final items = <_LessonItem>[
-      _LessonItem(
-        icon: Icons.play_arrow_rounded,
-        label: fhcT(
-          context,
-          'member.kca.videoLesson',
-          fallback: 'Video Lesson',
-        ),
-        done: true,
-      ),
-      _LessonItem(
-        icon: Icons.description_outlined,
-        label: fhcT(context, 'member.kca.studyNotes', fallback: 'Study Notes'),
-        done: true,
-      ),
-      _LessonItem(
-        icon: Icons.menu_book_outlined,
-        label: fhcT(
-          context,
-          'member.kca.keyScriptures',
-          fallback: 'Key Scriptures',
-        ),
-        done: true,
-      ),
-      _LessonItem(
-        icon: Icons.assignment_outlined,
-        label: fhcT(
-          context,
-          'member.kca.practicalAssignment',
-          fallback: 'Practical Assignment',
-        ),
-        done: false,
-      ),
-      _LessonItem(
-        icon: Icons.quiz_outlined,
-        label: fhcT(context, 'member.kca.quiz', fallback: 'Quiz'),
-        done: false,
-      ),
-    ];
+    final title = '${_lesson?['title'] ?? ''}'.trim();
+    final body = '${_lesson?['body'] ?? _lesson?['summary'] ?? ''}'.trim();
+    final contentUrl = '${_lesson?['content_url'] ?? ''}'.trim();
 
     return FhcDevicePage(
       backgroundColor: FhcColors.canvas,
       child: Column(
         children: [
           FhcTopBar(
-            title: fhcT(
-              context,
-              'member.kca.leadershipInfluence',
-              fallback: 'LEADERSHIP & INFLUENCE',
-            ),
+            title: title.isEmpty
+                ? fhcT(context, 'member.kca.lessonContent', fallback: 'Lesson')
+                : title,
             onBack: () => _onBack(context),
           ),
           Expanded(
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-              children: [
-                Text(
-                  fhcT(
-                    context,
-                    'member.kca.moduleOf',
-                    args: {'current': '8', 'total': '12'},
-                    fallback: 'Module {current} of {total}',
-                  ),
-                  textAlign: TextAlign.center,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                    color: FhcColors.muted,
-                    height: 1.2,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                const _VideoPlayer(),
-                const SizedBox(height: 18),
-                Text(
-                  fhcT(
-                    context,
-                    'member.kca.lessonContent',
-                    fallback: 'Lesson Content',
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: FhcColors.ink,
-                    height: 1.2,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                FhcSurfaceCard(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  child: Column(
+            child: _loading
+                ? const Center(child: CircularProgressIndicator())
+                : ListView(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
                     children: [
-                      for (var i = 0; i < items.length; i++) ...[
-                        if (i > 0)
-                          const Divider(height: 1, color: FhcColors.border),
-                        _ChecklistRow(item: items[i]),
+                      if (contentUrl.isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        const _VideoPlayer(),
+                        const SizedBox(height: 12),
                       ],
+                      Text(
+                        body.isEmpty
+                            ? fhcT(
+                                context,
+                                'member.kca.lessonContent',
+                                fallback: 'Lesson body is empty.',
+                              )
+                            : body,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          height: 1.4,
+                          color: FhcColors.ink,
+                        ),
+                      ),
                     ],
                   ),
-                ),
-              ],
-            ),
           ),
+          if (_error != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Text(
+                _error!,
+                style: const TextStyle(color: FhcColors.muted, fontSize: 12),
+              ),
+            ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
             child: FhcPrimaryButton(
-              label: fhcT(context, 'common.continue', fallback: 'Continue'),
-              onPressed: () => _onContinue(context),
+              label: _busy
+                  ? fhcT(context, 'common.saving', fallback: 'Saving…')
+                  : fhcT(context, 'common.continue', fallback: 'Continue'),
+              onPressed: _busy ? null : () => _onContinue(context),
             ),
           ),
           const FhcBottomNavigation(selected: 1),

@@ -113,20 +113,21 @@ final class GeographyCatalog {
     }
   }
 
-  Future<List<String>> fetchStates(String countryName) async {
-    final name = countryName.trim();
+  Future<List<String>> fetchStates(String countryCodeOrName) async {
+    final name = countryCodeOrName.trim();
     if (name.isEmpty) return const [];
     final key = name.toLowerCase();
     final cached = _statesCache[key];
     if (cached != null) return cached;
 
-    final iso = await _isoForCountryName(name);
+    final iso = _isoHint(name) ?? await _isoForCountryName(name);
     if (iso != null) {
       final fromApi = await _fetchLaravelStates(iso);
       if (fromApi != null) {
         _statesCache[key] = fromApi;
         return fromApi;
       }
+      throw StateError('Unable to load states from the platform catalogue.');
     }
 
     final response = await _http
@@ -156,21 +157,22 @@ final class GeographyCatalog {
     return names;
   }
 
-  Future<List<String>> fetchCities(String countryName, String stateName) async {
-    final country = countryName.trim();
+  Future<List<String>> fetchCities(String countryCodeOrName, String stateName) async {
+    final country = countryCodeOrName.trim();
     final state = stateName.trim();
     if (country.isEmpty || state.isEmpty) return const [];
     final key = '${country.toLowerCase()}::${state.toLowerCase()}';
     final cached = _citiesCache[key];
     if (cached != null) return cached;
 
-    final iso = await _isoForCountryName(country);
+    final iso = _isoHint(country) ?? await _isoForCountryName(country);
     if (iso != null) {
       final fromApi = await _fetchLaravelLocalities(iso, state);
       if (fromApi != null) {
         _citiesCache[key] = fromApi;
         return fromApi;
       }
+      throw StateError('Unable to load local areas from the platform catalogue.');
     }
 
     final response = await _http
@@ -203,6 +205,12 @@ final class GeographyCatalog {
       if (country.code == normalized) return country.name;
     }
     return normalized;
+  }
+
+  String? _isoHint(String value) {
+    final trimmed = value.trim();
+    if (trimmed.length == 2) return trimmed.toUpperCase();
+    return null;
   }
 
   Future<String?> _isoForCountryName(String countryName) async {
@@ -252,7 +260,7 @@ final class GeographyCatalog {
           .timeout(const Duration(seconds: 12));
       if (response.statusCode < 200 || response.statusCode >= 300) return null;
       final data = _envelopeData(response.body);
-      if (data is! List || data.isEmpty) return null;
+      if (data is! List) return null;
       return [
         for (final item in data)
           if (item is Map) '${item['name'] ?? ''}'.trim(),
@@ -275,7 +283,7 @@ final class GeographyCatalog {
           .timeout(const Duration(seconds: 12));
       if (response.statusCode < 200 || response.statusCode >= 300) return null;
       final data = _envelopeData(response.body);
-      if (data is! List || data.isEmpty) return null;
+      if (data is! List) return null;
       return [
         for (final item in data)
           if (item is Map) '${item['name'] ?? ''}'.trim(),

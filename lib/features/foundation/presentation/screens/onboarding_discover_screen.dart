@@ -8,7 +8,9 @@ import '../fhc_nav.dart';
 import '../onboarding_actions.dart';
 
 class OnboardingDiscoverScreen extends StatelessWidget {
-  const OnboardingDiscoverScreen({super.key});
+  const OnboardingDiscoverScreen({super.key, this.embedded = false});
+
+  final bool embedded;
 
   static const _copy =
       'Find churches, online fellowship,\nevents, resources and more.\nYou are never alone.';
@@ -37,20 +39,19 @@ class OnboardingDiscoverScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return FhcDevicePage(
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final h = constraints.maxHeight;
-          final photoH = (h * 0.236).clamp(148.0, 198.0);
-          final cardH = (h * 0.112).clamp(78.0, 102.0);
-          final gap = h < 760 ? 8.0 : 12.0;
+    final page = LayoutBuilder(
+      builder: (context, constraints) {
+        final h = constraints.maxHeight;
+        final photoH = (h * 0.236).clamp(148.0, 198.0);
+        final cardH = (h * 0.112).clamp(78.0, 102.0);
+        final gap = h < 760 ? 8.0 : 12.0;
 
-          return Padding(
-            padding: EdgeInsets.fromLTRB(20, h < 760 ? 12 : 20, 20, 8),
-            child: Column(
-              children: [
-                Text(
-                  fhcT(context, 'mobile.discover', fallback: 'DISCOVER'),
+        return Padding(
+          padding: EdgeInsets.fromLTRB(20, h < 760 ? 12 : 20, 20, 8),
+          child: Column(
+            children: [
+              Text(
+                fhcT(context, 'mobile.discover', fallback: 'DISCOVER'),
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                     fontSize: 15,
@@ -143,13 +144,14 @@ class OnboardingDiscoverScreen extends StatelessWidget {
                   ),
                 ),
                 const Spacer(),
-                const _DiscoverFooter(),
+                if (!embedded) const _DiscoverFooter(),
               ],
             ),
           );
         },
-      ),
-    );
+      );
+    if (embedded) return page;
+    return FhcDevicePage(child: page);
   }
 }
 

@@ -9,6 +9,7 @@ import '../../../../shared/widgets/fhc_components.dart';
 import '../../../foundation/presentation/fhc_nav.dart';
 import '../../../maps/presentation/widgets/interactive_church_map.dart';
 import '../../data/church_repository.dart';
+import '../membership_join.dart';
 
 class FindChurchesScreen extends StatefulWidget {
   const FindChurchesScreen({super.key, this.repository});
@@ -115,6 +116,68 @@ class _FindChurchesScreenState extends State<FindChurchesScreen> {
     fhcPush(context, '/discover/church/${church.id}');
   }
 
+  Future<void> _joinChurch(
+    ChurchSummary church, {
+    bool confirmTransfer = false,
+  }) async {
+    final repo = _repository;
+    if (repo == null) {
+      await fhcApiUnavailable(
+        context,
+        action: fhcT(
+          context,
+          'church.membershipAction',
+          fallback: 'Membership for this church',
+        ),
+      );
+      return;
+    }
+
+    final result = await repo.requestMembership(
+      church.id,
+      confirmTransfer: confirmTransfer,
+    );
+    if (!mounted) return;
+    switch (result) {
+      case AppSuccess():
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              fhcT(
+                context,
+                'church.membershipStarted',
+                fallback:
+                    'You have joined this church. Open My Church for details and updates.',
+              ),
+            ),
+          ),
+        );
+        fhcPush(context, FhcRoutes.myChurch);
+      case AppError(:final failure):
+        if (failure is IntegrationUnavailableFailure) {
+          await fhcApiUnavailable(
+            context,
+            action: fhcT(
+              context,
+              'church.membershipAction',
+              fallback: 'Membership for this church',
+            ),
+          );
+          return;
+        }
+        if (isMembershipTransferRequired(failure)) {
+          final confirmed = await confirmMembershipTransfer(context, failure);
+          if (confirmed && mounted) {
+            await _joinChurch(church, confirmTransfer: true);
+          }
+          return;
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(failure.message)),
+        );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return FhcDevicePage(
@@ -169,6 +232,7 @@ class _FindChurchesScreenState extends State<FindChurchesScreen> {
                             _ChurchCard(
                               church: churches[i],
                               onOpen: () => _openChurch(churches[i]),
+                              onJoin: () => _joinChurch(churches[i]),
                             ),
                           ],
                         ],
@@ -403,10 +467,15 @@ class _SectionTitle extends StatelessWidget {
 }
 
 class _ChurchCard extends StatelessWidget {
-  const _ChurchCard({required this.church, required this.onOpen});
+  const _ChurchCard({
+    required this.church,
+    required this.onOpen,
+    required this.onJoin,
+  });
 
   final ChurchSummary church;
   final VoidCallback onOpen;
+  final VoidCallback onJoin;
 
   @override
   Widget build(BuildContext context) {
@@ -467,6 +536,15 @@ class _ChurchCard extends StatelessWidget {
                   ),
                 ),
                 const Icon(Icons.chevron_right, color: FhcColors.muted),
+                IconButton(
+                  tooltip: fhcT(
+                    context,
+                    'church.join',
+                    fallback: 'Join this church',
+                  ),
+                  onPressed: onJoin,
+                  icon: const Icon(Icons.add_circle_outline),
+                ),
               ],
             ),
           ),

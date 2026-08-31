@@ -24,9 +24,11 @@ final class HomeChurchApplicationDraft {
   String? preferredName;
 
   String? proposedName;
+  String? residenceFamilyName;
   int? expectedParticipants;
   String? meetingDay;
   String? meetingTime;
+  List<Map<String, String>> meetingSchedules = [];
 
   String? contactEmail;
   String? contactPhone;
@@ -46,9 +48,11 @@ final class HomeChurchApplicationDraft {
     familyName = null;
     preferredName = null;
     proposedName = null;
+    residenceFamilyName = null;
     expectedParticipants = null;
     meetingDay = null;
     meetingTime = null;
+    meetingSchedules = [];
     contactEmail = null;
     contactPhone = null;
     guidelinesAgreed = false;
@@ -67,9 +71,11 @@ final class HomeChurchApplicationDraft {
           'preferred_name': preferredName,
         },
         'proposed_name': proposedName,
+        'residence_family_name': residenceFamilyName,
         'expected_participants': expectedParticipants,
         'meeting_day': meetingDay,
         'meeting_time': meetingTime,
+        'meeting_schedules': meetingSchedules,
         'contact_email': contactEmail,
         'contact_phone': contactPhone,
         'guidelines_agreed': guidelinesAgreed,
@@ -156,7 +162,7 @@ final class HomeChurchRepositoryImpl
     requireField('administrative_unit_id', draft.administrativeUnitId);
     requireField('applicant.given_name', draft.givenName);
     requireField('applicant.family_name', draft.familyName);
-    requireField('proposed_name', draft.proposedName);
+    requireField('residence_family_name', draft.residenceFamilyName ?? draft.proposedName);
     requireField('meeting_day', draft.meetingDay);
     requireField('meeting_time', draft.meetingTime);
     requireField('contact_email', draft.contactEmail);
@@ -232,6 +238,7 @@ final class HomeChurchRepositoryImpl
       ..locationId = application['location_id'] as String?
       ..administrativeUnitId = application['administrative_unit_id'] as String?
       ..proposedName = application['proposed_name'] as String?
+      ..residenceFamilyName = application['residence_family_name'] as String?
       ..expectedParticipants =
           (application['expected_participants'] as num?)?.toInt()
       ..meetingDay = application['meeting_day'] as String?
@@ -239,6 +246,19 @@ final class HomeChurchRepositoryImpl
       ..contactEmail = application['contact_email'] as String?
       ..contactPhone = application['contact_phone'] as String?
       ..guidelinesAgreed = application['guidelines_agreed'] == true;
+
+    final schedules = application['meeting_schedules'];
+    if (schedules is List) {
+      draft.meetingSchedules = [
+        for (final row in schedules)
+          if (row is Map)
+            {
+              'day': '${row['day'] ?? ''}',
+              'time': '${row['time'] ?? ''}',
+              'activity': '${row['activity'] ?? ''}',
+            },
+      ];
+    }
 
     final applicant = application['applicant'];
     if (applicant is Map) {

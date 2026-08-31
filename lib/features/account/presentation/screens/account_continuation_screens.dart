@@ -1949,7 +1949,8 @@ class _AccountContinuationScreenState extends State<AccountContinuationScreen>
       ),
       const WorkflowSectionTitle('May 2025'),
       _rows(const [
-        ('Tithe & Offering', 'May 19, 2025  •  NGN 10,000.00'),
+        ('Tithe', 'May 19, 2025  •  NGN 10,000.00'),
+        ('Offering', 'May 18, 2025  •  NGN 5,000.00'),
         ('Missions', 'May 15, 2025  •  NGN 5,000.00'),
         ('Church Building Project', 'May 10, 2025  •  NGN 20,000.00'),
         ('KCA Training', 'May 7, 2025  •  NGN 15,000.00'),
@@ -1965,7 +1966,7 @@ class _AccountContinuationScreenState extends State<AccountContinuationScreen>
       _details([
         (
           fhcT(context, 'account.purpose', fallback: 'Purpose'),
-          'Tithe & Offering',
+          'Tithe',
         ),
         (
           fhcT(context, 'account.referenceId', fallback: 'Reference ID'),
@@ -2356,7 +2357,7 @@ class _AccountContinuationScreenState extends State<AccountContinuationScreen>
   static const _receiptDetails = [
     ('Amount', 'NGN 10,000.00'),
     ('Currency', 'NGN'),
-    ('Purpose', 'Tithe & Offering'),
+    ('Purpose', 'Tithe'),
     ('Reference ID', 'PAY-2025-0519-000123'),
     ('Date', 'May 19, 2025 • 10:30 AM'),
     ('Payment Method', 'Mastercard •••• 4242'),

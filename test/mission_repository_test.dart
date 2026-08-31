@@ -109,6 +109,56 @@ void main() {
       'follow_up_completed',
     );
   });
+
+  test('getSoul GETs /admin/mission/souls/{id}', () async {
+    final transport = ScriptedTransport((request) async {
+      expect(request.method, ApiMethod.get);
+      expect(request.path, '/admin/mission/souls/$_soulId');
+      return AppSuccess(
+        const ApiResponse(
+          statusCode: 200,
+          body: {
+            'data': {'id': _soulId, 'status': 'new', 'converted_at': null},
+            'meta': <String, Object?>{},
+            'correlation_id': 'corr-soul',
+          },
+        ),
+      );
+    });
+    final repo = HttpMissionRepository(
+      baseUrl: 'http://example.test/api/v1',
+      transport: transport,
+    );
+    final result = await repo.getSoul(_soulId);
+    expect(result, isA<AppSuccess<JsonObject>>());
+    expect((result as AppSuccess<JsonObject>).value['converted_at'], isNull);
+  });
+
+  test('submitInvitation POSTs /user/mission/invitations', () async {
+    final transport = ScriptedTransport((request) async {
+      expect(request.method, ApiMethod.post);
+      expect(request.path, '/user/mission/invitations');
+      final body = request.body as Map<String, Object?>;
+      expect(body['title'], 'Invite us');
+      return AppSuccess(
+        const ApiResponse(
+          statusCode: 201,
+          body: {
+            'data': {'id': _soulId, 'status': 'received'},
+            'meta': <String, Object?>{},
+            'correlation_id': 'corr-invite',
+          },
+        ),
+      );
+    });
+    final repo = HttpMissionRepository(
+      baseUrl: 'http://example.test/api/v1',
+      transport: transport,
+    );
+    final result = await repo.submitInvitation({'title': 'Invite us'});
+    expect(result, isA<AppSuccess<JsonObject>>());
+    expect((result as AppSuccess<JsonObject>).value['status'], 'received');
+  });
 }
 
 final class ScriptedTransport implements ApiTransport {

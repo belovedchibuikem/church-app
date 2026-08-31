@@ -579,20 +579,16 @@ class _EventPaymentScreenState extends State<EventPaymentScreen> {
           return;
         }
         if (provider == 'local_manual' && intentId.isNotEmpty) {
-          final completed = await repo.completeGivingIntent(intentId);
-          if (!mounted) return;
-          switch (completed) {
-            case AppError(:final failure):
-              setState(() {
-                _submitting = false;
-                _error = paymentFailureMessage(failure);
-              });
-              return;
-            case AppSuccess():
-              setState(() => _submitting = false);
-              fhcPush(context, '/events/tickets?id=${Uri.encodeComponent(id)}');
-              return;
-          }
+          setState(() {
+            _submitting = false;
+            _error = fhcT(
+              context,
+              'events.manualPaymentReceiptRequired',
+              fallback:
+                  'Manual event payment needs a receipt upload from Give, or wait for the provider webhook.',
+            );
+          });
+          return;
         }
         final checkoutUrl = hostedCheckoutUrlOf(value);
         if (checkoutUrl != null) {

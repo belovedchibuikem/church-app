@@ -238,6 +238,8 @@ class _ModuleDetail {
             id: '${map['id'] ?? ''}',
             number: number,
             title: '${map['title'] ?? map['code'] ?? 'Lesson'}',
+            unlocked: map['unlocked'] == true,
+            lockReason: '${map['lock_reason'] ?? ''}',
           ),
         );
       }
@@ -397,11 +399,15 @@ class _LessonSpec {
     required this.id,
     required this.number,
     required this.title,
+    this.unlocked = false,
+    this.lockReason = '',
   });
 
   final String id;
   final int number;
   final String title;
+  final bool unlocked;
+  final String lockReason;
 }
 
 class _LessonsTab extends StatelessWidget {
@@ -454,7 +460,13 @@ class _LessonRow extends StatelessWidget {
           border: Border.all(color: FhcColors.border),
           boxShadow: FhcElevation.card,
         ),
-        child: Padding(
+        child: InkWell(
+          onTap: lesson.id.isEmpty
+              ? null
+              : () => Navigator.of(context).pushNamed(
+                    '/kca/lesson/${lesson.id}',
+                  ),
+          child: Padding(
           padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
           child: Row(
             children: [
@@ -495,11 +507,23 @@ class _LessonRow extends StatelessWidget {
                         height: 1.2,
                       ),
                     ),
+                    if (!lesson.unlocked && lesson.lockReason.isNotEmpty)
+                      Text(
+                        lesson.lockReason,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: FhcColors.muted,
+                          height: 1.2,
+                        ),
+                      ),
                   ],
                 ),
               ),
             ],
           ),
+        ),
         ),
       ),
     );

@@ -70,4 +70,31 @@ void main() {
     expect(failure, isA<NotFoundFailure>());
     expect(failure.message, contains('not found'));
   });
+
+  test('search maps publication_type onto filter query', () async {
+    final client = MockClient((request) async {
+      expect(request.method, 'GET');
+      expect(request.url.path, '/api/v1/press/publications');
+      expect(request.url.queryParameters['filter[publication_type]'], 'sermon');
+      return http.Response(
+        jsonEncode({
+          'data': [
+            {'id': _publicationId, 'title': 'Hope Sunday', 'publication_type': 'sermon'},
+          ],
+          'meta': <String, Object?>{},
+        }),
+        200,
+        headers: {'content-type': 'application/json'},
+      );
+    });
+
+    final repo = RemotePressRepository(
+      baseUrl: 'http://example.test/api/v1',
+      httpClient: client,
+    );
+    final result = await repo.search({'publication_type': 'sermon'});
+    expect(result, isA<AppSuccess<List<JsonObject>>>());
+    final value = (result as AppSuccess<List<JsonObject>>).value;
+    expect(value.first['publication_type'], 'sermon');
+  });
 }

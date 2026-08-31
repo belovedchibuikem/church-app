@@ -100,7 +100,7 @@ class _GeographySelectState extends State<GeographySelect> {
       _statesError = null;
     });
     try {
-      final list = await _catalog.fetchStates(name);
+      final list = await _catalog.fetchStates(_countryCode);
       if (!mounted) return;
       setState(() {
         _states = list;
@@ -135,7 +135,7 @@ class _GeographySelectState extends State<GeographySelect> {
       _citiesError = null;
     });
     try {
-      final list = await _catalog.fetchCities(country, region);
+      final list = await _catalog.fetchCities(_countryCode, region);
       if (!mounted) return;
       setState(() {
         _cities = list;

@@ -21,7 +21,15 @@ abstract interface class ProfileRepository {
 abstract interface class ChurchRepository {
   Future<AppResult<List<JsonObject>>> searchChurches(JsonObject filters);
   Future<AppResult<JsonObject>> getChurch(String id);
-  Future<AppResult<void>> requestMembership(String churchId);
+  Future<AppResult<void>> requestMembership(
+    String churchId, {
+    bool confirmTransfer = false,
+    String? homeChurchId,
+  });
+  Future<AppResult<void>> joinHomeChurch(
+    String homeChurchId, {
+    bool confirmTransfer = false,
+  });
   Future<AppResult<List<JsonObject>>> listMemberships();
   Future<AppResult<List<JsonObject>>> listChurchMembers(String churchId);
   Future<AppResult<List<JsonObject>>> listGroups();
@@ -50,6 +58,7 @@ abstract interface class MissionRepository {
 }
 
 abstract interface class KcaRepository {
+  Future<AppResult<JsonObject>> getAccess();
   Future<AppResult<JsonObject>> getDashboard();
   Future<AppResult<List<JsonObject>>> listModules();
   Future<AppResult<JsonObject>> getModule(String moduleId);
@@ -58,6 +67,14 @@ abstract interface class KcaRepository {
   Future<AppResult<JsonObject>> getMentor();
   Future<AppResult<List<JsonObject>>> listAttendance();
   Future<AppResult<JsonObject>> submitEvidence(JsonObject evidence);
+  Future<AppResult<JsonObject>> getLesson(String lessonId);
+  Future<AppResult<JsonObject>> completeLesson(
+    String lessonId, {
+    bool acknowledged = true,
+    String? idempotencyKey,
+    String? unlockToken,
+  });
+  Future<AppResult<void>> syncQueuedCompletions();
   Future<AppResult<JsonObject>> getCurrentApplication();
   Future<AppResult<JsonObject>> submitApplication(
     JsonObject applicationData, {
@@ -114,7 +131,14 @@ abstract interface class PaymentRepository {
   Future<AppResult<JsonObject>> initiate(JsonObject payment);
   /// Completes a local_manual giving intent. Hosted Paystack/Flutterwave/Stripe
   /// checkout is completed by the provider webhook, then polled via [getIntent].
-  Future<AppResult<JsonObject>> completeGivingIntent(String intentId);
+  Future<AppResult<JsonObject>> completeGivingIntent(
+    String intentId, {
+    String? proofFileAssetId,
+  });
+  Future<AppResult<JsonObject>> uploadPaymentProof({
+    required List<int> bytes,
+    required String filename,
+  });
   Future<AppResult<JsonObject>> initiateEventPayment(String registrationId);
   Future<AppResult<JsonObject>> getConfiguration();
   Future<AppResult<JsonObject>> getTransaction(String id);

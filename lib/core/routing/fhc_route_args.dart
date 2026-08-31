@@ -145,8 +145,8 @@ CanonicalRoute resolveCanonicalRoute(String requestedRoute) {
         entityId: parts[2],
       );
     }
-    if (parts.length >= 3 && parts[0] == 'kca' && parts[1] == 'module') {
-      return CanonicalRoute(canonical: '/kca/module', entityId: parts[2]);
+    if (parts.length >= 3 && parts[0] == 'kca' && parts[1] == 'lesson') {
+      return CanonicalRoute(canonical: '/kca/lesson', entityId: parts[2]);
     }
     if (parts.length >= 3 && parts[0] == 'kca' && parts[1] == 'assignment') {
       return CanonicalRoute(

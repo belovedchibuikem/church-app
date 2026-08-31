@@ -73,6 +73,36 @@ void main() {
     expect(find.text('Language & Location'), findsOneWidget);
   });
 
+  testWidgets('onboarding swipes and dots move between slides', (
+    tester,
+  ) async {
+    await pumpApp(
+      tester,
+      launchStore: MemoryAppLaunchStore(),
+      initialRoute: '/onboarding/discover',
+    );
+    expect(find.text('DISCOVER'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Next'));
+    await tester.pumpAndSettle();
+    expect(find.text('CONNECT'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('onboarding-dot-0')));
+    await tester.pumpAndSettle();
+    expect(find.text('DISCOVER'), findsOneWidget);
+
+    final pageCenter = tester.getCenter(find.byType(PageView));
+    final gesture = await tester.startGesture(pageCenter);
+    await gesture.moveBy(const Offset(-280, 0));
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(find.text('CONNECT'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('onboarding-dot-2')));
+    await tester.pumpAndSettle();
+    expect(find.text('MULTIPLY'), findsOneWidget);
+  });
+
   testWidgets('choosing French rebuilds chrome from the message catalog', (
     tester,
   ) async {

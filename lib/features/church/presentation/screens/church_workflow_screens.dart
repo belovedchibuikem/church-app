@@ -592,11 +592,7 @@ class ChurchFinanceScreen extends StatelessWidget {
           child: Column(
             children: [
               WorkflowRow(
-                title: fhcT(
-                  context,
-                  'homeChurch.tithesOffering',
-                  fallback: 'Tithes & Offering',
-                ),
+                title: fhcT(context, 'homeChurch.tithe', fallback: 'Tithe'),
                 subtitle: fhcT(
                   context,
                   'homeChurch.may16_2025',
@@ -604,7 +600,24 @@ class ChurchFinanceScreen extends StatelessWidget {
                 ),
                 leading: Icons.account_balance_outlined,
                 trailing: const Text(
-                  '₦420,000',
+                  '₦250,000',
+                  style: TextStyle(
+                    color: FhcColors.green,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              WorkflowRow(
+                title: fhcT(context, 'homeChurch.offering', fallback: 'Offering'),
+                subtitle: fhcT(
+                  context,
+                  'homeChurch.may16_2025',
+                  fallback: 'May 16, 2025',
+                ),
+                leading: Icons.account_balance_outlined,
+                trailing: const Text(
+                  '₦170,000',
                   style: TextStyle(
                     color: FhcColors.green,
                     fontSize: 11,

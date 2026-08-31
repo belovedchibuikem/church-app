@@ -133,7 +133,7 @@ final class HttpMissionRepository
     );
   }
 
-  /// No `GET /admin/mission/souls/{id}` — detail is unbound.
+  /// GET /admin/mission/souls/{id}
   @override
   Future<AppResult<JsonObject>> getSoul(String id) async {
     final soulId = id.trim();
@@ -142,7 +142,50 @@ final class HttpMissionRepository
         ValidationFailure('A valid soul journey ULID is required.'),
       );
     }
-    return const AppError(_soulDetailUnavailable);
+    final transport = _transport;
+    if (transport == null) {
+      return const AppError(_adminTransportRequired);
+    }
+    final scopeHeaders = <String, String>{};
+    _ensureScopeHeaders(scopeHeaders);
+    return sendObject(
+      transport,
+      ApiRequest(
+        method: ApiMethod.get,
+        path: '/admin/mission/souls/${encodeId(soulId)}',
+        headers: scopeHeaders,
+      ),
+    );
+  }
+
+  /// POST /user/mission/invitations
+  Future<AppResult<JsonObject>> submitInvitation(JsonObject payload) async {
+    final transport = _transport;
+    if (transport == null) {
+      return const AppError(_adminTransportRequired);
+    }
+    final title = _stringField(payload, 'title');
+    if (title == null) {
+      return const AppError(ValidationFailure('A title is required.'));
+    }
+    return sendObject(
+      transport,
+      ApiRequest(
+        method: ApiMethod.post,
+        path: '/user/mission/invitations',
+        body: {
+          'title': title,
+          if (_stringField(payload, 'type') != null) 'type': _stringField(payload, 'type'),
+          if (_stringField(payload, 'start') != null) 'start': _stringField(payload, 'start'),
+          if (_stringField(payload, 'location') != null) 'location': _stringField(payload, 'location'),
+          if (_stringField(payload, 'details') != null) 'details': _stringField(payload, 'details'),
+          'idempotency_key': _stringField(payload, 'idempotency_key') ??
+              newIdempotencyKey('mission-invite'),
+        },
+        idempotencyKey: _stringField(payload, 'idempotency_key') ??
+            newIdempotencyKey('mission-invite'),
+      ),
+    );
   }
 
   /// POST /admin/mission/crusades/{crusade}/souls
@@ -535,11 +578,6 @@ final class HttpMissionRepository
 const IntegrationUnavailableFailure _adminTransportRequired =
     IntegrationUnavailableFailure(
   'Admin mission soul/mentor operations require an authenticated API transport (bearer, device binding, scope headers, recent MFA).',
-);
-
-const IntegrationUnavailableFailure _soulDetailUnavailable =
-    IntegrationUnavailableFailure(
-  'Soul detail is unbound: Laravel exposes GET /admin/mission/souls (list) but not GET /admin/mission/souls/{id}.',
 );
 
 /// Shared copy for UI when a mission admin mutation cannot run.

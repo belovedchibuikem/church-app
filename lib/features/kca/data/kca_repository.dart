@@ -3,6 +3,7 @@ import '../../../core/api/app_failure.dart';
 import '../../../core/api/fhc_api_config.dart';
 import '../../../core/api/transport_repository_helpers.dart';
 import '../../../core/contracts/mobile_repository_contracts.dart';
+import 'kca_lesson_completion_queue.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 
@@ -14,13 +15,16 @@ final class HttpKcaRepository
     ApiTransport? transport,
     String? baseUrl,
     http.Client? httpClient,
+    KcaLessonCompletionQueue? completionQueue,
   })  : _transport = transport,
         baseUrl = resolveFhcApiUrl(override: baseUrl),
-        _http = httpClient ?? http.Client();
+        _http = httpClient ?? http.Client(),
+        _completionQueue = completionQueue ?? KcaLessonCompletionQueue();
 
   final ApiTransport? _transport;
   final String baseUrl;
   final http.Client _http;
+  final KcaLessonCompletionQueue _completionQueue;
 
   Uri get _root => Uri.parse(baseUrl.replaceAll(RegExp(r'/$'), ''));
 
@@ -29,6 +33,18 @@ final class HttpKcaRepository
       IntegrationUnavailableFailure(
         '$feature requires an authenticated API transport.',
       ),
+    );
+  }
+
+  @override
+  Future<AppResult<JsonObject>> getAccess() {
+    final transport = _transport;
+    if (transport == null) {
+      return Future.value(_needsTransport('KCA access'));
+    }
+    return sendObject(
+      transport,
+      const ApiRequest(method: ApiMethod.get, path: '/user/kca/me'),
     );
   }
 
@@ -121,12 +137,119 @@ final class HttpKcaRepository
   }
 
   @override
-  Future<AppResult<JsonObject>> submitEvidence(JsonObject evidence) async {
-    return const AppError(
-      IntegrationUnavailableFailure(
-        'Evidence submission remains gated by KCA governance (OD-008).',
+  Future<AppResult<JsonObject>> submitEvidence(JsonObject evidence) {
+    final transport = _transport;
+    if (transport == null) {
+      return Future.value(_needsTransport('KCA evidence'));
+    }
+    final assignmentId = '${evidence['assignment_id'] ?? evidence['id'] ?? ''}'.trim();
+    final fileAssetId = '${evidence['file_asset_id'] ?? ''}'.trim();
+    if (assignmentId.isEmpty || fileAssetId.isEmpty) {
+      return Future.value(
+        const AppError(
+          ValidationFailure('assignment_id and file_asset_id are required.'),
+        ),
+      );
+    }
+    final key = '${evidence['idempotency_key'] ?? newIdempotencyKey('kca-evidence')}';
+    return sendObject(
+      transport,
+      ApiRequest(
+        method: ApiMethod.post,
+        path: '/user/kca/assignments/${encodeId(assignmentId)}/evidence',
+        body: {
+          'file_asset_id': fileAssetId,
+          'idempotency_key': key,
+        },
+        idempotencyKey: key,
       ),
     );
+  }
+
+  @override
+  Future<AppResult<JsonObject>> getLesson(String lessonId) {
+    final transport = _transport;
+    if (transport == null) {
+      return Future.value(_needsTransport('KCA lesson'));
+    }
+    final id = lessonId.trim();
+    if (id.isEmpty) {
+      return Future.value(
+        const AppError(ValidationFailure('Lesson id is required.')),
+      );
+    }
+    return sendObject(
+      transport,
+      ApiRequest(method: ApiMethod.get, path: '/user/kca/lessons/${encodeId(id)}'),
+    );
+  }
+
+  @override
+  Future<AppResult<JsonObject>> completeLesson(
+    String lessonId, {
+    bool acknowledged = true,
+    String? idempotencyKey,
+    String? unlockToken,
+  }) async {
+    final transport = _transport;
+    if (transport == null) {
+      return _needsTransport('KCA lesson completion');
+    }
+    final id = lessonId.trim();
+    if (id.isEmpty) {
+      return const AppError(ValidationFailure('Lesson id is required.'));
+    }
+    final key = idempotencyKey ?? newIdempotencyKey('kca-lesson');
+    final result = await sendObject(
+      transport,
+      ApiRequest(
+        method: ApiMethod.post,
+        path: '/user/kca/lessons/${encodeId(id)}/complete',
+        body: {
+          'acknowledged': acknowledged,
+          'idempotency_key': key,
+          if (unlockToken != null && unlockToken.isNotEmpty) 'unlock_token': unlockToken,
+        },
+        idempotencyKey: key,
+      ),
+    );
+    switch (result) {
+      case AppSuccess():
+        await _completionQueue.remove(id);
+        return result;
+      case AppError(:final failure):
+        if (failure is NetworkFailure) {
+          await _completionQueue.enqueue(
+            lessonId: id,
+            idempotencyKey: key,
+            unlockToken: unlockToken,
+          );
+        }
+        return result;
+    }
+  }
+
+  @override
+  Future<AppResult<void>> syncQueuedCompletions() async {
+    final pending = await _completionQueue.load();
+    for (final item in pending) {
+      final lessonId = item['lesson_id'];
+      if (lessonId == null || lessonId.isEmpty) continue;
+      final result = await completeLesson(
+        lessonId,
+        idempotencyKey: item['idempotency_key'],
+        unlockToken: item['unlock_token'],
+      );
+      switch (result) {
+        case AppSuccess():
+          await _completionQueue.remove(lessonId);
+        case AppError(:final failure):
+          if (failure is ForbiddenFailure || failure is ValidationFailure) {
+            await _completionQueue.remove(lessonId);
+          }
+      }
+    }
+    return const AppSuccess(null);
   }
 
   @override
