@@ -87,7 +87,8 @@ final class LaravelAuthorizationGateway implements AuthorizationGateway {
 
   @override
   Future<void> clearSession() async {
-    await tokenStore.clear();
+    // Tokens are owned by AuthRepository. Wiping them here also dropped the
+    // device id after logout and broke fingerprint unlock.
     clearCache();
   }
 

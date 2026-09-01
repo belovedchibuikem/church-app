@@ -97,6 +97,10 @@ abstract interface class SessionTokenStore {
 
   Future<void> writeBiometricUnlockEnabled(bool enabled);
 
+  Future<String?> readMfaVerifiedAt();
+
+  Future<void> writeMfaVerifiedAt(String? iso8601);
+
   Future<void> clear();
 }
 

@@ -10,6 +10,7 @@ import '../../../core/api/app_failure.dart';
 import '../../../core/api/fhc_api_config.dart';
 import '../../../core/auth/auth_session.dart';
 import '../../../core/auth/authorization.dart';
+import '../../../core/auth/biometric_unlock.dart';
 import '../../../core/contracts/mobile_repository_contracts.dart';
 
 /// HTTP transport for the generated protected OpenAPI client.
@@ -125,6 +126,7 @@ final class LaravelAuthRepository implements AuthRepository, SessionRefresher {
       if (email.isNotEmpty) {
         await tokenStore.writeRememberedEmail(email);
       }
+      await _enableBiometricUnlockIfAvailable();
       return AppSuccess(Map<String, Object?>.from(data));
     } on ProtectedApiException catch (error) {
       return AppError(_mapApiException(error, loginContext: true));
@@ -218,6 +220,7 @@ final class LaravelAuthRepository implements AuthRepository, SessionRefresher {
       if (email.isNotEmpty) {
         await tokenStore.writeRememberedEmail(email);
       }
+      await _enableBiometricUnlockIfAvailable();
       return AppSuccess(Map<String, Object?>.from(data));
     } on ProtectedApiException catch (error) {
       return AppError(_mapApiException(error));
@@ -341,7 +344,16 @@ final class LaravelAuthRepository implements AuthRepository, SessionRefresher {
   }
 
   @override
+  Future<AppResult<void>> lockSession() async {
+    await authorizationGateway?.clearSession();
+    return const AppSuccess(null);
+  }
+
+  @override
   Future<AppResult<JsonObject>> restoreSession() async {
+    _mfaVerifiedAt ??= AuthCredentials.parseIso8601(
+      await tokenStore.readMfaVerifiedAt(),
+    );
     final access = await tokenStore.readAccessToken();
     final refresh = await tokenStore.readRefreshToken();
     final accessExpires = await tokenStore.readAccessTokenExpiresAt();
@@ -452,6 +464,7 @@ final class LaravelAuthRepository implements AuthRepository, SessionRefresher {
       );
       final data = _dataMap(response);
       _mfaVerifiedAt = AuthCredentials.parseIso8601(data['mfa_verified_at']);
+      await tokenStore.writeMfaVerifiedAt(_mfaVerifiedAt?.toIso8601String());
       return AppSuccess(Map<String, Object?>.from(data));
     } on ProtectedApiException catch (error) {
       return AppError(_mapApiException(error));
@@ -503,6 +516,7 @@ final class LaravelAuthRepository implements AuthRepository, SessionRefresher {
       );
       final data = _dataMap(response);
       _mfaVerifiedAt = AuthCredentials.parseIso8601(data['verified_at']);
+      await tokenStore.writeMfaVerifiedAt(_mfaVerifiedAt?.toIso8601String());
       return AppSuccess(Map<String, Object?>.from(data));
     } on ProtectedApiException catch (error) {
       return AppError(_mapApiException(error));
@@ -525,6 +539,7 @@ final class LaravelAuthRepository implements AuthRepository, SessionRefresher {
       refreshTokenExpiresAt: issued.refreshTokenExpiresAt,
     );
     _mfaVerifiedAt = issued.mfaVerifiedAt;
+    await tokenStore.writeMfaVerifiedAt(_mfaVerifiedAt?.toIso8601String());
     final gateway = authorizationGateway;
     if (gateway != null) {
       await gateway.bindSession(
@@ -542,7 +557,18 @@ final class LaravelAuthRepository implements AuthRepository, SessionRefresher {
       await tokenStore.writeDeviceIdentifier(deviceId);
     }
     _mfaVerifiedAt = null;
+    await tokenStore.writeMfaVerifiedAt(null);
     await authorizationGateway?.clearSession();
+  }
+
+  Future<void> _enableBiometricUnlockIfAvailable() async {
+    try {
+      if (await BiometricUnlock(tokenStore: tokenStore).isHardwareAvailable) {
+        await tokenStore.writeBiometricUnlockEnabled(true);
+      }
+    } catch (error, stack) {
+      debugPrint('Could not enable fingerprint unlock: $error\n$stack');
+    }
   }
 
   Future<ProtectedRequestOptions?> _authedOptions() async {

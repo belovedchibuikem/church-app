@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:local_auth/local_auth.dart';
 
 import '../api/api_transport.dart';
+import '../api/app_failure.dart';
+import '../contracts/mobile_repository_contracts.dart';
 
 /// Device biometrics (fingerprint / Face ID). Unavailable on web.
 abstract interface class DeviceBiometrics {
@@ -115,6 +117,15 @@ final class BiometricUnlock {
     return tokenStore.readBiometricUnlockEnabled();
   }
 
+  /// Cold start must show the lock screen instead of silently restoring.
+  Future<bool> get shouldGateAppLaunch async {
+    if (!await hasStoredSession) return false;
+    if (await isEnabled) return true;
+    if (!await isHardwareAvailable) return false;
+    await setEnabled(true);
+    return true;
+  }
+
   Future<void> setEnabled(bool enabled) {
     return tokenStore.writeBiometricUnlockEnabled(enabled);
   }
@@ -122,4 +133,26 @@ final class BiometricUnlock {
   Future<bool> authenticate({required String reason}) {
     return _biometrics.authenticate(reason: reason);
   }
+}
+
+/// Log out of the UI without revoking the 30-day device session when
+/// fingerprint unlock is available. Full [AuthRepository.signOut] is reserved
+/// for removing this device.
+Future<AppResult<void>> lockOrSignOut({
+  required AuthRepository? auth,
+  required SessionTokenStore? store,
+}) async {
+  if (auth == null) {
+    return const AppError(UnknownFailure('Sign out is not available.'));
+  }
+  if (store != null) {
+    final unlock = BiometricUnlock(tokenStore: store);
+    if (await unlock.hasStoredSession) {
+      if (await unlock.isHardwareAvailable) {
+        await unlock.setEnabled(true);
+      }
+      return auth.lockSession();
+    }
+  }
+  return auth.signOut();
 }

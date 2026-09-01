@@ -55,6 +55,11 @@ class _SignInScreenState extends State<SignInScreen> {
     if (email != null && email.isNotEmpty && mounted) {
       _emailController.text = email;
     }
+    if (!mounted) return;
+    final biometric = _biometric;
+    if (biometric != null && await biometric.canOfferUnlock) {
+      unawaited(_unlockWithFingerprint());
+    }
   }
 
   @override

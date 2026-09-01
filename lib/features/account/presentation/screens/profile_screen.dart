@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 import '../../../../core/api/app_failure.dart';
+import '../../../../core/auth/biometric_unlock.dart';
 import '../../../../core/contracts/mobile_repository_contracts.dart';
 import '../../../../core/design_system/fhc_tokens.dart';
 import '../../../../core/di/app_services_scope.dart';
@@ -107,10 +108,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String get _email => (_profile?['email'] as String?) ?? '';
 
   Future<void> _signOut(BuildContext context) async {
-    final auth = AppServicesScope.maybeOf(context)?.authRepository;
-    if (auth != null) {
-      await auth.signOut();
-    }
+    final services = AppServicesScope.maybeOf(context);
+    await lockOrSignOut(
+      auth: services?.authRepository,
+      store: services?.tokenStore,
+    );
     if (!context.mounted) return;
     fhcGo(context, '/sign-in');
   }

@@ -12,6 +12,7 @@ const _accessExpiresKey = 'fhc.mobile.access_token_expires_at';
 const _refreshExpiresKey = 'fhc.mobile.refresh_token_expires_at';
 const _rememberedEmailKey = 'fhc.mobile.remembered_email';
 const _biometricEnabledKey = 'fhc.mobile.biometric_unlock';
+const _mfaVerifiedKey = 'fhc.mobile.mfa_verified_at';
 
 DateTime _defaultSessionExpiry() =>
     DateTime.now().toUtc().add(kMobileSessionLifetime);
@@ -30,6 +31,7 @@ final class MemorySessionTokenStore implements SessionTokenStore {
   DateTime? _refreshExpiresAt;
   String? _rememberedEmail;
   bool _biometricEnabled = false;
+  String? _mfaVerifiedAt;
 
   @override
   Future<String?> readAccessToken() async => _accessToken;
@@ -88,6 +90,15 @@ final class MemorySessionTokenStore implements SessionTokenStore {
       _biometricEnabled = enabled;
 
   @override
+  Future<String?> readMfaVerifiedAt() async => _mfaVerifiedAt;
+
+  @override
+  Future<void> writeMfaVerifiedAt(String? iso8601) async {
+    final trimmed = iso8601?.trim();
+    _mfaVerifiedAt = (trimmed == null || trimmed.isEmpty) ? null : trimmed;
+  }
+
+  @override
   Future<void> clear() async {
     _accessToken = null;
     _refreshToken = null;
@@ -95,6 +106,7 @@ final class MemorySessionTokenStore implements SessionTokenStore {
     _accessExpiresAt = null;
     _refreshExpiresAt = null;
     _biometricEnabled = false;
+    _mfaVerifiedAt = null;
   }
 }
 
@@ -188,6 +200,19 @@ final class SecureSessionTokenStore implements SessionTokenStore {
       _storage.write(key: _biometricEnabledKey, value: enabled ? '1' : '0');
 
   @override
+  Future<String?> readMfaVerifiedAt() => _storage.read(key: _mfaVerifiedKey);
+
+  @override
+  Future<void> writeMfaVerifiedAt(String? iso8601) async {
+    final trimmed = iso8601?.trim();
+    if (trimmed == null || trimmed.isEmpty) {
+      await _storage.delete(key: _mfaVerifiedKey);
+      return;
+    }
+    await _storage.write(key: _mfaVerifiedKey, value: trimmed);
+  }
+
+  @override
   Future<void> clear() async {
     await Future.wait([
       _storage.delete(key: _accessTokenKey),
@@ -196,6 +221,7 @@ final class SecureSessionTokenStore implements SessionTokenStore {
       _storage.delete(key: _accessExpiresKey),
       _storage.delete(key: _refreshExpiresKey),
       _storage.delete(key: _biometricEnabledKey),
+      _storage.delete(key: _mfaVerifiedKey),
     ]);
   }
 }

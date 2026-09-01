@@ -99,6 +99,25 @@ void main() {
     expect(await store.readRefreshToken(), 'refresh-still-valid');
     expect(await store.readAccessToken(), 'access');
   });
+
+  test('authorization clearSession does not wipe stored tokens', () async {
+    final store = MemorySessionTokenStore();
+    await store.writeSession(
+      accessToken: 'access',
+      refreshToken: 'refresh-still-valid',
+      deviceIdentifier: 'device',
+    );
+    final gateway = LaravelAuthorizationGateway(
+      baseUrl: 'http://example.test/api/v1',
+      tokenStore: store,
+      httpClient: MockClient((request) async {
+        fail('Unexpected ${request.url}');
+      }),
+    );
+    await gateway.clearSession();
+    expect(await store.readRefreshToken(), 'refresh-still-valid');
+    expect(await store.readAccessToken(), 'access');
+  });
 }
 
 final class _FailingRefresher implements SessionRefresher {

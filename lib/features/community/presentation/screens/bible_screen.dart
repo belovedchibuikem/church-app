@@ -8,6 +8,7 @@ import '../../../../core/di/app_services_scope.dart';
 import '../../../../core/l10n/locale_scope.dart';
 import '../../../../shared/widgets/fhc_components.dart';
 import '../../../foundation/presentation/fhc_nav.dart';
+import '../../data/bible_kjv_markup.dart';
 
 const _kBibleVersionPref = 'bible.version';
 const _kParchment = Color(0xFFF7F3EA);
@@ -598,7 +599,9 @@ class _SearchHit extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 4),
-                Text.rich(_highlight('${hit['text'] ?? ''}', query)),
+                Text.rich(
+                  _highlight(parseKjvMarkup('${hit['text'] ?? ''}').reading, query),
+                ),
               ],
             ),
           ),

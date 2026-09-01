@@ -9,6 +9,7 @@ import '../../../../core/l10n/locale_scope.dart';
 import '../../../../core/routing/fhc_route_args.dart';
 import '../../../../shared/widgets/fhc_components.dart';
 import '../../../foundation/presentation/fhc_nav.dart';
+import '../widgets/bible_verse_rich_text.dart';
 
 const _kBibleVersionPref = 'bible.version';
 const _kParchment = Color(0xFFF7F3EA);
@@ -341,34 +342,10 @@ class _BibleReaderScreenState extends State<BibleReaderScreen> {
                       for (final verse in verseList)
                         Padding(
                           padding: const EdgeInsets.only(bottom: 12),
-                          child: Text.rich(
-                            TextSpan(
-                              children: [
-                                TextSpan(
-                                  text: '${verse['verse']}  ',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w700,
-                                    color: FhcColors.green,
-                                    fontSize: 12,
-                                    height: 1.7,
-                                  ),
-                                ),
-                                TextSpan(
-                                  text: '${verse['text']}',
-                                  style: TextStyle(
-                                    fontSize: _fontSize,
-                                    height: 1.7,
-                                    color: FhcColors.ink,
-                                    fontFamily: 'Georgia',
-                                    fontFamilyFallback: const [
-                                      'serif',
-                                      'Times New Roman',
-                                      'Noto Serif',
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
+                          child: BibleVerseRichText(
+                            raw: '${verse['text'] ?? ''}',
+                            verseNumber: verse['verse'],
+                            fontSize: _fontSize,
                           ),
                         ),
                       const SizedBox(height: 16),

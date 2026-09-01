@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../../core/api/app_failure.dart';
+import '../../../../core/auth/biometric_unlock.dart';
 import '../../../../core/design_system/fhc_tokens.dart';
 import '../../../../core/di/app_services_scope.dart';
 import '../../../../core/l10n/locale_scope.dart';
@@ -87,7 +88,13 @@ class _SplashScreenState extends State<SplashScreen>
             (access != null && access.isNotEmpty) ||
             (refresh != null && refresh.isNotEmpty);
 
-        if (auth != null && refresh != null && refresh.isNotEmpty) {
+        final biometricGate =
+            await BiometricUnlock(tokenStore: tokenStore).shouldGateAppLaunch;
+
+        if (biometricGate) {
+          // Keep tokens on disk; the sign-in screen unlocks with fingerprint.
+          hasSession = false;
+        } else if (auth != null && refresh != null && refresh.isNotEmpty) {
           // Refresh before routing so PermissionGuard does not treat an
           // expired access token as signed-out while refresh remains valid.
           final restored = await auth.restoreSession();

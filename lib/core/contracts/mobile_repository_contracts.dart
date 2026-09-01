@@ -9,6 +9,10 @@ abstract interface class AuthRepository {
   Future<AppResult<void>> resetPassword(JsonObject payload);
   Future<AppResult<void>> verify(JsonObject challenge);
   Future<AppResult<void>> signOut();
+
+  /// Leaves stored tokens on the device so fingerprint can unlock next time.
+  Future<AppResult<void>> lockSession();
+
   Future<AppResult<JsonObject>> restoreSession();
 }
 

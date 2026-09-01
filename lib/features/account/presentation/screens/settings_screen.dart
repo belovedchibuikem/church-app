@@ -372,11 +372,34 @@ class _SettingsScreenState extends State<SettingsScreen> {
           color: const Color(0xFFEF4444),
           onPressed: () => _logOut(context),
         ),
+        if (_fingerprintEnabled) ...[
+          const SizedBox(height: 8),
+          TextButton(
+            onPressed: () => _revokeDevice(context),
+            child: Text(
+              fhcT(
+                context,
+                'settings.signOutThisDevice',
+                fallback: 'Remove saved sign-in from this device',
+              ),
+            ),
+          ),
+        ],
       ],
     );
   }
 
   Future<void> _logOut(BuildContext context) async {
+    final services = AppServicesScope.maybeOf(context);
+    await lockOrSignOut(
+      auth: services?.authRepository,
+      store: services?.tokenStore,
+    );
+    if (!context.mounted) return;
+    fhcGo(context, '/sign-in');
+  }
+
+  Future<void> _revokeDevice(BuildContext context) async {
     final auth = AppServicesScope.maybeOf(context)?.authRepository;
     if (auth != null) {
       await auth.signOut();

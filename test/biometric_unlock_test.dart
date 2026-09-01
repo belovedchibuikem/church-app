@@ -1,6 +1,8 @@
+import 'package:family_house_connect_mobile/core/api/app_failure.dart';
 import 'package:family_house_connect_mobile/core/auth/authorization.dart';
 import 'package:family_house_connect_mobile/core/auth/biometric_unlock.dart';
 import 'package:family_house_connect_mobile/core/auth/session_token_store.dart';
+import 'package:family_house_connect_mobile/core/contracts/mobile_repository_contracts.dart';
 import 'package:family_house_connect_mobile/core/di/app_services.dart';
 import 'package:family_house_connect_mobile/core/di/app_services_scope.dart';
 import 'package:family_house_connect_mobile/core/l10n/locale_scope.dart';
@@ -40,6 +42,39 @@ void main() {
       biometrics: const _FakeBiometrics(available: false, authenticates: false),
     );
     expect(await unlock.canOfferUnlock, isFalse);
+  });
+
+  test('cold start gates behind fingerprint when a session is stored', () async {
+    final store = MemorySessionTokenStore();
+    final unlock = BiometricUnlock(
+      tokenStore: store,
+      biometrics: const _FakeBiometrics(available: true, authenticates: true),
+    );
+
+    expect(await unlock.shouldGateAppLaunch, isFalse);
+
+    await store.writeSession(
+      accessToken: 'access',
+      refreshToken: 'refresh',
+      deviceIdentifier: 'device',
+    );
+
+    expect(await unlock.shouldGateAppLaunch, isTrue);
+    expect(await store.readBiometricUnlockEnabled(), isTrue);
+  });
+
+  test('UI log out keeps tokens so fingerprint can restore them', () async {
+    final store = MemorySessionTokenStore();
+    await store.writeSession(
+      accessToken: 'access',
+      refreshToken: 'refresh',
+      deviceIdentifier: 'device',
+    );
+    final auth = _RecordingAuth();
+    await lockOrSignOut(auth: auth, store: store);
+    expect(auth.locked, isTrue);
+    expect(auth.signedOut, isFalse);
+    expect(await store.readRefreshToken(), 'refresh');
   });
 
   testWidgets('sign-in always shows a fingerprint login control', (
@@ -87,4 +122,44 @@ final class _FakeBiometrics implements DeviceBiometrics {
 
   @override
   Future<bool> authenticate({required String reason}) async => authenticates;
+}
+
+final class _RecordingAuth implements AuthRepository {
+  var locked = false;
+  var signedOut = false;
+
+  @override
+  Future<AppResult<JsonObject>> signIn(JsonObject credentials) async =>
+      const AppSuccess({});
+
+  @override
+  Future<AppResult<JsonObject>> register(JsonObject registration) async =>
+      const AppSuccess({});
+
+  @override
+  Future<AppResult<void>> requestPasswordReset(String email) async =>
+      const AppSuccess(null);
+
+  @override
+  Future<AppResult<void>> resetPassword(JsonObject payload) async =>
+      const AppSuccess(null);
+
+  @override
+  Future<AppResult<void>> verify(JsonObject challenge) async =>
+      const AppSuccess(null);
+
+  @override
+  Future<AppResult<void>> signOut() async {
+    signedOut = true;
+    return const AppSuccess(null);
+  }
+
+  @override
+  Future<AppResult<void>> lockSession() async {
+    locked = true;
+    return const AppSuccess(null);
+  }
+
+  @override
+  Future<AppResult<JsonObject>> restoreSession() async => const AppSuccess({});
 }
