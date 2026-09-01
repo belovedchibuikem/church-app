@@ -40,7 +40,7 @@ class _StartHomeChurchStep2ScreenState
     'Midweek service',
     'Prayer meeting',
     'Fellowship',
-    'Bible study',
+    'Study Manuals',
     'Gathering',
   ];
 

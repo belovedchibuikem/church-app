@@ -129,7 +129,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Hope and Faith'), findsWidgets);
-    expect(find.text('Bible Study'), findsOneWidget);
+    expect(find.text('Devotionals'), findsOneWidget);
+    expect(find.text('Study Manuals'), findsNothing);
     expect(find.text('Integration required'), findsNothing);
 
     await tester.tap(find.byIcon(Icons.tune));

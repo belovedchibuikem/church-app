@@ -101,6 +101,7 @@ abstract final class FhcRoutes {
   static const kcaOpportunities = '/kca/opportunities';
 
   static const press = '/press';
+  static const pressDevotionals = '/press/devotionals';
   static const pressAdmin = '/press/admin';
   static const pressBook = '/press/book';
   static const pressCategories = '/press/categories';
@@ -124,6 +125,8 @@ abstract final class FhcRoutes {
   static const sermons = '/sermons';
   static const groups = '/groups';
   static const bible = '/bible';
+  static const biblePlans = '/bible/plans';
+  static const bibleRead = '/bible/read';
   static const media = '/media';
 
   /// Primary member shell: Home · Modules · Give · Events · Profile.

@@ -187,7 +187,7 @@ class KingdomJourneyScreen extends StatelessWidget {
     ],
     KingdomJourneyKind.grow => [
       const WorkflowSegments(
-        labels: ['Overview', 'Bible Study', 'Prayer', 'Training', 'Mentor'],
+        labels: ['Overview', 'Study Manuals', 'Prayer', 'Training', 'Mentor'],
       ),
       const SizedBox(height: 12),
       const WorkflowSummary(
@@ -201,7 +201,7 @@ class KingdomJourneyScreen extends StatelessWidget {
       ),
       const WorkflowSectionTitle('Continue Your Growth'),
       _tiles(const [
-        ('Bible Study', Icons.menu_book_outlined),
+        ('Study Manuals', Icons.menu_book_outlined),
         ('Prayer Life', Icons.self_improvement),
         ('Kingdom Training', Icons.school_outlined),
         ('Mentor Sessions', Icons.groups_outlined),

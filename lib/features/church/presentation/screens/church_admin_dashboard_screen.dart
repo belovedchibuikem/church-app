@@ -656,7 +656,7 @@ class _ChurchAdminFixtureView extends StatelessWidget {
                               title: fhcT(
                                 context,
                                 'church.bibleStudy',
-                                fallback: 'Bible Study',
+                                fallback: 'Study Manuals',
                               ),
                               value: fhcT(
                                 context,

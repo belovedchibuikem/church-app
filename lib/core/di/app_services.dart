@@ -7,6 +7,7 @@ import '../../features/account/data/profile_repository.dart';
 import '../../features/account/data/security_repository.dart';
 import '../../features/church/data/church_repository.dart';
 import '../../features/church/data/home_church_repository.dart';
+import '../../features/community/data/bible_repository.dart';
 import '../../features/community/data/event_repository.dart';
 import '../../features/community/data/need_repository.dart';
 import '../../features/community/data/payment_repository.dart';
@@ -62,6 +63,7 @@ final class AppServices {
     this.paymentRepository,
     this.messageRepository,
     this.notificationRepository,
+    this.bibleRepository,
     this.securityRepository,
     this.syncRepository,
     this.pushNotifications = const PushNotificationScaffold(),
@@ -105,6 +107,7 @@ final class AppServices {
   final PaymentRepository? paymentRepository;
   final MessageRepository? messageRepository;
   final NotificationRepository? notificationRepository;
+  final BibleRepository? bibleRepository;
   final SecurityRepository? securityRepository;
   final SyncRepository? syncRepository;
 
@@ -157,6 +160,7 @@ final class AppServices {
     PaymentRepository? paymentRepository,
     MessageRepository? messageRepository,
     NotificationRepository? notificationRepository,
+    BibleRepository? bibleRepository,
     SecurityRepository? securityRepository,
     SyncRepository? syncRepository,
     PushNotificationScaffold? pushNotifications,
@@ -323,6 +327,12 @@ final class AppServices {
       notificationRepository:
           notificationRepository ??
           withTransport((t) => HttpNotificationRepository(transport: t)),
+      bibleRepository:
+          bibleRepository ??
+          HttpBibleRepository(
+            baseUrl: apiUrl,
+            transport: resolvedTransport,
+          ),
       securityRepository: resolvedSecurity,
       syncRepository:
           syncRepository ??

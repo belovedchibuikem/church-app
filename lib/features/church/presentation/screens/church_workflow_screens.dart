@@ -481,7 +481,7 @@ class HomeChurchActivitiesScreen extends StatelessWidget {
                 title: fhcT(
                   context,
                   'homeChurch.bibleStudy',
-                  fallback: 'Bible Study',
+                  fallback: 'Study Manuals',
                 ),
                 subtitle: fhcT(
                   context,

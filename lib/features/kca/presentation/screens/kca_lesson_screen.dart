@@ -12,10 +12,11 @@ import '../../../../shared/widgets/fhc_components.dart';
 import '../../../foundation/presentation/fhc_nav.dart';
 
 class KcaLessonScreen extends StatefulWidget {
-  const KcaLessonScreen({super.key, this.lessonId, this.kcaRepository});
+  const KcaLessonScreen({super.key, this.lessonId, this.kcaRepository, this.chapter = false});
 
   final String? lessonId;
   final KcaRepository? kcaRepository;
+  final bool chapter;
 
   @override
   State<KcaLessonScreen> createState() => _KcaLessonScreenState();
@@ -58,7 +59,9 @@ class _KcaLessonScreenState extends State<KcaLessonScreen> {
       return;
     }
     await repo.syncQueuedCompletions();
-    final result = await repo.getLesson(id);
+    final result = widget.chapter
+        ? await repo.getChapter(id)
+        : await repo.getLesson(id);
     if (!mounted) return;
     switch (result) {
       case AppSuccess(:final value):
@@ -93,7 +96,13 @@ class _KcaLessonScreenState extends State<KcaLessonScreen> {
       _busy = true;
       _error = null;
     });
-    final result = await repo.completeLesson(
+    final result = widget.chapter
+        ? await repo.completeChapter(
+            id,
+            acknowledged: true,
+            unlockToken: '${_lesson?['unlock_token'] ?? ''}',
+          )
+        : await repo.completeLesson(
       id,
       acknowledged: true,
       unlockToken: '${_lesson?['unlock_token'] ?? ''}',
@@ -113,6 +122,15 @@ class _KcaLessonScreenState extends State<KcaLessonScreen> {
     final title = '${_lesson?['title'] ?? ''}'.trim();
     final body = '${_lesson?['body'] ?? _lesson?['summary'] ?? ''}'.trim();
     final contentUrl = '${_lesson?['content_url'] ?? ''}'.trim();
+    final chaptersRaw = _lesson?['chapters'];
+    final chapters = <Map<String, Object?>>[];
+    if (chaptersRaw is List) {
+      for (final item in chaptersRaw) {
+        if (item is Map) {
+          chapters.add(Map<String, Object?>.from(item.map((k, v) => MapEntry('$k', v))));
+        }
+      }
+    }
 
     return FhcDevicePage(
       backgroundColor: FhcColors.canvas,
@@ -149,6 +167,35 @@ class _KcaLessonScreenState extends State<KcaLessonScreen> {
                           color: FhcColors.ink,
                         ),
                       ),
+                      if (chapters.isNotEmpty) ...[
+                        const SizedBox(height: 16),
+                        Text(
+                          fhcT(context, 'member.kca.chapters', fallback: 'Chapters'),
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: FhcColors.ink,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        for (final chapter in chapters)
+                          ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: Text('${chapter['title'] ?? 'Chapter'}'),
+                            subtitle: Text(
+                              chapter['completed'] == true
+                                  ? 'Completed'
+                                  : chapter['unlocked'] == false
+                                  ? 'Locked'
+                                  : 'Open',
+                            ),
+                            onTap: '${chapter['id'] ?? ''}'.isEmpty
+                                ? null
+                                : () => Navigator.of(context).pushNamed(
+                                    '/kca/chapter/${chapter['id']}',
+                                  ),
+                          ),
+                      ],
                     ],
                   ),
           ),

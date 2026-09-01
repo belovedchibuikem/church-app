@@ -140,6 +140,40 @@ class _KcaDashboardScreenState extends State<KcaDashboardScreen> {
                           ),
                           const SizedBox(height: 8),
                           Row(
+                            children: [
+                              Expanded(
+                                child: _KcaMetric(
+                                  icon: Icons.menu_book_outlined,
+                                  title: fhcT(
+                                    context,
+                                    'member.kcaBible',
+                                    fallback: 'Bible plan',
+                                  ),
+                                  value: dash.biblePercent == null
+                                      ? '—'
+                                      : '${dash.biblePercent}%',
+                                  onTap: () => fhcPush(context, FhcRoutes.bible),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: _KcaMetric(
+                                  icon: Icons.groups_outlined,
+                                  title: fhcT(
+                                    context,
+                                    'member.kcaMentees',
+                                    fallback: 'Mentees',
+                                  ),
+                                  value: dash.isMentor ? 'Open' : '—',
+                                  onTap: dash.isMentor
+                                      ? () => fhcPush(context, FhcRoutes.kcaMentees)
+                                      : null,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Expanded(
@@ -243,6 +277,8 @@ class _KcaDash {
     required this.attendanceRecorded,
     required this.mentorName,
     required this.mentorAssigned,
+    required this.isMentor,
+    this.biblePercent,
   });
 
   factory _KcaDash.fromJson(Map<String, Object?> json) {
@@ -256,6 +292,17 @@ class _KcaDash {
       final family = '${mentor['family_name'] ?? ''}'.trim();
       mentorName = family.isEmpty ? given : '$given $family'.trim();
     }
+    final activity = json['activity'];
+    int? biblePercent;
+    if (activity is Map) {
+      final bible = activity['bible'];
+      if (bible is Map) {
+        final enrollment = bible['enrollment'];
+        if (enrollment is Map) {
+          biblePercent = _asInt(enrollment['percent']);
+        }
+      }
+    }
     return _KcaDash(
       enrolled: json['enrolled'] == true,
       modulesTotal: _asInt(json['modules_total']),
@@ -264,6 +311,8 @@ class _KcaDash {
       attendanceRecorded: _asInt(json['attendance_recorded']),
       mentorName: mentorName,
       mentorAssigned: assigned,
+      isMentor: json['is_mentor'] == true,
+      biblePercent: biblePercent,
     );
   }
 
@@ -280,6 +329,8 @@ class _KcaDash {
   final int attendanceRecorded;
   final String mentorName;
   final bool mentorAssigned;
+  final bool isMentor;
+  final int? biblePercent;
 }
 
 class _KcaHeader extends StatelessWidget {

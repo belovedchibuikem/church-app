@@ -257,6 +257,148 @@ final class HttpKcaRepository
   }
 
   @override
+  Future<AppResult<JsonObject>> getChapter(String chapterId) {
+    final transport = _transport;
+    if (transport == null) {
+      return Future.value(_needsTransport('KCA chapter'));
+    }
+    final id = chapterId.trim();
+    if (id.isEmpty) {
+      return Future.value(
+        const AppError(ValidationFailure('Chapter id is required.')),
+      );
+    }
+    return sendObject(
+      transport,
+      ApiRequest(method: ApiMethod.get, path: '/user/kca/chapters/${encodeId(id)}'),
+    );
+  }
+
+  @override
+  Future<AppResult<JsonObject>> completeChapter(
+    String chapterId, {
+    bool acknowledged = true,
+    String? idempotencyKey,
+    String? unlockToken,
+  }) {
+    final transport = _transport;
+    if (transport == null) {
+      return Future.value(_needsTransport('KCA chapter completion'));
+    }
+    final id = chapterId.trim();
+    if (id.isEmpty) {
+      return Future.value(
+        const AppError(ValidationFailure('Chapter id is required.')),
+      );
+    }
+    final key = idempotencyKey ?? newIdempotencyKey('kca-chapter');
+    return sendObject(
+      transport,
+      ApiRequest(
+        method: ApiMethod.post,
+        path: '/user/kca/chapters/${encodeId(id)}/complete',
+        body: {
+          'acknowledged': acknowledged,
+          'idempotency_key': key,
+          if (unlockToken != null && unlockToken.isNotEmpty) 'unlock_token': unlockToken,
+        },
+        idempotencyKey: key,
+      ),
+    );
+  }
+
+  @override
+  Future<AppResult<JsonObject>> getAssignment(String assignmentId) {
+    final transport = _transport;
+    if (transport == null) {
+      return Future.value(_needsTransport('KCA assignment'));
+    }
+    final id = assignmentId.trim();
+    if (id.isEmpty) {
+      return Future.value(
+        const AppError(ValidationFailure('Assignment id is required.')),
+      );
+    }
+    return sendObject(
+      transport,
+      ApiRequest(
+        method: ApiMethod.get,
+        path: '/user/kca/assignments/${encodeId(id)}',
+      ),
+    );
+  }
+
+  @override
+  Future<AppResult<JsonObject>> recordSoulWin(
+    String assignmentId,
+    JsonObject body,
+  ) {
+    final transport = _transport;
+    if (transport == null) {
+      return Future.value(_needsTransport('KCA soul winning'));
+    }
+    final id = assignmentId.trim();
+    if (id.isEmpty) {
+      return Future.value(
+        const AppError(ValidationFailure('Assignment id is required.')),
+      );
+    }
+    return sendObject(
+      transport,
+      ApiRequest(
+        method: ApiMethod.post,
+        path: '/user/kca/assignments/${encodeId(id)}/souls',
+        body: body,
+      ),
+    );
+  }
+
+  @override
+  Future<AppResult<List<JsonObject>>> listMentees() {
+    final transport = _transport;
+    if (transport == null) {
+      return Future.value(_needsTransport('KCA mentees'));
+    }
+    return sendList(
+      transport,
+      const ApiRequest(method: ApiMethod.get, path: '/user/kca/mentees'),
+    );
+  }
+
+  @override
+  Future<AppResult<JsonObject>> getMentee(String enrollmentId) {
+    final transport = _transport;
+    if (transport == null) {
+      return Future.value(_needsTransport('KCA mentee report'));
+    }
+    final id = enrollmentId.trim();
+    if (id.isEmpty) {
+      return Future.value(
+        const AppError(ValidationFailure('Enrollment id is required.')),
+      );
+    }
+    return sendObject(
+      transport,
+      ApiRequest(
+        method: ApiMethod.get,
+        path: '/user/kca/mentees/${encodeId(id)}',
+      ),
+    );
+  }
+
+  @override
+  Future<AppResult<JsonObject>> createNote(JsonObject body) {
+    final transport = _transport;
+    if (transport == null) {
+      return Future.value(_needsTransport('KCA study notes'));
+    }
+    return sendObject(
+      transport,
+      ApiRequest(method: ApiMethod.post, path: '/user/kca/notes', body: body),
+    );
+  }
+
+  @override
   Future<AppResult<void>> syncQueuedCompletions() async {
     final pending = await _completionQueue.load();
     for (final item in pending) {

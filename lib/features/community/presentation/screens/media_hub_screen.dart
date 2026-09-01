@@ -27,6 +27,14 @@ class MediaHubScreen extends StatelessWidget {
     ),
     _MediaSpec(
       icon: Icons.menu_book,
+      titleKey: 'bible.title',
+      titleFallback: 'Bible',
+      subtitleKey: 'bible.subtitle',
+      subtitleFallback: 'Read Scripture and follow a yearly plan.',
+      route: FhcRoutes.bible,
+    ),
+    _MediaSpec(
+      icon: Icons.auto_stories_outlined,
       titleKey: 'online.read',
       titleFallback: 'Read',
       subtitleKey: 'online.readCopy',

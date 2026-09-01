@@ -233,6 +233,29 @@ class _ModuleDetail {
                 : sequence is num
                 ? sequence.round()
                 : i + 1;
+        final chaptersRaw = map['chapters'];
+        final chapters = <_ChapterSpec>[];
+        if (chaptersRaw is List) {
+          for (var c = 0; c < chaptersRaw.length; c++) {
+            final chapter = chaptersRaw[c];
+            if (chapter is! Map) continue;
+            final cmap = Map<String, Object?>.from(
+              chapter.map((k, v) => MapEntry('$k', v)),
+            );
+            final cseq = cmap['sequence'];
+            chapters.add(
+              _ChapterSpec(
+                id: '${cmap['id'] ?? ''}',
+                number: cseq is int
+                    ? cseq
+                    : cseq is num
+                    ? cseq.round()
+                    : c + 1,
+                title: '${cmap['title'] ?? cmap['code'] ?? 'Chapter'}',
+              ),
+            );
+          }
+        }
         lessons.add(
           _LessonSpec(
             id: '${map['id'] ?? ''}',
@@ -240,6 +263,7 @@ class _ModuleDetail {
             title: '${map['title'] ?? map['code'] ?? 'Lesson'}',
             unlocked: map['unlocked'] == true,
             lockReason: '${map['lock_reason'] ?? ''}',
+            chapters: chapters,
           ),
         );
       }
@@ -401,6 +425,7 @@ class _LessonSpec {
     required this.title,
     this.unlocked = false,
     this.lockReason = '',
+    this.chapters = const [],
   });
 
   final String id;
@@ -408,6 +433,15 @@ class _LessonSpec {
   final String title;
   final bool unlocked;
   final String lockReason;
+  final List<_ChapterSpec> chapters;
+}
+
+class _ChapterSpec {
+  const _ChapterSpec({required this.id, required this.number, required this.title});
+
+  final String id;
+  final int number;
+  final String title;
 }
 
 class _LessonsTab extends StatelessWidget {
@@ -507,6 +541,15 @@ class _LessonRow extends StatelessWidget {
                         height: 1.2,
                       ),
                     ),
+                    if (lesson.chapters.isNotEmpty)
+                      Text(
+                        '${lesson.chapters.length} chapters',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: FhcColors.muted,
+                          height: 1.2,
+                        ),
+                      ),
                     if (!lesson.unlocked && lesson.lockReason.isNotEmpty)
                       Text(
                         lesson.lockReason,

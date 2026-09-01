@@ -648,7 +648,7 @@ class LeadershipContinuationScreen extends StatelessWidget {
       ]),
       _rows([
         (
-          fhcT(context, 'member.bibleStudy', fallback: 'Bible Study'),
+          fhcT(context, 'member.bibleStudy', fallback: 'Study Manuals'),
           fhcT(
             context,
             'member.completedOf',
@@ -692,7 +692,7 @@ class LeadershipContinuationScreen extends StatelessWidget {
         fhcT(
           context,
           'member.nextMilestoneBibleStudies',
-          fallback: 'Next milestone: Complete 2 more Bible studies.',
+          fallback: 'Next milestone: Complete 2 more study manuals.',
         ),
       ),
     ],

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../../core/api/app_failure.dart';
@@ -469,58 +471,145 @@ class _AttendanceRow {
   final String statusLabel;
 }
 
-class KcaMenteesScreen extends StatelessWidget {
-  const KcaMenteesScreen({super.key});
+class KcaMenteesScreen extends StatefulWidget {
+  const KcaMenteesScreen({super.key, this.kcaRepository});
+
+  final KcaRepository? kcaRepository;
+
+  @override
+  State<KcaMenteesScreen> createState() => _KcaMenteesScreenState();
+}
+
+class _KcaMenteesScreenState extends State<KcaMenteesScreen> {
+  FhcAsyncValue<List<JsonObject>> _state = const FhcAsyncValue.loading();
+  JsonObject? _report;
+
+  KcaRepository? get _repo =>
+      widget.kcaRepository ??
+      AppServicesScope.maybeOf(context)?.kcaRepository;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_state is FhcAsyncLoading) {
+      unawaited(_load());
+    }
+  }
+
+  Future<void> _load() async {
+    final repo = _repo;
+    if (repo == null) {
+      setState(() {
+        _state = const FhcAsyncValue.unavailable(
+          message: 'Mentee reports require the member KCA API.',
+        );
+      });
+      return;
+    }
+    setState(() => _state = const FhcAsyncValue.loading());
+    final result = await repo.listMentees();
+    if (!mounted) return;
+    switch (result) {
+      case AppSuccess(:final value):
+        setState(() => _state = FhcAsyncValue.data(value));
+      case AppError(:final failure):
+        setState(() => _state = FhcAsyncValue.error(failure));
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    const mentees = [
-      ('Jane Esther', 'New Convert', .70),
-      ('Michael Bassey', 'Level 1 Student', .60),
-      ('Glory Samuel', 'Level 1 Student', .40),
-      ('David Okoro', 'Level 2 Student', .80),
-      ('Mercy John', 'Level 1 Student', .50),
-    ];
     return WorkflowPage(
       title: 'My Mentees',
       domain: WorkflowDomain.kca,
-      actionLabel: 'View All Mentees',
+      actionLabel: 'Refresh',
+      onAction: _load,
       children: [
-        const WorkflowSummary(
-          title: 'Mentor Overview',
-          metrics: [('18', 'Total Mentees'), ('15', 'Active')],
-        ),
-        const SizedBox(height: 10),
-        for (final mentee in mentees)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: WorkflowCard(
-              child: Row(
-                children: [
-                  const CircleAvatar(child: Icon(Icons.person_outline)),
-                  const SizedBox(width: 10),
-                  Expanded(
+        FhcAsyncBody<List<JsonObject>>(
+          value: _state,
+          onRetry: _load,
+          emptyTitle: 'No mentees',
+          emptyMessage: 'No students are assigned to you yet.',
+          builder: (context, rows) {
+            return Column(
+              children: [
+                for (final row in rows)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: WorkflowCard(
+                      child: InkWell(
+                        onTap: () async {
+                          final id = '${row['enrollment_id'] ?? ''}';
+                          if (id.isEmpty) return;
+                          final result = await _repo?.getMentee(id);
+                          if (!mounted || result == null) return;
+                          switch (result) {
+                            case AppSuccess(:final value):
+                              setState(() => _report = value);
+                            case AppError():
+                              break;
+                          }
+                        },
+                        child: Row(
+                          children: [
+                            const CircleAvatar(child: Icon(Icons.person_outline)),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '${(row['person'] is Map ? (row['person'] as Map)['name'] : null) ?? 'Student'}',
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                  Text(
+                                    'Curriculum ${row['curriculum_percent'] ?? 0}% · Assignments ${row['assignments_open'] ?? 0} open',
+                                    style: FhcTypography.caption,
+                                  ),
+                                  WorkflowProgress(
+                                    label: 'Progress',
+                                    value: ((_asNum(row['curriculum_percent'])) / 100).clamp(0, 1),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                if (_report != null) ...[
+                  const SizedBox(height: 12),
+                  WorkflowCard(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          mentee.$1,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                          ),
+                          '${(_report!['person'] is Map ? (_report!['person'] as Map)['name'] : null) ?? 'Report'}',
+                          style: const TextStyle(fontWeight: FontWeight.w700),
                         ),
-                        Text(mentee.$2, style: FhcTypography.caption),
-                        WorkflowProgress(label: 'Progress', value: mentee.$3),
+                        Text(
+                          'Notes ${(_report!['notes'] is Map ? (_report!['notes'] as Map)['count'] : 0)} · Devotionals ${(_report!['devotionals'] is Map ? (_report!['devotionals'] as Map)['count'] : 0)}',
+                          style: FhcTypography.caption,
+                        ),
                       ],
                     ),
                   ),
                 ],
-              ),
-            ),
-          ),
+              ],
+            );
+          },
+        ),
       ],
     );
+  }
+
+  double _asNum(Object? value) {
+    if (value is num) return value.toDouble();
+    return double.tryParse('$value') ?? 0;
   }
 }
 

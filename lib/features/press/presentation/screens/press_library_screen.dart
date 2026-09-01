@@ -11,9 +11,11 @@ import '../../../foundation/presentation/fhc_nav.dart';
 import '../widgets/press_cover.dart';
 
 class PressLibraryScreen extends StatefulWidget {
-  const PressLibraryScreen({super.key, this.repository});
+  const PressLibraryScreen({super.key, this.repository, this.initialFamily});
 
   final PressRepository? repository;
+  /// When `devotionals`, opens the shared Devotionals + Study Manual shelf.
+  final String? initialFamily;
 
   @override
   State<PressLibraryScreen> createState() => _PressLibraryScreenState();
@@ -22,7 +24,8 @@ class PressLibraryScreen extends StatefulWidget {
 class _PressLibraryScreenState extends State<PressLibraryScreen> {
   final _searchController = TextEditingController();
   FhcAsyncValue<List<JsonObject>> _state = const FhcAsyncValue.loading();
-  String? _publicationType;
+  String? _family;
+  String? _kind;
   String? _formatFilter;
   String? _languageFilter;
 
@@ -33,6 +36,7 @@ class _PressLibraryScreenState extends State<PressLibraryScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    _family ??= widget.initialFamily;
     if (_state is FhcAsyncLoading) {
       _load();
     }
@@ -62,13 +66,31 @@ class _PressLibraryScreenState extends State<PressLibraryScreen> {
     }
 
     setState(() => _state = const FhcAsyncValue.loading());
-    final result = await repository.search({
+    final shared = <String, Object?>{
       'sort': '-publication_date',
       'per_page': 50,
-      if (_publicationType != null) 'publication_type': _publicationType,
       if (_formatFilter != null) 'format': _formatFilter,
       if (_languageFilter != null) 'language': _languageFilter,
-    });
+    };
+    late final AppResult<List<JsonObject>> result;
+    if (_family == 'devotionals' && (_kind == null || _kind == 'all')) {
+      final devotionals = await repository.search({
+        ...shared,
+        'publication_type': 'devotional',
+      });
+      final manuals = await repository.search({
+        ...shared,
+        'publication_type': 'bible_study',
+      });
+      result = _mergeResults(devotionals, manuals);
+    } else {
+      final type = _kind ??
+          (_family == 'book' || _family == 'sermon' ? _family : null);
+      result = await repository.search({
+        ...shared,
+        if (type != null) 'publication_type': type,
+      });
+    }
     if (!mounted) return;
     switch (result) {
       case AppSuccess(:final value):
@@ -89,6 +111,27 @@ class _PressLibraryScreenState extends State<PressLibraryScreen> {
     }
   }
 
+  AppResult<List<JsonObject>> _mergeResults(
+    AppResult<List<JsonObject>> first,
+    AppResult<List<JsonObject>> second,
+  ) {
+    if (first is AppError<List<JsonObject>> &&
+        second is AppError<List<JsonObject>>) {
+      return first;
+    }
+    final items = <JsonObject>[];
+    final seen = <String>{};
+    for (final result in [first, second]) {
+      if (result is! AppSuccess<List<JsonObject>>) continue;
+      for (final item in result.value) {
+        final id = '${item['id'] ?? item['slug'] ?? item['title']}';
+        if (!seen.add(id)) continue;
+        items.add(item);
+      }
+    }
+    return AppSuccess(items);
+  }
+
   void _openPublication(String id) {
     if (id.isEmpty) return;
     Navigator.of(context).pushNamed('/press/book/$id', arguments: id);
@@ -103,7 +146,9 @@ class _PressLibraryScreenState extends State<PressLibraryScreen> {
       final publisher = '${item['publisher'] ?? ''}'.toLowerCase();
       final itemCategory = '${item['category'] ?? ''}'.toLowerCase();
       final format = '${item['format'] ?? ''}'.toLowerCase();
-      return '$title $subtitle $publisher $itemCategory $format'.contains(q);
+      final type = '${item['publication_type'] ?? ''}'.toLowerCase();
+      final typeLabel = type == 'bible_study' ? 'study manual' : type;
+      return '$title $subtitle $publisher $itemCategory $format $typeLabel'.contains(q);
     }).toList(growable: false);
   }
 
@@ -114,7 +159,8 @@ class _PressLibraryScreenState extends State<PressLibraryScreen> {
       showDragHandle: true,
       isScrollControlled: true,
       builder: (sheetContext) {
-        String? type = _publicationType;
+        String? type = _kind ??
+            (_family == 'devotionals' ? 'devotionals' : _family);
         String? format = _formatFilter;
         String? language = _languageFilter;
         return StatefulBuilder(
@@ -147,17 +193,51 @@ class _PressLibraryScreenState extends State<PressLibraryScreen> {
                           (null, 'All'),
                           ('book', 'Books'),
                           ('sermon', 'Sermons'),
-                          ('devotional', 'Devotionals'),
-                          ('bible_study', 'Bible Study'),
+                          ('devotionals', 'Devotionals'),
                         ])
                           ChoiceChip(
                             label: Text(option.$2),
-                            selected: type == option.$1,
+                            selected:
+                                type == option.$1 ||
+                                (option.$1 == 'devotionals' &&
+                                    (type == 'devotional' ||
+                                        type == 'bible_study')),
                             onSelected: (_) =>
                                 setSheetState(() => type = option.$1),
                           ),
                       ],
                     ),
+                    if (type == 'devotionals' ||
+                        type == 'devotional' ||
+                        type == 'bible_study') ...[
+                      const SizedBox(height: 16),
+                      Text(
+                        fhcT(
+                          context,
+                          'nav.pressDevotionalKind',
+                          fallback: 'Devotional type',
+                        ),
+                        style: FhcTypography.label,
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          for (final option in const [
+                            ('devotionals', 'All'),
+                            ('devotional', 'Devotional'),
+                            ('bible_study', 'Study Manual'),
+                          ])
+                            ChoiceChip(
+                              label: Text(option.$2),
+                              selected: type == option.$1,
+                              onSelected: (_) =>
+                                  setSheetState(() => type = option.$1),
+                            ),
+                        ],
+                      ),
+                    ],
                     const SizedBox(height: 16),
                     Text(
                       fhcT(context, 'nav.pressFormat', fallback: 'Format'),
@@ -225,19 +305,41 @@ class _PressLibraryScreenState extends State<PressLibraryScreen> {
       },
     );
     if (!mounted || applied == null) return;
+    final selected = applied.$1;
     setState(() {
-      _publicationType = applied.$1;
+      if (selected == 'devotional' || selected == 'bible_study') {
+        _family = 'devotionals';
+        _kind = selected;
+      } else if (selected == 'devotionals') {
+        _family = 'devotionals';
+        _kind = null;
+      } else {
+        _family = selected;
+        _kind = null;
+      }
       _formatFilter = applied.$2;
       _languageFilter = applied.$3;
     });
     await _load();
   }
 
+  String _typeLabel(String? type) {
+    return switch ((type ?? '').toLowerCase()) {
+      'bible_study' => fhcT(context, 'nav.pressStudyManual', fallback: 'Study Manual'),
+      'devotional' => fhcT(context, 'nav.pressDevotionalType', fallback: 'Devotional'),
+      'book' => fhcT(context, 'nav.pressBooks', fallback: 'Books'),
+      'sermon' => fhcT(context, 'nav.pressSermons', fallback: 'Sermons'),
+      _ => '',
+    };
+  }
+
   String _subtitle(JsonObject item) {
+    final type = _typeLabel('${item['publication_type'] ?? ''}');
     final format = '${item['format'] ?? ''}'.trim();
     final publisher = '${item['publisher'] ?? ''}'.trim();
     final category = '${item['category'] ?? ''}'.trim();
     final parts = <String>[
+      if (type.isNotEmpty) type,
       if (format.isNotEmpty) _titleCase(format),
       if (publisher.isNotEmpty) publisher else if (category.isNotEmpty) category,
     ];
@@ -363,12 +465,42 @@ class _PressLibraryScreenState extends State<PressLibraryScreen> {
               ),
               const SizedBox(height: 10),
               _CategoryRow(
-                selected: _publicationType,
+                selected: _family,
                 onSelect: (value) {
-                  setState(() => _publicationType = value);
+                  setState(() {
+                    _family = value;
+                    if (value != 'devotionals') _kind = null;
+                  });
                   _load();
                 },
               ),
+              if (_family == 'devotionals') ...[
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    for (final option in [
+                      (null, 'All'),
+                      (
+                        'devotional',
+                        fhcT(context, 'nav.pressDevotionalType', fallback: 'Devotional'),
+                      ),
+                      (
+                        'bible_study',
+                        fhcT(context, 'nav.pressStudyManual', fallback: 'Study Manual'),
+                      ),
+                    ])
+                      ChoiceChip(
+                        label: Text(option.$2),
+                        selected: _kind == option.$1,
+                        onSelected: (_) {
+                          setState(() => _kind = option.$1);
+                          _load();
+                        },
+                      ),
+                  ],
+                ),
+              ],
               const SizedBox(height: 18),
               _SectionHeader(
                 title: fhcT(
@@ -453,7 +585,7 @@ class _SearchFilterRow extends StatelessWidget {
                 hintText: fhcT(
                   context,
                   'common.searchPressHint',
-                  fallback: 'Search books, sermons, devotionals, Bible studies...',
+                  fallback: 'Search books, sermons, devotionals, study manuals...',
                 ),
                 hintStyle: FhcTypography.hint,
                 filled: true,
@@ -641,13 +773,7 @@ class _CategoryRow extends StatelessWidget {
       Icons.auto_stories_outlined,
       'nav.pressDevotionals',
       'Devotionals',
-      'devotional',
-    ),
-    (
-      Icons.import_contacts,
-      'nav.pressBibleStudy',
-      'Bible Study',
-      'bible_study',
+      'devotionals',
     ),
   ];
 

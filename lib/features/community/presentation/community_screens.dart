@@ -1,4 +1,6 @@
 export 'screens/bible_screen.dart';
+export 'screens/bible_reader_screen.dart';
+export 'screens/bible_plans_screen.dart';
 export 'screens/event_detail_screen.dart';
 export 'screens/event_press_account_workflow_screens.dart';
 export 'screens/events_screen.dart';

@@ -76,6 +76,18 @@ abstract interface class KcaRepository {
     String? idempotencyKey,
     String? unlockToken,
   });
+  Future<AppResult<JsonObject>> getChapter(String chapterId);
+  Future<AppResult<JsonObject>> completeChapter(
+    String chapterId, {
+    bool acknowledged = true,
+    String? idempotencyKey,
+    String? unlockToken,
+  });
+  Future<AppResult<JsonObject>> getAssignment(String assignmentId);
+  Future<AppResult<JsonObject>> recordSoulWin(String assignmentId, JsonObject body);
+  Future<AppResult<List<JsonObject>>> listMentees();
+  Future<AppResult<JsonObject>> getMentee(String enrollmentId);
+  Future<AppResult<JsonObject>> createNote(JsonObject body);
   Future<AppResult<void>> syncQueuedCompletions();
   Future<AppResult<JsonObject>> getCurrentApplication();
   Future<AppResult<JsonObject>> submitApplication(
@@ -158,6 +170,17 @@ abstract interface class NotificationRepository {
   Future<AppResult<List<JsonObject>>> list();
   Future<AppResult<JsonObject>> markRead(String notificationId);
   Future<AppResult<JsonObject>> resolveDestination(String notificationId);
+}
+
+abstract interface class BibleRepository {
+  Future<AppResult<JsonObject>> books();
+  Future<AppResult<JsonObject>> chapter(String book, int chapter);
+  Future<AppResult<JsonObject>> search(String query);
+  Future<AppResult<List<JsonObject>>> plans();
+  Future<AppResult<JsonObject>> progress();
+  Future<AppResult<JsonObject>> enroll(String planCode);
+  Future<AppResult<JsonObject>> completeDay(String enrollmentId, int day);
+  Future<AppResult<JsonObject>> savePosition(String book, int chapter);
 }
 
 abstract interface class SecurityRepository {

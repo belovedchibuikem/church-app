@@ -525,6 +525,8 @@ class _FamilyHouseConnectAppState extends State<FamilyHouseConnectApp> {
             child: const GroupsScreen(),
           ),
           '/bible' => const BibleScreen(),
+          '/bible/plans' => const BiblePlansScreen(),
+          '/bible/read' => const BibleReaderScreen(),
           '/media' => const MediaHubScreen(),
           '/kca' => const KcaEntryGate(),
           '/kca/gate' => const KcaEntryGate(),
@@ -538,6 +540,10 @@ class _FamilyHouseConnectAppState extends State<FamilyHouseConnectApp> {
           ),
           '/kca/lesson' => KcaLessonScreen(
             lessonId: routeArgs.entityId ?? routeQuery['id'],
+          ),
+          '/kca/chapter' => KcaLessonScreen(
+            lessonId: routeArgs.entityId ?? routeQuery['id'],
+            chapter: true,
           ),
           '/kca/assignments' => const KcaAssignmentsScreen(),
           '/kca/mentor' => const MentorChatScreen(),
@@ -566,11 +572,7 @@ class _FamilyHouseConnectAppState extends State<FamilyHouseConnectApp> {
             permission: 'kca.attendance.view',
             child: const KcaAttendanceScreen(),
           ),
-          '/kca/mentees' => PermissionGuard(
-            gateway: authorizationGateway,
-            permission: 'kca.mentoring.view',
-            child: const KcaMenteesScreen(),
-          ),
+          '/kca/mentees' => const KcaMenteesScreen(),
           '/kca/review' => PermissionGuard(
             gateway: authorizationGateway,
             permission: 'kca.evidence.review',
@@ -751,6 +753,9 @@ class _FamilyHouseConnectAppState extends State<FamilyHouseConnectApp> {
             child: const SoulsFollowupScreen(),
           ),
           '/press' => const PressLibraryScreen(),
+          '/press/devotionals' => const PressLibraryScreen(
+            initialFamily: 'devotionals',
+          ),
           '/press/admin' => PermissionGuard(
             gateway: authorizationGateway,
             permission: 'press.publications.manage',

@@ -94,6 +94,7 @@ CanonicalRoute resolveCanonicalRoute(String requestedRoute) {
     '/home-church/dashboard' => '/home-church',
     '/online-church/live' => '/fellowship/live',
     '/online-church/sermons' => '/sermons',
+    '/online-church/bible-study' => '/press/devotionals',
     '/online-church/prayer' => '/prayer',
     '/mission/crusades' => '/mission/crusade',
     '/mission/follow-up' => '/mission/souls',
@@ -147,6 +148,12 @@ CanonicalRoute resolveCanonicalRoute(String requestedRoute) {
     }
     if (parts.length >= 3 && parts[0] == 'kca' && parts[1] == 'lesson') {
       return CanonicalRoute(canonical: '/kca/lesson', entityId: parts[2]);
+    }
+    if (parts.length >= 3 && parts[0] == 'kca' && parts[1] == 'chapter') {
+      return CanonicalRoute(canonical: '/kca/chapter', entityId: parts[2]);
+    }
+    if (parts.length >= 3 && parts[0] == 'kca' && parts[1] == 'module') {
+      return CanonicalRoute(canonical: '/kca/module', entityId: parts[2]);
     }
     if (parts.length >= 3 && parts[0] == 'kca' && parts[1] == 'assignment') {
       return CanonicalRoute(
@@ -214,6 +221,28 @@ CanonicalRoute resolveCanonicalRoute(String requestedRoute) {
         return CanonicalRoute(
           canonical: '/payments/transaction',
           entityId: parts[1],
+        );
+      }
+    }
+    if (parts.isNotEmpty && parts[0] == 'bible') {
+      if (parts.length == 1) {
+        return const CanonicalRoute(canonical: '/bible');
+      }
+      if (parts[1] == 'plans') {
+        return const CanonicalRoute(canonical: '/bible/plans');
+      }
+      if (parts[1] == 'read' && parts.length >= 3) {
+        return CanonicalRoute(
+          canonical: '/bible/read',
+          entityId: parts.length > 2 ? parts[2] : null,
+          secondaryId: parts.length > 3 ? parts[3] : null,
+        );
+      }
+      if (parts.length >= 3) {
+        return CanonicalRoute(
+          canonical: '/bible/read',
+          entityId: parts[1],
+          secondaryId: parts[2],
         );
       }
     }

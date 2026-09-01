@@ -216,7 +216,9 @@ class _Assignment {
   factory _Assignment.fromJson(Map<String, Object?> json) {
     final state = '${json['state'] ?? json['status'] ?? ''}'.toLowerCase();
     final bucket =
-        state.contains('approved') || state.contains('complete')
+        treeOpen
+            ? _Bucket.pending
+            : state.contains('approved') || state.contains('complete')
             ? _Bucket.completed
             : state.contains('submit') || state.contains('review')
             ? _Bucket.submitted
@@ -227,9 +229,18 @@ class _Assignment {
             ? '${module['title'] ?? module['code'] ?? 'Module'}'
             : 'Module';
     final due = json['due_at'] ?? json['submitted_at'] ?? json['updated_at'];
+    final tree = json['soul_tree'];
+    final treeOpen = tree is Map && tree['open'] == true;
+    final recorded = tree is Map ? '${tree['recorded_souls'] ?? 0}' : '';
+    final required = tree is Map ? '${tree['required_souls'] ?? 0}' : '';
+    final kind = '${json['assignment_kind'] ?? ''}';
     return _Assignment(
       title: '${json['title'] ?? 'Assignment'}',
-      moduleLabel: moduleTitle,
+      moduleLabel: treeOpen
+          ? '$moduleTitle • souls $recorded/$required (open)'
+          : kind == 'soul_winning'
+          ? '$moduleTitle • soul tree complete'
+          : moduleTitle,
       dateLabel: due == null ? '' : due.toString(),
       priority: switch ('${json['priority'] ?? ''}'.toLowerCase()) {
         'high' => _Priority.high,
