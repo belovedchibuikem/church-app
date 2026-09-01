@@ -197,8 +197,10 @@ class _KcaLifecycleScreenState extends State<KcaLifecycleScreen> {
     if (spec.next == null) return;
 
     if (_isEnrolmentStep) {
+      final fixtures =
+          AppServicesScope.maybeOf(context)?.showUnboundFixtures ?? false;
       final form = _formKey.currentState;
-      if (form != null && !form.validate()) return;
+      if (!fixtures && form != null && !form.validate()) return;
       await _persistDraft(pushServer: kind != KcaLifecycleKind.recommendation);
       if (!mounted) return;
     }

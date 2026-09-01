@@ -7,6 +7,7 @@ import '../../../../core/design_system/fhc_tokens.dart';
 import '../../../../core/di/app_services_scope.dart';
 import '../../../../core/l10n/locale_scope.dart';
 import '../../../../core/launch/app_launch_scope.dart';
+import '../../../../core/offline/offline_warmup.dart';
 import '../../../../shared/widgets/fhc_brand_logo.dart';
 import '../../../../shared/widgets/fhc_components.dart';
 import '../fhc_nav.dart';
@@ -105,6 +106,17 @@ class _SplashScreenState extends State<SplashScreen>
 
         if (hasSession) {
           await services?.authorizationGateway.prefetchCapabilities();
+          if (services?.visualReview != true) {
+            final transport = services?.transport;
+            if (transport != null || services?.kcaRepository != null) {
+              unawaited(
+                warmupOfflineCache(
+                  transport: transport,
+                  kcaRepository: services?.kcaRepository,
+                ),
+              );
+            }
+          }
         }
       } catch (_) {
         hasSession = false;

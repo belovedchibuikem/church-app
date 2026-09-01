@@ -182,10 +182,10 @@ class _OfflineSyncScreenState extends State<OfflineSyncScreen> {
     );
   }
 
-  void _handleAction(_OfflineSpec spec) {
+  Future<void> _handleAction(_OfflineSpec spec) async {
     switch (widget.kind) {
       case OfflineSyncKind.syncPending:
-        _requestSync();
+        await _requestSync();
       case OfflineSyncKind.storage:
         _showMessage(
           fhcT(
@@ -194,6 +194,7 @@ class _OfflineSyncScreenState extends State<OfflineSyncScreen> {
             fallback: '120 MB of cached temporary files cleared.',
           ),
         );
+        await AppServicesScope.maybeOf(context)?.offline.clearDownloadedContent();
       case OfflineSyncKind.lowBandwidth:
         _showMessage(
           fhcT(
@@ -203,7 +204,8 @@ class _OfflineSyncScreenState extends State<OfflineSyncScreen> {
           ),
         );
       case OfflineSyncKind.uploadFailed:
-        _requestSync();
+        await _requestSync();
+        if (mounted) fhcPush(context, '/uploads/progress');
       default:
         if (spec.next != null) fhcPush(context, spec.next!);
     }
@@ -215,13 +217,23 @@ class _OfflineSyncScreenState extends State<OfflineSyncScreen> {
       ..showSnackBar(SnackBar(content: Text(message)));
   }
 
-  void _retryConnection() {
+  Future<void> _retryConnection() async {
+    final offline = AppServicesScope.maybeOf(context)?.offline;
+    final ok = await offline?.probe() ?? false;
+    if (!mounted) return;
     _showMessage(
-      fhcT(
-        context,
-        'account.checkingConnection',
-        fallback: 'Checking the connection. Offline content remains available.',
-      ),
+      ok
+          ? fhcT(
+            context,
+            'account.connectionRestored',
+            fallback: 'Connection restored. Syncing queued items…',
+          )
+          : fhcT(
+            context,
+            'account.checkingConnection',
+            fallback:
+                'Still no connection. Downloaded content remains available.',
+          ),
     );
   }
 
@@ -520,13 +532,13 @@ class _OfflineSyncScreenState extends State<OfflineSyncScreen> {
           fallback: 'PDF Document • resumable via SyncRepository',
         ),
         .78,
-        canPause: true,
+        canPause: false,
       ),
       _notice(
         fhcT(
           context,
           'account.resumableUploads',
-          fallback: 'Resumable uploads',
+          fallback: 'Resumable uploads are ON',
         ),
         fhcT(
           context,

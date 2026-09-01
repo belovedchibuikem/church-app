@@ -11,9 +11,14 @@ final class LaravelSecurityRepository implements SecurityRepository {
   factory LaravelSecurityRepository.fromTokenStore({
     required SessionTokenStore tokenStore,
     String? baseUrl,
+    ApiTransport? transport,
   }) {
     return LaravelSecurityRepository(
-      client: UserApiClient(tokenStore: tokenStore, baseUrl: baseUrl),
+      client: UserApiClient(
+        tokenStore: tokenStore,
+        baseUrl: baseUrl,
+        transport: transport,
+      ),
     );
   }
 

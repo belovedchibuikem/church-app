@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../core/api/app_failure.dart';
@@ -7,33 +8,78 @@ import '../../../../core/contracts/mobile_repository_contracts.dart';
 import '../../../../core/design_system/fhc_tokens.dart';
 import '../../../../core/di/app_services_scope.dart';
 import '../../../../core/l10n/locale_scope.dart';
+import '../../../../core/routing/fhc_route_args.dart';
 import '../../../../shared/widgets/async_state.dart';
 import '../../../../shared/widgets/fhc_components.dart';
 import '../../../../shared/widgets/workflow_components.dart';
 import '../../../foundation/presentation/fhc_nav.dart';
 import '../../data/kca_repository.dart';
 
-class KcaEvidenceUploadScreen extends StatelessWidget {
+class KcaEvidenceUploadScreen extends StatefulWidget {
   const KcaEvidenceUploadScreen({super.key});
 
-  Future<void> _submit(BuildContext context) async {
+  @override
+  State<KcaEvidenceUploadScreen> createState() =>
+      _KcaEvidenceUploadScreenState();
+}
+
+class _KcaEvidenceUploadScreenState extends State<KcaEvidenceUploadScreen> {
+  String? _filename;
+  List<int>? _bytes;
+  String? _status;
+  bool _busy = false;
+
+  Future<void> _pickFile() async {
+    final picked = await FilePicker.pickFiles(
+      withData: true,
+      type: FileType.custom,
+      allowedExtensions: const ['jpg', 'jpeg', 'png', 'pdf', 'mp4', 'mov'],
+    );
+    if (picked == null || picked.files.isEmpty) return;
+    final file = picked.files.first;
+    setState(() {
+      _filename = file.name;
+      _bytes = file.bytes;
+      _status = null;
+    });
+  }
+
+  Future<void> _submit() async {
     final repo = AppServicesScope.maybeOf(context)?.kcaRepository;
-    if (repo != null) {
-      final result = await repo.submitEvidence(const <String, Object?>{});
-      if (!context.mounted) return;
-      if (result case AppError(:final failure)) {
-        await fhcApiUnavailable(
-          context,
-          action: failure.message,
-        );
-        return;
+    final assignmentId =
+        FhcRouteArgs.entityIdOf(context)?.trim() ?? '';
+    final bytes = _bytes;
+    if (repo != null && bytes != null && bytes.isNotEmpty) {
+      var id = assignmentId;
+      if (id.isEmpty) {
+        final listed = await repo.listAssignments();
+        if (listed case AppSuccess(:final value) when value.isNotEmpty) {
+          id = '${value.first['id'] ?? value.first['public_id'] ?? ''}'.trim();
+        }
+      }
+      setState(() => _busy = true);
+      final result = await repo.submitEvidence({
+        'assignment_id': id,
+        'filename': _filename ?? 'kca-evidence.bin',
+        'bytes': bytes,
+      });
+      if (!mounted) return;
+      setState(() => _busy = false);
+      switch (result) {
+        case AppSuccess(:final value):
+          setState(() {
+            _status =
+                value['queued'] == true
+                    ? 'Evidence is saved on this device and will upload when you are online.'
+                    : 'Evidence was submitted.';
+          });
+        case AppError(:final failure):
+          setState(() => _status = failure.message);
+          return;
       }
     }
-    if (!context.mounted) return;
-    await fhcApiUnavailable(
-      context,
-      action: 'Submitting KCA evidence',
-    );
+    if (!mounted) return;
+    fhcPush(context, FhcRoutes.kcaReview);
   }
 
   @override
@@ -41,10 +87,10 @@ class KcaEvidenceUploadScreen extends StatelessWidget {
     return WorkflowPage(
       title: 'Upload Evidence',
       domain: WorkflowDomain.kca,
-      actionLabel: 'Upload Evidence',
-      onAction: () => _submit(context),
-      children: const [
-        WorkflowCard(
+      actionLabel: _busy ? 'Saving…' : 'Upload Evidence',
+      onAction: _busy ? null : _submit,
+      children: [
+        const WorkflowCard(
           color: Color(0xFFEAF4EF),
           child: Row(
             children: [
@@ -59,20 +105,37 @@ class KcaEvidenceUploadScreen extends StatelessWidget {
             ],
           ),
         ),
-        SizedBox(height: 14),
-        WorkflowField(
+        const SizedBox(height: 14),
+        const WorkflowField(
           label: 'Activity Type',
           value: 'Select activity type',
           required: true,
           icon: Icons.keyboard_arrow_down,
         ),
-        WorkflowField(
+        const WorkflowField(
           label: 'Description',
           value: 'Tell us what happened...',
           lines: 4,
           required: true,
         ),
-        WorkflowUploadBox(),
+        GestureDetector(
+          onTap: _pickFile,
+          child: WorkflowUploadBox(
+            label: _filename ??
+                fhcT(
+                  context,
+                  'common.uploadHint',
+                  fallback: 'Tap to upload or drag files here',
+                ),
+          ),
+        ),
+        if (_status != null) ...[
+          const SizedBox(height: 10),
+          Text(
+            _status!,
+            style: const TextStyle(fontSize: 12, color: FhcColors.muted),
+          ),
+        ],
       ],
     );
   }

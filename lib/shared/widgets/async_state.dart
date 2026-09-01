@@ -105,11 +105,17 @@ class FhcAsyncBody<T> extends StatelessWidget {
             ),
       ),
       FhcAsyncError<T>(:final failure) => FhcErrorState(
-        title: fhcT(
-          context,
-          'errors.somethingWentWrong',
-          fallback: 'Something went wrong',
-        ),
+        title: failure is NetworkFailure || failure is OfflineFailure
+            ? fhcT(
+                context,
+                'account.youreOfflineHeadline',
+                fallback: 'You’re offline',
+              )
+            : fhcT(
+                context,
+                'errors.somethingWentWrong',
+                fallback: 'Something went wrong',
+              ),
         message: failure.message,
         onRetry: onRetry,
       ),

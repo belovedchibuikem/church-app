@@ -13,6 +13,13 @@ final class KcaEnrolmentDraftStore extends ChangeNotifier {
   static const stepCount = 8;
 
   SharedPreferences? _prefs;
+  bool _closed = false;
+
+  @override
+  void dispose() {
+    _closed = true;
+    super.dispose();
+  }
 
   Future<SharedPreferences> _ensurePrefs() async {
     return _prefs ??= await SharedPreferences.getInstance();
@@ -41,7 +48,7 @@ final class KcaEnrolmentDraftStore extends ChangeNotifier {
     if (step < 1 || step > stepCount) return;
     final prefs = await _ensurePrefs();
     await prefs.setString(_key(step), jsonEncode(fields));
-    notifyListeners();
+    if (!_closed) notifyListeners();
   }
 
   Future<Map<String, String>> loadAll() async {
@@ -87,6 +94,6 @@ final class KcaEnrolmentDraftStore extends ChangeNotifier {
     for (var step = 1; step <= stepCount; step++) {
       await prefs.remove(_key(step));
     }
-    notifyListeners();
+    if (!_closed) notifyListeners();
   }
 }

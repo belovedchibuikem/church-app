@@ -173,12 +173,16 @@ abstract interface class NotificationRepository {
 }
 
 abstract interface class BibleRepository {
-  Future<AppResult<JsonObject>> books();
-  Future<AppResult<JsonObject>> chapter(String book, int chapter);
-  Future<AppResult<JsonObject>> search(String query);
+  Future<AppResult<JsonObject>> books({String? version});
+  Future<AppResult<JsonObject>> chapter(
+    String book,
+    int chapter, {
+    String? version,
+  });
+  Future<AppResult<JsonObject>> search(String query, {String? version});
   Future<AppResult<List<JsonObject>>> plans();
   Future<AppResult<JsonObject>> progress();
-  Future<AppResult<JsonObject>> enroll(String planCode);
+  Future<AppResult<JsonObject>> enroll(String planCode, {int? durationDays});
   Future<AppResult<JsonObject>> completeDay(String enrollmentId, int day);
   Future<AppResult<JsonObject>> savePosition(String book, int chapter);
 }

@@ -8,6 +8,8 @@ import '../../../../core/l10n/locale_scope.dart';
 import '../../../../shared/widgets/fhc_components.dart';
 import '../../../foundation/presentation/fhc_nav.dart';
 
+const _kParchment = Color(0xFFF7F3EA);
+
 class BiblePlansScreen extends StatefulWidget {
   const BiblePlansScreen({super.key, this.repository});
 
@@ -21,6 +23,7 @@ class _BiblePlansScreenState extends State<BiblePlansScreen> {
   List<JsonObject> _plans = const [];
   String? _error;
   String? _busy;
+  int _customDays = 90;
 
   BibleRepository? get _repository =>
       widget.repository ?? AppServicesScope.maybeOf(context)?.bibleRepository;
@@ -48,18 +51,24 @@ class _BiblePlansScreenState extends State<BiblePlansScreen> {
     setState(() {
       switch (result) {
         case AppSuccess(:final value):
-          _plans = value;
+          _plans = [
+            for (final plan in value)
+              if ('${plan['code']}' != 'year_3') plan,
+          ];
         case AppError(:final failure):
           _error = failure.message;
       }
     });
   }
 
-  Future<void> _start(String code) async {
+  Future<void> _start(String code, {int? durationDays}) async {
     final repository = _repository;
     if (repository == null) return;
     setState(() => _busy = code);
-    final result = await repository.enroll(code);
+    final result = await repository.enroll(
+      code,
+      durationDays: durationDays,
+    );
     if (!mounted) return;
     switch (result) {
       case AppSuccess():
@@ -75,7 +84,7 @@ class _BiblePlansScreenState extends State<BiblePlansScreen> {
   @override
   Widget build(BuildContext context) {
     return FhcDevicePage(
-      backgroundColor: FhcColors.canvas,
+      backgroundColor: _kParchment,
       child: Column(
         children: [
           FhcTopBar(
@@ -110,6 +119,16 @@ class _BiblePlansScreenState extends State<BiblePlansScreen> {
                         ),
                         const SizedBox(height: 6),
                         Text('${plan['description']}'),
+                        const SizedBox(height: 4),
+                        Text(
+                          fhcT(
+                            context,
+                            'bible.planDays',
+                            args: {'days': '${plan['days']}'},
+                            fallback: '{days} days',
+                          ),
+                          style: FhcTypography.caption,
+                        ),
                         const SizedBox(height: 12),
                         FilledButton(
                           onPressed: _busy == plan['code']
@@ -128,6 +147,60 @@ class _BiblePlansScreenState extends State<BiblePlansScreen> {
                   ),
                   const SizedBox(height: 12),
                 ],
+                FhcSurfaceCard(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        fhcT(
+                          context,
+                          'bible.customPlan',
+                          fallback: 'Create your own pace',
+                        ),
+                        style: FhcTypography.titleSmall,
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        fhcT(
+                          context,
+                          'bible.customPlanCopy',
+                          fallback:
+                              'Choose how many days you want to finish the Bible. 30–1,095 days.',
+                        ),
+                      ),
+                      Slider(
+                        min: 30,
+                        max: 1095,
+                        divisions: 213,
+                        value: _customDays.toDouble(),
+                        label: '$_customDays days',
+                        onChanged: (value) =>
+                            setState(() => _customDays = value.round()),
+                      ),
+                      Text(
+                        fhcT(
+                          context,
+                          'bible.planDays',
+                          args: {'days': '$_customDays'},
+                          fallback: '{days} days',
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      FilledButton(
+                        onPressed: _busy == 'custom'
+                            ? null
+                            : () => _start('', durationDays: _customDays),
+                        child: Text(
+                          fhcT(
+                            context,
+                            'bible.startCustomPlan',
+                            fallback: 'Start custom plan',
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),

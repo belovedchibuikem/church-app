@@ -31,12 +31,8 @@ final class LocalDeviceBiometrics implements DeviceBiometrics {
   Future<bool> canAuthenticate() async {
     try {
       final supported = await _auth.isDeviceSupported();
-      if (!supported) return false;
-      final types = await _auth.getAvailableBiometrics();
-      if (types.isEmpty) {
-        return _auth.canCheckBiometrics;
-      }
-      return true;
+      final canCheck = await _auth.canCheckBiometrics;
+      return supported || canCheck;
     } on MissingPluginException {
       return false;
     } on PlatformException {
@@ -49,7 +45,7 @@ final class LocalDeviceBiometrics implements DeviceBiometrics {
   @override
   Future<bool> authenticate({required String reason}) async {
     try {
-      return await _auth.authenticate(
+      final enrolled = await _auth.authenticate(
         localizedReason: reason,
         options: const AuthenticationOptions(
           biometricOnly: true,
@@ -57,10 +53,30 @@ final class LocalDeviceBiometrics implements DeviceBiometrics {
           useErrorDialogs: true,
         ),
       );
+      if (enrolled) return true;
+      return await _auth.authenticate(
+        localizedReason: reason,
+        options: const AuthenticationOptions(
+          biometricOnly: false,
+          stickyAuth: true,
+          useErrorDialogs: true,
+        ),
+      );
     } on MissingPluginException {
       return false;
     } on PlatformException {
-      return false;
+      try {
+        return await _auth.authenticate(
+          localizedReason: reason,
+          options: const AuthenticationOptions(
+            biometricOnly: false,
+            stickyAuth: true,
+            useErrorDialogs: true,
+          ),
+        );
+      } catch (_) {
+        return false;
+      }
     } catch (_) {
       return false;
     }
@@ -86,14 +102,16 @@ final class BiometricUnlock {
 
   Future<bool> get isEnabled => tokenStore.readBiometricUnlockEnabled();
 
-  Future<bool> get canOfferUnlock async {
-    if (!await isHardwareAvailable) return false;
+  Future<bool> get hasStoredSession async {
     final refresh = await tokenStore.readRefreshToken();
     final access = await tokenStore.readAccessToken();
-    final hasSession =
-        (refresh != null && refresh.isNotEmpty) ||
+    return (refresh != null && refresh.isNotEmpty) ||
         (access != null && access.isNotEmpty);
-    if (!hasSession) return false;
+  }
+
+  Future<bool> get canOfferUnlock async {
+    if (!await isHardwareAvailable) return false;
+    if (!await hasStoredSession) return false;
     return tokenStore.readBiometricUnlockEnabled();
   }
 

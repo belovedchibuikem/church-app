@@ -7,6 +7,8 @@ import 'package:http/http.dart' as http;
 import '../api/api_transport.dart';
 import '../api/app_failure.dart';
 import '../api/fhc_api_config.dart';
+import '../offline/connectivity_monitor.dart';
+import '../offline/offline_store.dart';
 import 'authorization.dart';
 import 'session_lifetime.dart';
 import 'session_token_store.dart';
@@ -33,6 +35,9 @@ final class LaravelAuthorizationGateway implements AuthorizationGateway {
   SessionRefresher? _sessionRefresher;
   Completer<bool>? _refreshCompleter;
 
+  OfflineStore? offlineStore;
+  ConnectivityMonitor? connectivity;
+
   /// Wired after [LaravelAuthRepository] is constructed in [AppServices].
   set sessionRefresher(SessionRefresher? value) => _sessionRefresher = value;
 
@@ -53,6 +58,7 @@ final class LaravelAuthorizationGateway implements AuthorizationGateway {
   Uri get _root => Uri.parse(baseUrl.replaceAll(RegExp(r'/$'), ''));
 
   bool get _capabilitiesAreStale {
+    if (connectivity?.isOnline == false) return false;
     final fetchedAt = _capabilitiesFetchedAt;
     if (fetchedAt == null) return true;
     return !DateTime.now().toUtc().isBefore(
@@ -94,21 +100,27 @@ final class LaravelAuthorizationGateway implements AuthorizationGateway {
       final snapshot = await _fetchCapabilities(credentials);
       _capabilityPermissions = snapshot;
       _capabilitiesFetchedAt = DateTime.now().toUtc();
+      await offlineStore?.saveCapabilities(snapshot);
     } on UnauthorizedFailure {
       final refreshed = await _refreshOnce();
-      if (!refreshed) return;
+      if (!refreshed) {
+        await _hydrateCapabilitiesFromDisk();
+        return;
+      }
       credentials = await _readCredentials();
       if (credentials == null) return;
       try {
         final snapshot = await _fetchCapabilities(credentials);
         _capabilityPermissions = snapshot;
         _capabilitiesFetchedAt = DateTime.now().toUtc();
+        await offlineStore?.saveCapabilities(snapshot);
       } on UnauthorizedFailure {
         // Refresh already persisted or cleared credentials. Do not wipe
         // a still-valid 30-day refresh token from a second 401.
       }
     } catch (error, stack) {
       debugPrint('Capabilities prefetch failed: $error\n$stack');
+      await _hydrateCapabilitiesFromDisk();
     }
   }
 
@@ -125,6 +137,8 @@ final class LaravelAuthorizationGateway implements AuthorizationGateway {
         reason: 'Sign in to access this area.',
       );
     }
+
+    await _hydrateCapabilitiesFromDisk();
 
     final needsScopedCheck =
         (organizationScope != null && organizationScope.isNotEmpty) ||
@@ -246,6 +260,14 @@ final class LaravelAuthorizationGateway implements AuthorizationGateway {
     );
   }
 
+  Future<void> _hydrateCapabilitiesFromDisk() async {
+    if (_capabilityPermissions != null) return;
+    final stored = await offlineStore?.loadCapabilities() ?? const [];
+    if (stored.isEmpty) return;
+    _capabilityPermissions = stored.toSet();
+    _capabilitiesFetchedAt ??= DateTime.now().toUtc();
+  }
+
   Future<({String token, String deviceId})?> _readCredentials() async {
     final token = await tokenStore.readAccessToken();
     final deviceId = await tokenStore.readDeviceIdentifier();
@@ -354,6 +376,7 @@ final class LaravelAuthorizationGateway implements AuthorizationGateway {
     _cacheExpiresAt = null;
     _capabilityPermissions = null;
     _capabilitiesFetchedAt = null;
+    unawaited(offlineStore?.clearCapabilities() ?? Future<void>.value());
   }
 }
 

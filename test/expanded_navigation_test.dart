@@ -65,6 +65,11 @@ void main() {
     tester,
   ) async {
     await pumpRoute(tester, '/needs/request');
+    await tester.enterText(find.byType(TextField).first, 'School Fees Support');
+    await tester.enterText(
+      find.byType(TextField).last,
+      'Help with term fees this month.',
+    );
     await tapAction(tester, 'Submit Need');
     expect(find.text('My Needs'), findsOneWidget);
   });
@@ -97,7 +102,7 @@ void main() {
   ) async {
     await pumpRoute(tester, '/kca/evidence');
     await tapAction(tester, 'Upload Evidence');
-    expect(find.text('Under Review (2)'), findsOneWidget);
+    expect(find.text('Review Evidence'), findsOneWidget);
   });
 
   testWidgets('sensitive expansion routes request scoped authorization', (

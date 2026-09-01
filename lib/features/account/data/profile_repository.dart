@@ -26,9 +26,14 @@ final class LaravelProfileRepository implements ProfileRepository {
     required SessionTokenStore tokenStore,
     String? baseUrl,
     http.Client? httpClient,
+    ApiTransport? transport,
   }) {
     return LaravelProfileRepository(
-      client: UserApiClient(tokenStore: tokenStore, baseUrl: baseUrl),
+      client: UserApiClient(
+        tokenStore: tokenStore,
+        baseUrl: baseUrl,
+        transport: transport,
+      ),
       tokenStore: tokenStore,
       baseUrl: baseUrl,
       httpClient: httpClient,

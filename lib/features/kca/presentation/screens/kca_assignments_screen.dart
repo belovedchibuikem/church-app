@@ -215,6 +215,8 @@ class _Assignment {
 
   factory _Assignment.fromJson(Map<String, Object?> json) {
     final state = '${json['state'] ?? json['status'] ?? ''}'.toLowerCase();
+    final tree = json['soul_tree'];
+    final treeOpen = tree is Map && tree['open'] == true;
     final bucket =
         treeOpen
             ? _Bucket.pending
@@ -229,8 +231,6 @@ class _Assignment {
             ? '${module['title'] ?? module['code'] ?? 'Module'}'
             : 'Module';
     final due = json['due_at'] ?? json['submitted_at'] ?? json['updated_at'];
-    final tree = json['soul_tree'];
-    final treeOpen = tree is Map && tree['open'] == true;
     final recorded = tree is Map ? '${tree['recorded_souls'] ?? 0}' : '';
     final required = tree is Map ? '${tree['required_souls'] ?? 0}' : '';
     final kind = '${json['assignment_kind'] ?? ''}';

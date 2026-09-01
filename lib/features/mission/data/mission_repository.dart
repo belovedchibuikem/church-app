@@ -428,19 +428,34 @@ final class HttpMissionRepository
     String path,
     JsonObject filters,
   ) async {
-    try {
-      final query = <String, String>{};
-      for (final entry in filters.entries) {
-        final value = entry.value;
-        if (value == null) continue;
-        final text = value.toString().trim();
-        if (text.isEmpty) continue;
-        query[entry.key] = text;
-      }
+    final query = <String, Object?>{};
+    for (final entry in filters.entries) {
+      final value = entry.value;
+      if (value == null) continue;
+      final text = value.toString().trim();
+      if (text.isEmpty) continue;
+      query[entry.key] = text;
+    }
 
+    final transport = _transport;
+    if (transport != null) {
+      return sendList(
+        transport,
+        ApiRequest(
+          method: ApiMethod.get,
+          path: path,
+          query: query,
+          skipAuth: true,
+        ),
+      );
+    }
+
+    try {
       final uri = _root.replace(
         path: '${_root.path}$path',
-        queryParameters: query.isEmpty ? null : query,
+        queryParameters: {
+          for (final entry in query.entries) entry.key: '${entry.value}',
+        },
       );
       final response = await _http.get(
         uri,

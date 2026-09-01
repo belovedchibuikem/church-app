@@ -42,7 +42,7 @@ void main() {
     expect(await unlock.canOfferUnlock, isFalse);
   });
 
-  testWidgets('sign-in shows the fingerprint action when unlock is enabled', (
+  testWidgets('sign-in always shows a fingerprint login control', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(390, 844);
@@ -51,17 +51,6 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
 
     final store = MemorySessionTokenStore();
-    await store.writeSession(
-      accessToken: 'access',
-      refreshToken: 'refresh',
-      deviceIdentifier: 'device',
-    );
-    await store.writeBiometricUnlockEnabled(true);
-    final biometric = BiometricUnlock(
-      tokenStore: store,
-      biometrics: const _FakeBiometrics(available: true, authenticates: true),
-    );
-
     await tester.pumpWidget(
       AppServicesScope(
         services: AppServices.bootstrap(
@@ -71,9 +60,7 @@ void main() {
         ),
         child: FhcLocaleScope(
           languageCode: 'en',
-          child: MaterialApp(
-            home: SignInScreen(biometricUnlock: biometric),
-          ),
+          child: MaterialApp(home: const SignInScreen()),
         ),
       ),
     );
@@ -81,6 +68,7 @@ void main() {
 
     expect(find.text('Sign in with fingerprint'), findsOneWidget);
     expect(find.byIcon(Icons.fingerprint), findsOneWidget);
+    expect(find.text('or'), findsOneWidget);
     expect(find.text('Welcome Back'), findsOneWidget);
   });
 }

@@ -7,6 +7,7 @@ import '../../../../core/contracts/mobile_repository_contracts.dart';
 import '../../../../core/design_system/fhc_tokens.dart';
 import '../../../../core/di/app_services_scope.dart';
 import '../../../../core/l10n/locale_scope.dart';
+import '../../../../core/offline/offline_policy.dart';
 import '../../../../core/routing/fhc_route_args.dart';
 import '../../../../shared/widgets/fhc_components.dart';
 import '../../../foundation/presentation/fhc_nav.dart';
@@ -26,7 +27,7 @@ class _KcaLessonScreenState extends State<KcaLessonScreen> {
   bool _busy = false;
   bool _loading = true;
   bool _started = false;
-  String? _error;
+  AppFailure? _failure;
   JsonObject? _lesson;
 
   KcaRepository? get _repo =>
@@ -54,7 +55,7 @@ class _KcaLessonScreenState extends State<KcaLessonScreen> {
     if (id == null || id.isEmpty || repo == null) {
       setState(() {
         _loading = false;
-        _error = 'Lesson id is required.';
+        _failure = const ValidationFailure('Lesson id is required.');
       });
       return;
     }
@@ -68,10 +69,11 @@ class _KcaLessonScreenState extends State<KcaLessonScreen> {
         setState(() {
           _lesson = value;
           _loading = false;
+          _failure = null;
         });
       case AppError(:final failure):
         setState(() {
-          _error = failure.message;
+          _failure = failure;
           _loading = false;
         });
     }
@@ -94,7 +96,7 @@ class _KcaLessonScreenState extends State<KcaLessonScreen> {
     }
     setState(() {
       _busy = true;
-      _error = null;
+      _failure = null;
     });
     final result = widget.chapter
         ? await repo.completeChapter(
@@ -113,7 +115,7 @@ class _KcaLessonScreenState extends State<KcaLessonScreen> {
       case AppSuccess():
         fhcPush(context, FhcRoutes.kcaAssignments);
       case AppError(:final failure):
-        setState(() => _error = failure.message);
+        setState(() => _failure = failure);
     }
   }
 
@@ -145,6 +147,25 @@ class _KcaLessonScreenState extends State<KcaLessonScreen> {
           Expanded(
             child: _loading
                 ? const Center(child: CircularProgressIndicator())
+                : _lesson == null
+                ? FhcErrorState(
+                    title:
+                        _failure is OfflineFailure
+                            ? fhcT(
+                              context,
+                              'account.youreOfflineHeadline',
+                              fallback: 'You’re offline',
+                            )
+                            : fhcT(
+                              context,
+                              'errors.somethingWentWrong',
+                              fallback: 'Something went wrong',
+                            ),
+                    message:
+                        _failure?.message ??
+                        OfflinePolicy.notDownloadedMessage,
+                    onRetry: _load,
+                  )
                 : ListView(
                     padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
                     children: [
@@ -199,23 +220,24 @@ class _KcaLessonScreenState extends State<KcaLessonScreen> {
                     ],
                   ),
           ),
-          if (_error != null)
+          if (_failure != null && _lesson != null)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
               child: Text(
-                _error!,
+                _failure!.message,
                 style: const TextStyle(color: FhcColors.muted, fontSize: 12),
               ),
             ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-            child: FhcPrimaryButton(
-              label: _busy
-                  ? fhcT(context, 'common.saving', fallback: 'Saving…')
-                  : fhcT(context, 'common.continue', fallback: 'Continue'),
-              onPressed: _busy ? null : () => _onContinue(context),
+          if (_lesson != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+              child: FhcPrimaryButton(
+                label: _busy
+                    ? fhcT(context, 'common.saving', fallback: 'Saving…')
+                    : fhcT(context, 'common.continue', fallback: 'Continue'),
+                onPressed: _busy ? null : () => _onContinue(context),
+              ),
             ),
-          ),
           const FhcBottomNavigation(selected: 1),
         ],
       ),

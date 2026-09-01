@@ -1,5 +1,6 @@
 import 'package:family_house_connect_public_api/public_api.dart';
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../features/account/data/message_repository.dart';
 import '../../features/account/data/notification_repository.dart';
@@ -25,6 +26,11 @@ import '../auth/authorization.dart';
 import '../auth/laravel_authorization_gateway.dart';
 import '../contracts/mobile_repository_contracts.dart';
 import '../notifications/push_notification_scaffold.dart';
+import '../offline/connectivity_monitor.dart';
+import '../offline/offline_aware_transport.dart';
+import '../offline/offline_controller.dart';
+import '../offline/offline_store.dart';
+import '../offline/local_offline_sync_repository.dart';
 import '../sync/http_sync_repository.dart';
 import '../sync/sync_contract.dart';
 
@@ -67,6 +73,7 @@ final class AppServices {
     this.securityRepository,
     this.syncRepository,
     this.pushNotifications = const PushNotificationScaffold(),
+    required this.offline,
   });
 
   /// Sentinel so callers can pass `transport: null` to leave protected HTTP
@@ -110,6 +117,7 @@ final class AppServices {
   final BibleRepository? bibleRepository;
   final SecurityRepository? securityRepository;
   final SyncRepository? syncRepository;
+  final OfflineController offline;
 
   bool get paymentsBound => paymentRepository != null;
   bool get prayerBound => prayerRepository != null;
@@ -164,12 +172,19 @@ final class AppServices {
     SecurityRepository? securityRepository,
     SyncRepository? syncRepository,
     PushNotificationScaffold? pushNotifications,
+    OfflineStore? offlineStore,
+    ConnectivityMonitor? connectivity,
   }) {
     assertFhcApiConfiguredForRelease(override: apiBaseUrl);
 
     // Release never ships allow-all auth or unbound fixture UX — even if a
     // caller (or FHC_VISUAL_REVIEW) asked for them.
     final effectiveVisualReview = visualReview && !kReleaseMode;
+    if (effectiveVisualReview) {
+      // Widget tests hydrate SharedPreferences-backed drafts without a plugin.
+      // ignore: invalid_use_of_visible_for_testing_member
+      SharedPreferences.setMockInitialValues({});
+    }
     if (visualReview && kReleaseMode) {
       debugPrint(
         'FHC: FHC_VISUAL_REVIEW / visualReview ignored in release builds.',
@@ -230,26 +245,63 @@ final class AppServices {
       transport: publicTransport,
     );
 
-    final ApiTransport? resolvedTransport =
+    final ApiTransport? rawTransport =
         identical(transport, _createDefaultTransport)
-            ? createHttpApiTransport(
-              tokenStore: store,
-              baseUrl: apiUrl,
-              refresher: refresher,
-            )
+            ? (effectiveVisualReview
+                ? const ImmediateNetworkFailureTransport()
+                : createHttpApiTransport(
+                  tokenStore: store,
+                  baseUrl: apiUrl,
+                  refresher: refresher,
+                ))
             : transport as ApiTransport?;
+
+    final resolvedStore =
+        offlineStore ??
+        (effectiveVisualReview
+            ? MemoryOfflineStore()
+            : SharedPreferencesOfflineStore());
+    final resolvedConnectivity = connectivity ?? ConnectivityMonitor();
+    late final OfflineController offline;
+
+    final ApiTransport? resolvedTransport = () {
+      if (rawTransport == null) return null;
+      if (rawTransport is OfflineAwareApiTransport) return rawTransport;
+      return OfflineAwareApiTransport(
+        inner: rawTransport,
+        store: resolvedStore,
+        connectivity: resolvedConnectivity,
+        onOutboxChanged: () => offline.outboxChanged(),
+      );
+    }();
+
+    offline = OfflineController(
+      connectivity: resolvedConnectivity,
+      store: resolvedStore,
+      transport:
+          resolvedTransport is OfflineAwareApiTransport
+              ? resolvedTransport
+              : null,
+    );
+
+    if (gateway is LaravelAuthorizationGateway) {
+      gateway.offlineStore = resolvedStore;
+      gateway.connectivity = resolvedConnectivity;
+    }
 
     final resolvedProfile =
         profileRepository ??
         LaravelProfileRepository.fromTokenStore(
           tokenStore: store,
           baseUrl: apiUrl,
+          transport: resolvedTransport,
         );
     final resolvedSecurity =
         securityRepository ??
         LaravelSecurityRepository.fromTokenStore(
           tokenStore: store,
           baseUrl: apiUrl,
+          transport: resolvedTransport,
         );
 
     if (!effectiveVisualReview && gateway is LaravelAuthorizationGateway) {
@@ -258,6 +310,33 @@ final class AppServices {
 
     T? withTransport<T>(T Function(ApiTransport t) build) =>
         resolvedTransport == null ? null : build(resolvedTransport);
+
+    final resolvedSync =
+        syncRepository ??
+        (resolvedTransport is OfflineAwareApiTransport
+            ? LocalOfflineSyncRepository(
+              store: resolvedStore,
+              transport: resolvedTransport,
+              remote:
+                  effectiveVisualReview
+                      ? const ImmediateNetworkSyncRepository()
+                      : HttpSyncRepository(
+                        transport: resolvedTransport.inner,
+                      ),
+            )
+            : withTransport((t) => HttpSyncRepository(transport: t))) ??
+        const UnconfiguredSyncRepository();
+    final resolvedKca =
+        kcaRepository ??
+        HttpKcaRepository(
+          baseUrl: apiUrl,
+          transport: resolvedTransport,
+          tokenStore: store,
+        );
+    offline.syncRepository = resolvedSync;
+    offline.extraDrain = () async {
+      await resolvedKca.syncQueuedCompletions();
+    };
 
     return AppServices._(
       apiBaseUrl: apiUrl,
@@ -288,9 +367,7 @@ final class AppServices {
             baseUrl: apiUrl,
             transport: resolvedTransport,
           ),
-      kcaRepository:
-          kcaRepository ??
-          HttpKcaRepository(baseUrl: apiUrl, transport: resolvedTransport),
+      kcaRepository: resolvedKca,
       pressRepository:
           pressRepository ??
           RemotePressRepository(
@@ -334,11 +411,9 @@ final class AppServices {
             transport: resolvedTransport,
           ),
       securityRepository: resolvedSecurity,
-      syncRepository:
-          syncRepository ??
-          withTransport((t) => HttpSyncRepository(transport: t)) ??
-          const UnconfiguredSyncRepository(),
+      syncRepository: resolvedSync,
       pushNotifications: pushNotifications ?? const PushNotificationScaffold(),
+      offline: offline,
     );
   }
 }

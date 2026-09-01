@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/api/app_failure.dart';
 import '../../../../core/contracts/mobile_repository_contracts.dart';
@@ -52,6 +54,7 @@ bool _isApiBackedAccountKind(AccountContinuationKind kind) =>
     kind == AccountContinuationKind.consents ||
     kind == AccountContinuationKind.privacy ||
     kind == AccountContinuationKind.receipt ||
+    kind == AccountContinuationKind.shareReceipt ||
     kind == AccountContinuationKind.paymentHistory ||
     kind == AccountContinuationKind.transaction ||
     kind == AccountContinuationKind.paymentPending ||
@@ -476,6 +479,7 @@ class _AccountContinuationScreenState extends State<AccountContinuationScreen>
       case AccountContinuationKind.transaction:
         await _loadPaymentSurface(payment);
       case AccountContinuationKind.receipt:
+      case AccountContinuationKind.shareReceipt:
         if (payment == null) {
           setState(() {
             _error = fhcT(
@@ -768,6 +772,11 @@ class _AccountContinuationScreenState extends State<AccountContinuationScreen>
         'account.shareReceipt',
         fallback: 'Share Receipt',
       ),
+      AccountContinuationKind.shareReceipt => fhcT(
+        context,
+        'account.saveToGallery',
+        fallback: 'Save to Gallery',
+      ),
       AccountContinuationKind.paymentSuccess => fhcT(
         context,
         'account.viewReceipt',
@@ -798,7 +807,17 @@ class _AccountContinuationScreenState extends State<AccountContinuationScreen>
       AccountContinuationKind.activeSessions => _revokeOtherSessions,
       AccountContinuationKind.privacy => _submitDataSubjectRequest,
       AccountContinuationKind.receipt =>
-        () => fhcPush(context, '/payments/receipt/share'),
+        () {
+          final receiptId =
+              '${_receipt?['id'] ?? _transaction?['receipt_id'] ?? ''}';
+          fhcPush(
+            context,
+            receiptId.isEmpty
+                ? '/payments/receipt/share'
+                : '/payments/receipt/share?id=${Uri.encodeComponent(receiptId)}',
+          );
+        },
+      AccountContinuationKind.shareReceipt => _copyReceiptToClipboard,
       AccountContinuationKind.paymentSuccess ||
       AccountContinuationKind.transaction => () {
         final receiptId = '${_transaction?['receipt_id'] ?? _receipt?['id'] ?? ''}';
@@ -863,6 +882,7 @@ class _AccountContinuationScreenState extends State<AccountContinuationScreen>
       AccountContinuationKind.transaction =>
         _livePaymentListContent(kind),
       AccountContinuationKind.receipt => _liveReceiptContent(),
+      AccountContinuationKind.shareReceipt => _liveShareReceiptContent(),
       _ => _content(kind),
     };
   }
@@ -1287,32 +1307,6 @@ class _AccountContinuationScreenState extends State<AccountContinuationScreen>
         ),
       ];
     }
-    final tx = _transaction;
-    final minor = tx == null ? null : paymentAmountMinorOf(tx);
-    final currency = '${tx?['currency'] ?? 'NGN'}';
-    final rows = <(String, String)>[
-      (
-        fhcT(context, 'account.receiptId', fallback: 'Receipt ID'),
-        '${receipt['id'] ?? '—'}',
-      ),
-      (
-        fhcT(context, 'account.receiptNumber', fallback: 'Receipt number'),
-        '${receipt['receipt_number'] ?? '—'}',
-      ),
-      (
-        fhcT(context, 'account.transactionId', fallback: 'Transaction ID'),
-        '${receipt['payment_transaction_id'] ?? tx?['id'] ?? '—'}',
-      ),
-      if (minor != null)
-        (
-          fhcT(context, 'account.amount', fallback: 'Amount'),
-          formatPaymentAmountMinor(minor, currency: currency),
-        ),
-      (
-        fhcT(context, 'account.issuedAt', fallback: 'Issued at'),
-        _formatTimestamp(receipt['issued_at'] ?? receipt['created_at']),
-      ),
-    ];
     return [
       _notice(
         fhcT(
@@ -1321,8 +1315,150 @@ class _AccountContinuationScreenState extends State<AccountContinuationScreen>
           fallback: 'Receipt loaded from GET /user/payments/receipts/{id}.',
         ),
       ),
-      _details(rows),
+      _details(_liveReceiptRows()),
     ];
+  }
+
+  List<Widget> _liveShareReceiptContent() {
+    if (_receipt == null) {
+      return _liveReceiptContent();
+    }
+    return [
+      _receiptCard(),
+      WorkflowSectionTitle(
+        fhcT(context, 'account.shareVia', fallback: 'Share via'),
+      ),
+      _iconChoices([
+        (
+          Icons.chat,
+          fhcT(context, 'account.whatsapp', fallback: 'WhatsApp'),
+          () => unawaited(_shareReceipt('whatsapp')),
+        ),
+        (
+          Icons.email_outlined,
+          fhcT(context, 'account.email', fallback: 'Email'),
+          () => unawaited(_shareReceipt('email')),
+        ),
+        (
+          Icons.message_outlined,
+          fhcT(context, 'common.messages', fallback: 'Message'),
+          () => unawaited(_shareReceipt('sms')),
+        ),
+        (
+          Icons.more_horiz,
+          fhcT(context, 'common.more', fallback: 'More'),
+          () => unawaited(_copyReceiptToClipboard()),
+        ),
+      ]),
+    ];
+  }
+
+  List<(String, String)> _liveReceiptRows() {
+    final receipt = _receipt;
+    final tx = _transaction;
+    if (receipt == null && tx == null) return _receiptDetails;
+    final minor =
+        paymentAmountMinorOf(receipt ?? const {}) ??
+        (tx == null ? null : paymentAmountMinorOf(tx));
+    final currency = '${receipt?['currency'] ?? tx?['currency'] ?? 'NGN'}';
+    final purpose =
+        '${receipt?['purpose_label'] ?? tx?['purpose_code'] ?? 'Giving'}';
+    final settlement = '${receipt?['settlement'] ?? ''}';
+    final method = settlement == 'manual'
+        ? fhcT(
+            context,
+            'account.manualPayment',
+            fallback: 'Manual payment (bank transfer / proof)',
+          )
+        : settlement == 'automatic'
+        ? fhcT(
+            context,
+            'account.automaticPayment',
+            fallback: 'Automatic checkout',
+          )
+        : '${tx?['provider_code'] ?? receipt?['provider_code'] ?? '—'}';
+    return [
+      (
+        fhcT(context, 'account.amount', fallback: 'Amount'),
+        minor == null
+            ? '—'
+            : formatPaymentAmountMinor(minor, currency: currency),
+      ),
+      (
+        fhcT(context, 'account.currency', fallback: 'Currency'),
+        currency,
+      ),
+      (
+        fhcT(context, 'account.purpose', fallback: 'Purpose'),
+        purpose,
+      ),
+      (
+        fhcT(context, 'account.referenceId', fallback: 'Reference ID'),
+        '${receipt?['receipt_number'] ?? receipt?['id'] ?? '—'}',
+      ),
+      (
+        fhcT(context, 'account.dateTime', fallback: 'Date & Time'),
+        _formatTimestamp(
+          receipt?['occurred_at'] ??
+              receipt?['issued_at'] ??
+              tx?['occurred_at'],
+        ),
+      ),
+      (
+        fhcT(context, 'account.paymentMethod', fallback: 'Payment Method'),
+        method,
+      ),
+      (
+        fhcT(context, 'account.status', fallback: 'Status'),
+        '${receipt?['status'] ?? tx?['status'] ?? 'successful'}',
+      ),
+    ];
+  }
+
+  String _receiptShareText() {
+    final rows = _liveReceiptRows();
+    final buffer = StringBuffer('Family House Connect — Official Receipt\n');
+    for (final row in rows) {
+      buffer.writeln('${row.$1}: ${row.$2}');
+    }
+    return buffer.toString().trim();
+  }
+
+  Future<void> _copyReceiptToClipboard() async {
+    await Clipboard.setData(ClipboardData(text: _receiptShareText()));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          fhcT(
+            context,
+            'account.receiptCopied',
+            fallback: 'Receipt copied. You can paste it or save it from share.',
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _shareReceipt(String channel) async {
+    final text = _receiptShareText();
+    final encoded = Uri.encodeComponent(text);
+    final uri = switch (channel) {
+      'whatsapp' => Uri.parse('https://wa.me/?text=$encoded'),
+      'email' => Uri.parse(
+        'mailto:?subject=${Uri.encodeComponent('Family House Connect receipt')}&body=$encoded',
+      ),
+      'sms' => Uri.parse('sms:?body=$encoded'),
+      _ => null,
+    };
+    if (uri == null) {
+      await _copyReceiptToClipboard();
+      return;
+    }
+    final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!launched && mounted) {
+      await _copyReceiptToClipboard();
+    }
   }
 
   String _paymentTitle(JsonObject tx) {
@@ -1909,18 +2045,22 @@ class _AccountContinuationScreenState extends State<AccountContinuationScreen>
         (
           Icons.chat,
           fhcT(context, 'account.whatsapp', fallback: 'WhatsApp'),
+          null,
         ),
         (
           Icons.email_outlined,
           fhcT(context, 'account.email', fallback: 'Email'),
+          null,
         ),
         (
           Icons.message_outlined,
           fhcT(context, 'common.messages', fallback: 'Message'),
+          null,
         ),
         (
           Icons.more_horiz,
           fhcT(context, 'common.more', fallback: 'More'),
+          null,
         ),
       ]),
     ],
@@ -2447,7 +2587,7 @@ class _AccountContinuationScreenState extends State<AccountContinuationScreen>
         ),
         const Text('Official Receipt', style: FhcTypography.caption),
         const SizedBox(height: 14),
-        _details(_receiptDetails.take(5).toList()),
+        _details(_liveReceiptRows().take(5).toList()),
         const SizedBox(height: 14),
         const Center(child: Icon(Icons.qr_code_2, size: 74)),
         const Center(
@@ -2554,25 +2694,29 @@ class _AccountContinuationScreenState extends State<AccountContinuationScreen>
     ),
   );
 
-  Widget _iconChoices(List<(IconData, String)> items) => Row(
+  Widget _iconChoices(List<(IconData, String, VoidCallback?)> items) => Row(
     children: [
       for (final item in items)
         Expanded(
-          child: Column(
-            children: [
-              Container(
-                width: 48,
-                height: 44,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: FhcColors.canvas,
-                  borderRadius: BorderRadius.circular(9),
+          child: InkWell(
+            onTap: item.$3,
+            borderRadius: BorderRadius.circular(9),
+            child: Column(
+              children: [
+                Container(
+                  width: 48,
+                  height: 44,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: FhcColors.canvas,
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                  child: Icon(item.$1, color: FhcColors.greenDark),
                 ),
-                child: Icon(item.$1, color: FhcColors.greenDark),
-              ),
-              const SizedBox(height: 5),
-              Text(item.$2, style: FhcTypography.caption),
-            ],
+                const SizedBox(height: 5),
+                Text(item.$2, style: FhcTypography.caption),
+              ],
+            ),
           ),
         ),
     ],

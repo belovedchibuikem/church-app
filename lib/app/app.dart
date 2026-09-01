@@ -9,6 +9,7 @@ import '../core/l10n/locale_scope.dart';
 import '../core/l10n/supported_locales.dart';
 import '../core/launch/app_launch_scope.dart';
 import '../core/launch/app_launch_store.dart';
+import '../core/offline/offline_banner.dart';
 import '../core/routing/fhc_route_args.dart';
 import '../features/account/presentation/account_screens.dart';
 import '../features/church/presentation/church_screens.dart';
@@ -67,6 +68,7 @@ class _FamilyHouseConnectAppState extends State<FamilyHouseConnectApp> {
   late final AppServices _services;
   late final AppLaunchStore _launchStore;
   late final AuthorizationGateway _authorizationGateway;
+  final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
 
   @override
   void initState() {
@@ -97,6 +99,7 @@ class _FamilyHouseConnectAppState extends State<FamilyHouseConnectApp> {
         final app = MaterialApp(
       title: 'Family House Connect',
       debugShowCheckedModeBanner: false,
+      navigatorKey: _navigatorKey,
       theme: buildFhcTheme(),
       locale: Locale(localeCode),
       localeResolutionCallback: (locale, supported) {
@@ -115,6 +118,13 @@ class _FamilyHouseConnectAppState extends State<FamilyHouseConnectApp> {
         GlobalCupertinoLocalizations.delegate,
       ],
       initialRoute: widget.initialRoute,
+      builder: (context, child) {
+        return OfflineBannerHost(
+          enabled: !resolvedServices.visualReview,
+          navigatorKey: _navigatorKey,
+          child: child ?? const SizedBox.shrink(),
+        );
+      },
       onGenerateRoute: (settings) {
         final requestedRoute = _normalizeIncomingRoute(settings.name ?? '/splash');
         final resolved = resolveCanonicalRoute(requestedRoute);
@@ -1120,12 +1130,15 @@ class _FamilyHouseConnectAppState extends State<FamilyHouseConnectApp> {
 
         return AppServicesScope(
           services: resolvedServices,
-          child: AppLaunchScope(
+          child: OfflineScope(
+            controller: resolvedServices.offline,
+            child: AppLaunchScope(
             store: resolvedLaunch,
             child: FhcLocaleScope(
               languageCode: localeCode,
               child: app,
             ),
+          ),
           ),
         );
       },

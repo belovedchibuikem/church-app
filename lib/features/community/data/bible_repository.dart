@@ -30,23 +30,77 @@ final class HttpBibleRepository
     );
   }
 
-  @override
-  Future<AppResult<JsonObject>> books() => _getObject(_uri('/bible/books'));
+  Map<String, Object?> _versionQueryObject(String? version) {
+    final id = version?.trim() ?? '';
+    if (id.isEmpty) return const {};
+    return {'version': id};
+  }
 
-  @override
-  Future<AppResult<JsonObject>> chapter(String book, int chapter) {
+  Future<AppResult<JsonObject>> _publicObject(
+    String path, [
+    Map<String, Object?> query = const {},
+  ]) {
+    final transport = _transport;
+    if (transport != null) {
+      return sendObject(
+        transport,
+        ApiRequest(
+          method: ApiMethod.get,
+          path: path,
+          query: query,
+          skipAuth: true,
+        ),
+      );
+    }
     return _getObject(
-      _uri('/bible/books/${Uri.encodeComponent(book)}/chapters/$chapter'),
+      _uri(
+        path,
+        {
+          for (final entry in query.entries)
+            if (entry.value != null) entry.key: '${entry.value}',
+        },
+      ),
     );
   }
 
   @override
-  Future<AppResult<JsonObject>> search(String query) {
-    return _getObject(_uri('/bible/search', {'q': query, 'limit': '12'}));
+  Future<AppResult<JsonObject>> books({String? version}) =>
+      _publicObject('/bible/books', _versionQueryObject(version));
+
+  @override
+  Future<AppResult<JsonObject>> chapter(
+    String book,
+    int chapter, {
+    String? version,
+  }) {
+    return _publicObject(
+      '/bible/books/${Uri.encodeComponent(book)}/chapters/$chapter',
+      _versionQueryObject(version),
+    );
+  }
+
+  @override
+  Future<AppResult<JsonObject>> search(String query, {String? version}) {
+    return _publicObject('/bible/search', {
+      'q': query,
+      'limit': '30',
+      ..._versionQueryObject(version),
+    });
   }
 
   @override
   Future<AppResult<List<JsonObject>>> plans() async {
+    final transport = _transport;
+    if (transport != null) {
+      return sendList(
+        transport,
+        const ApiRequest(
+          method: ApiMethod.get,
+          path: '/bible/plans',
+          skipAuth: true,
+        ),
+      );
+    }
     final result = await _getRaw(_uri('/bible/plans'));
     return switch (result) {
       AppSuccess(:final value) => _asList(value),
@@ -73,7 +127,7 @@ final class HttpBibleRepository
   }
 
   @override
-  Future<AppResult<JsonObject>> enroll(String planCode) {
+  Future<AppResult<JsonObject>> enroll(String planCode, {int? durationDays}) {
     final transport = _transport;
     if (transport == null) {
       return Future.value(
@@ -89,7 +143,10 @@ final class HttpBibleRepository
       ApiRequest(
         method: ApiMethod.post,
         path: '/user/bible/enrollments',
-        body: {'plan_code': planCode},
+        body: {
+          if (planCode.trim().isNotEmpty) 'plan_code': planCode.trim(),
+          if (durationDays != null) 'duration_days': durationDays,
+        },
         idempotencyKey: newIdempotencyKey('bible-enroll'),
       ),
     );

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../core/api/app_failure.dart';
 import '../../../../core/contracts/mobile_repository_contracts.dart';
@@ -8,6 +9,9 @@ import '../../../../core/l10n/locale_scope.dart';
 import '../../../../core/routing/fhc_route_args.dart';
 import '../../../../shared/widgets/fhc_components.dart';
 import '../../../foundation/presentation/fhc_nav.dart';
+
+const _kBibleVersionPref = 'bible.version';
+const _kParchment = Color(0xFFF7F3EA);
 
 class BibleReaderScreen extends StatefulWidget {
   const BibleReaderScreen({super.key, this.repository});
@@ -23,11 +27,20 @@ class _BibleReaderScreenState extends State<BibleReaderScreen> {
   List<JsonObject> _books = const [];
   String? _error;
   bool _loading = true;
-  double _fontSize = 18;
+  double _fontSize = 19;
   String? _loadedKey;
+  String _version = 'kjv';
 
   BibleRepository? get _repository =>
       widget.repository ?? AppServicesScope.maybeOf(context)?.bibleRepository;
+
+  String _versionFromRoute() {
+    final name = ModalRoute.of(context)?.settings.name ?? '';
+    final uri = Uri.tryParse(name.startsWith('/') ? 'https://fhc.local$name' : name);
+    final fromQuery = uri?.queryParameters['v']?.trim();
+    if (fromQuery != null && fromQuery.isNotEmpty) return fromQuery;
+    return '';
+  }
 
   @override
   void didChangeDependencies() {
@@ -35,14 +48,25 @@ class _BibleReaderScreenState extends State<BibleReaderScreen> {
     final args = FhcRouteArgs.maybeOf(context);
     final book = args?.entityId ?? 'john';
     final chapter = args?.secondaryId ?? '1';
-    final key = '$book:$chapter';
+    final version = _versionFromRoute();
+    final key = '$book:$chapter:$version';
     if (_loadedKey != key) {
       _loadedKey = key;
-      _load(book, int.tryParse(chapter) ?? 1);
+      _load(book, int.tryParse(chapter) ?? 1, version);
     }
   }
 
-  Future<void> _load(String book, int chapter) async {
+  Future<void> _load(String book, int chapter, String version) async {
+    var resolved = version;
+    if (resolved.isEmpty) {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        resolved = prefs.getString(_kBibleVersionPref) ?? 'kjv';
+      } catch (_) {
+        resolved = 'kjv';
+      }
+    }
+    _version = resolved;
     setState(() {
       _loading = true;
       _error = null;
@@ -59,9 +83,9 @@ class _BibleReaderScreenState extends State<BibleReaderScreen> {
       });
       return;
     }
-    final result = await repository.chapter(book, chapter);
+    final result = await repository.chapter(book, chapter, version: resolved);
     if (_books.isEmpty) {
-      final books = await repository.books();
+      final books = await repository.books(version: resolved);
       if (books is AppSuccess<JsonObject>) {
         final items = books.value['books'];
         if (items is List) {
@@ -82,6 +106,10 @@ class _BibleReaderScreenState extends State<BibleReaderScreen> {
         case AppSuccess(:final value):
           _chapter = value;
           _error = null;
+          final current = value['version'];
+          if (current is Map && current['id'] is String) {
+            _version = current['id'] as String;
+          }
         case AppError(:final failure):
           _error = failure.message;
       }
@@ -92,7 +120,10 @@ class _BibleReaderScreenState extends State<BibleReaderScreen> {
   }
 
   void _open(String slug, int chapter) {
-    fhcGo(context, '/bible/$slug/$chapter');
+    fhcGo(
+      context,
+      '/bible/$slug/$chapter?v=${Uri.encodeComponent(_version)}',
+    );
   }
 
   void _openNeighbour(JsonObject? neighbour) {
@@ -109,6 +140,7 @@ class _BibleReaderScreenState extends State<BibleReaderScreen> {
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
+      backgroundColor: _kParchment,
       builder: (sheetContext) {
         return SizedBox(
           height: MediaQuery.sizeOf(sheetContext).height * 0.7,
@@ -117,6 +149,13 @@ class _BibleReaderScreenState extends State<BibleReaderScreen> {
               for (final book in _books)
                 ListTile(
                   title: Text('${book['name']}'),
+                  trailing: Text(
+                    '${book['abbrev'] ?? book['id']}'.toString().toUpperCase(),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      color: FhcColors.greenDark,
+                    ),
+                  ),
                   subtitle: Text(
                     book['testament'] == 'ot'
                         ? fhcT(
@@ -158,6 +197,7 @@ class _BibleReaderScreenState extends State<BibleReaderScreen> {
     final selected = await showModalBottomSheet<int>(
       context: context,
       showDragHandle: true,
+      backgroundColor: _kParchment,
       builder: (sheetContext) {
         return SizedBox(
           height: MediaQuery.sizeOf(sheetContext).height * 0.55,
@@ -172,9 +212,19 @@ class _BibleReaderScreenState extends State<BibleReaderScreen> {
               ),
               itemBuilder: (context, index) {
                 final chapter = index + 1;
-                return FilledButton.tonal(
-                  onPressed: () => Navigator.pop(sheetContext, chapter),
-                  child: Text('$chapter'),
+                return Material(
+                  color: FhcColors.white,
+                  borderRadius: BorderRadius.circular(10),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(10),
+                    onTap: () => Navigator.pop(sheetContext, chapter),
+                    child: Center(
+                      child: Text(
+                        '$chapter',
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                  ),
                 );
               },
             ),
@@ -202,26 +252,47 @@ class _BibleReaderScreenState extends State<BibleReaderScreen> {
     final title = bookMap == null
         ? fhcT(context, 'bible.title', fallback: 'Bible')
         : '${bookMap['name']} ${_chapter?['chapter']}';
+    final versionLabel =
+        '${(_chapter?['version'] is Map ? (_chapter!['version'] as Map)['abbreviation'] : null) ?? _version}'
+            .toUpperCase();
 
     return FhcDevicePage(
-      backgroundColor: FhcColors.canvas,
+      backgroundColor: _kParchment,
       child: Column(
         children: [
           FhcTopBar(
             title: title,
             onBack: () => Navigator.of(context).maybePop(),
-            trailingWidth: 128,
+            trailingWidth: 148,
             trailing: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
+                Text(
+                  versionLabel,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    color: FhcColors.greenDark,
+                  ),
+                ),
                 IconButton(
-                  tooltip: fhcT(context, 'bible.fontSmaller', fallback: 'Smaller text'),
-                  onPressed: () => setState(() => _fontSize = (_fontSize - 2).clamp(16, 26)),
+                  tooltip: fhcT(
+                    context,
+                    'bible.fontSmaller',
+                    fallback: 'Smaller text',
+                  ),
+                  onPressed: () =>
+                      setState(() => _fontSize = (_fontSize - 1).clamp(16, 28)),
                   icon: const Icon(Icons.text_decrease),
                 ),
                 IconButton(
-                  tooltip: fhcT(context, 'bible.fontLarger', fallback: 'Larger text'),
-                  onPressed: () => setState(() => _fontSize = (_fontSize + 2).clamp(16, 26)),
+                  tooltip: fhcT(
+                    context,
+                    'bible.fontLarger',
+                    fallback: 'Larger text',
+                  ),
+                  onPressed: () =>
+                      setState(() => _fontSize = (_fontSize + 1).clamp(16, 28)),
                   icon: const Icon(Icons.text_increase),
                 ),
               ],
@@ -236,7 +307,11 @@ class _BibleReaderScreenState extends State<BibleReaderScreen> {
                     onPressed: _books.isEmpty ? null : _pickBook,
                     child: Text(
                       bookMap == null
-                          ? fhcT(context, 'bible.chooseBook', fallback: 'Choose book')
+                          ? fhcT(
+                              context,
+                              'bible.chooseBook',
+                              fallback: 'Choose book',
+                            )
                           : '${bookMap['name']}',
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -254,13 +329,18 @@ class _BibleReaderScreenState extends State<BibleReaderScreen> {
             child: _loading
                 ? const Center(child: CircularProgressIndicator())
                 : _error != null
-                ? Center(child: Text(_error!))
+                ? Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Text(_error!, textAlign: TextAlign.center),
+                    ),
+                  )
                 : ListView(
-                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
+                    padding: const EdgeInsets.fromLTRB(22, 8, 22, 28),
                     children: [
                       for (final verse in verseList)
                         Padding(
-                          padding: const EdgeInsets.only(bottom: 10),
+                          padding: const EdgeInsets.only(bottom: 12),
                           child: Text.rich(
                             TextSpan(
                               children: [
@@ -268,16 +348,23 @@ class _BibleReaderScreenState extends State<BibleReaderScreen> {
                                   text: '${verse['verse']}  ',
                                   style: const TextStyle(
                                     fontWeight: FontWeight.w700,
-                                    color: FhcColors.purple,
+                                    color: FhcColors.green,
                                     fontSize: 12,
+                                    height: 1.7,
                                   ),
                                 ),
                                 TextSpan(
                                   text: '${verse['text']}',
                                   style: TextStyle(
                                     fontSize: _fontSize,
-                                    height: 1.55,
+                                    height: 1.7,
                                     color: FhcColors.ink,
+                                    fontFamily: 'Georgia',
+                                    fontFamilyFallback: const [
+                                      'serif',
+                                      'Times New Roman',
+                                      'Noto Serif',
+                                    ],
                                   ),
                                 ),
                               ],
@@ -301,8 +388,9 @@ class _BibleReaderScreenState extends State<BibleReaderScreen> {
                             const SizedBox.shrink(),
                           if (next is Map)
                             TextButton(
-                              onPressed: () =>
-                                  _openNeighbour(Map<String, Object?>.from(next)),
+                              onPressed: () => _openNeighbour(
+                                Map<String, Object?>.from(next),
+                              ),
                               child: Text(
                                 '${next['book_name']} ${next['chapter']} →',
                               ),

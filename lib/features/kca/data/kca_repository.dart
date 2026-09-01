@@ -2,7 +2,9 @@ import '../../../core/api/api_transport.dart';
 import '../../../core/api/app_failure.dart';
 import '../../../core/api/fhc_api_config.dart';
 import '../../../core/api/transport_repository_helpers.dart';
+import '../../../core/auth/session_token_store.dart';
 import '../../../core/contracts/mobile_repository_contracts.dart';
+import 'kca_evidence_queue.dart';
 import 'kca_lesson_completion_queue.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
@@ -16,15 +18,21 @@ final class HttpKcaRepository
     String? baseUrl,
     http.Client? httpClient,
     KcaLessonCompletionQueue? completionQueue,
+    KcaEvidenceQueue? evidenceQueue,
+    SessionTokenStore? tokenStore,
   })  : _transport = transport,
         baseUrl = resolveFhcApiUrl(override: baseUrl),
         _http = httpClient ?? http.Client(),
-        _completionQueue = completionQueue ?? KcaLessonCompletionQueue();
+        _completionQueue = completionQueue ?? KcaLessonCompletionQueue(),
+        _evidenceQueue = evidenceQueue ?? KcaEvidenceQueue(),
+        _tokenStore = tokenStore;
 
   final ApiTransport? _transport;
   final String baseUrl;
   final http.Client _http;
   final KcaLessonCompletionQueue _completionQueue;
+  final KcaEvidenceQueue _evidenceQueue;
+  final SessionTokenStore? _tokenStore;
 
   Uri get _root => Uri.parse(baseUrl.replaceAll(RegExp(r'/$'), ''));
 
@@ -164,21 +172,72 @@ final class HttpKcaRepository
   }
 
   @override
-  Future<AppResult<JsonObject>> submitEvidence(JsonObject evidence) {
+  Future<AppResult<JsonObject>> submitEvidence(JsonObject evidence) async {
     final transport = _transport;
     if (transport == null) {
-      return Future.value(_needsTransport('KCA evidence'));
+      return _needsTransport('KCA evidence');
     }
-    final assignmentId = '${evidence['assignment_id'] ?? evidence['id'] ?? ''}'.trim();
-    final fileAssetId = '${evidence['file_asset_id'] ?? ''}'.trim();
-    if (assignmentId.isEmpty || fileAssetId.isEmpty) {
-      return Future.value(
-        const AppError(
-          ValidationFailure('assignment_id and file_asset_id are required.'),
+    final assignmentId =
+        '${evidence['assignment_id'] ?? evidence['id'] ?? ''}'.trim();
+    var fileAssetId = '${evidence['file_asset_id'] ?? ''}'.trim();
+    final key =
+        '${evidence['idempotency_key'] ?? newIdempotencyKey('kca-evidence')}';
+    final filename = '${evidence['filename'] ?? 'kca-evidence.bin'}'.trim();
+    final description = '${evidence['description'] ?? ''}'.trim();
+    final bytes = _bytesOf(evidence['bytes']);
+
+    if (assignmentId.isEmpty) {
+      return const AppError(
+        ValidationFailure('An assignment id is required to submit evidence.'),
+      );
+    }
+
+    if (fileAssetId.isEmpty && bytes != null && bytes.isNotEmpty) {
+      if (bytes.length > KcaEvidenceQueue.maxBytes) {
+        return const AppError(
+          ValidationFailure(
+            'Evidence files larger than 1.5 MB cannot be stored offline. '
+            'Compress the file or submit while online.',
+          ),
+        );
+      }
+      final uploaded = await _uploadEvidenceFile(
+        bytes: bytes,
+        filename: filename,
+        idempotencyKey: key,
+      );
+      switch (uploaded) {
+        case AppSuccess(:final value):
+          fileAssetId = '${value['id'] ?? value['public_id'] ?? ''}'.trim();
+        case AppError(:final failure):
+          if (failure is NetworkFailure || failure is OfflineFailure) {
+            await _evidenceQueue.enqueue(
+              assignmentId: assignmentId,
+              idempotencyKey: key,
+              filename: filename,
+              bytes: bytes,
+              description: description,
+            );
+            return AppSuccess(<String, Object?>{
+              'queued': true,
+              'assignment_id': assignmentId,
+              'sync_state': 'queued',
+              'message':
+                  'Evidence is saved on this device and will upload when a connection is available.',
+            });
+          }
+          return AppError(failure);
+      }
+    }
+
+    if (fileAssetId.isEmpty) {
+      return const AppError(
+        ValidationFailure(
+          'Choose an evidence file, or provide assignment_id and file_asset_id.',
         ),
       );
     }
-    final key = '${evidence['idempotency_key'] ?? newIdempotencyKey('kca-evidence')}';
+
     return sendObject(
       transport,
       ApiRequest(
@@ -187,10 +246,106 @@ final class HttpKcaRepository
         body: {
           'file_asset_id': fileAssetId,
           'idempotency_key': key,
+          if (description.isNotEmpty) 'description': description,
         },
         idempotencyKey: key,
       ),
     );
+  }
+
+  List<int>? _bytesOf(Object? raw) {
+    if (raw is List<int>) return raw;
+    if (raw is List) {
+      return [
+        for (final item in raw)
+          if (item is num) item.toInt(),
+      ];
+    }
+    return null;
+  }
+
+  Future<AppResult<JsonObject>> _uploadEvidenceFile({
+    required List<int> bytes,
+    required String filename,
+    required String idempotencyKey,
+  }) async {
+    final store = _tokenStore;
+    if (store == null) {
+      return const AppError(
+        IntegrationUnavailableFailure(
+          'Evidence upload requires a signed-in session.',
+        ),
+      );
+    }
+    final access = await store.readAccessToken();
+    final deviceId = await store.readDeviceIdentifier();
+    if (access == null ||
+        access.isEmpty ||
+        deviceId == null ||
+        deviceId.isEmpty) {
+      return const AppError(
+        UnauthorizedFailure(
+          'Sign in again to upload KCA evidence.',
+        ),
+      );
+    }
+    final safeName = filename.trim().isEmpty ? 'kca-evidence.bin' : filename.trim();
+    final uri = Uri.parse(
+      '${baseUrl.replaceAll(RegExp(r'/$'), '')}/user/files',
+    );
+    try {
+      final request = http.MultipartRequest('POST', uri);
+      request.headers.addAll({
+        'Accept': 'application/json',
+        'Authorization': 'Bearer $access',
+        'X-Device-Identifier': deviceId,
+        'Idempotency-Key': idempotencyKey,
+      });
+      request.fields['purpose'] = 'kca.evidence';
+      request.fields['classification'] = 'internal';
+      request.fields['idempotency_key'] = idempotencyKey;
+      request.files.add(
+        http.MultipartFile.fromBytes('file', bytes, filename: safeName),
+      );
+      final streamed = await _http.send(request).timeout(
+        const Duration(seconds: 120),
+      );
+      final response = await http.Response.fromStream(streamed);
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        if (response.statusCode == 0) {
+          return const AppError(NetworkFailure('Unable to upload evidence.'));
+        }
+        return AppError(
+          mapHttpStatusToFailure(
+            statusCode: response.statusCode,
+            message: 'Evidence file upload failed (${response.statusCode}).',
+          ),
+        );
+      }
+      final decoded = jsonDecode(response.body);
+      if (decoded is Map && decoded['data'] is Map) {
+        return AppSuccess(
+          Map<String, Object?>.from(decoded['data'] as Map),
+        );
+      }
+      return const AppError(
+        ServerFailure('Evidence upload returned an unexpected payload.'),
+      );
+    } on http.ClientException catch (error) {
+      return AppError(
+        NetworkFailure('Unable to upload KCA evidence.', cause: error),
+      );
+    } catch (error) {
+      final name = error.runtimeType.toString();
+      if (name == 'SocketException' || name.contains('Timeout')) {
+        return AppError(
+          NetworkFailure('Unable to upload KCA evidence.', cause: error),
+        );
+      }
+      return AppError(
+        UploadFailure('KCA evidence upload failed.', cause: error),
+      );
+    }
   }
 
   @override
@@ -415,6 +570,40 @@ final class HttpKcaRepository
         case AppError(:final failure):
           if (failure is ForbiddenFailure || failure is ValidationFailure) {
             await _completionQueue.remove(lessonId);
+          }
+      }
+    }
+
+    final evidence = await _evidenceQueue.load();
+    for (final item in evidence) {
+      final key = item['idempotency_key'] ?? '';
+      final raw = item['bytes_b64'];
+      if (key.isEmpty || raw == null || raw.isEmpty) continue;
+      List<int> bytes;
+      try {
+        bytes = base64Decode(raw);
+      } catch (_) {
+        await _evidenceQueue.remove(key);
+        continue;
+      }
+      final result = await submitEvidence({
+        'assignment_id': item['assignment_id'],
+        'idempotency_key': key,
+        'filename': item['filename'] ?? 'kca-evidence.bin',
+        'description': item['description'],
+        'bytes': bytes,
+      });
+      switch (result) {
+        case AppSuccess(:final value):
+          if (value['queued'] == true) {
+            break;
+          }
+          await _evidenceQueue.remove(key);
+        case AppError(:final failure):
+          if (failure is ForbiddenFailure ||
+              failure is ValidationFailure ||
+              failure is ConflictFailure) {
+            await _evidenceQueue.remove(key);
           }
       }
     }

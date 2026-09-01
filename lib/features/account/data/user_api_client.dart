@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../../../core/api/api_envelope.dart';
 import '../../../core/api/api_transport.dart';
 import '../../../core/api/app_failure.dart';
 import '../../../core/api/fhc_api_config.dart';
@@ -13,12 +14,15 @@ final class UserApiClient {
     required this.tokenStore,
     String? baseUrl,
     http.Client? httpClient,
+    ApiTransport? transport,
   }) : baseUrl = resolveFhcApiUrl(override: baseUrl),
-       _http = httpClient ?? http.Client();
+       _http = httpClient ?? http.Client(),
+       _transport = transport;
 
   final SessionTokenStore tokenStore;
   final String baseUrl;
   final http.Client _http;
+  final ApiTransport? _transport;
 
   Future<AppResult<JsonObject>> getObject(String path) async {
     final raw = await _send(ApiMethod.get, path);
@@ -80,6 +84,22 @@ final class UserApiClient {
 
     final correlationId = _newCorrelationId();
     final normalized = path.startsWith('/') ? path : '/$path';
+    final transport = _transport;
+    if (transport != null) {
+      final result = await transport.send(
+        ApiRequest(
+          method: method,
+          path: normalized,
+          body: body,
+          correlationId: correlationId,
+        ),
+      );
+      return switch (result) {
+        AppSuccess(:final value) => AppSuccess(ApiEnvelope.dataOf(value.body)),
+        AppError(:final failure) => AppError(failure),
+      };
+    }
+
     final uri = Uri.parse(
       '${baseUrl.replaceAll(RegExp(r'/$'), '')}$normalized',
     );
