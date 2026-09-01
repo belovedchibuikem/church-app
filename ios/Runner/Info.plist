@@ -47,6 +47,8 @@
 	<true/>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Family House Connect uses your location to show nearby churches on the map.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Family House Connect uses Face ID or Touch ID so you can unlock your 30-day session without typing your password.</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsLocalNetworking</key>

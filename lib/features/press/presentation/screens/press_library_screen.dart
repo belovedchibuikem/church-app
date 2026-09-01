@@ -8,6 +8,7 @@ import '../../../../core/l10n/locale_scope.dart';
 import '../../../../shared/widgets/async_state.dart';
 import '../../../../shared/widgets/fhc_components.dart';
 import '../../../foundation/presentation/fhc_nav.dart';
+import '../widgets/press_cover.dart';
 
 class PressLibraryScreen extends StatefulWidget {
   const PressLibraryScreen({super.key, this.repository});
@@ -21,7 +22,9 @@ class PressLibraryScreen extends StatefulWidget {
 class _PressLibraryScreenState extends State<PressLibraryScreen> {
   final _searchController = TextEditingController();
   FhcAsyncValue<List<JsonObject>> _state = const FhcAsyncValue.loading();
-  String? _categoryFilter;
+  String? _publicationType;
+  String? _formatFilter;
+  String? _languageFilter;
 
   PressRepository? get _repository =>
       widget.repository ??
@@ -59,9 +62,12 @@ class _PressLibraryScreenState extends State<PressLibraryScreen> {
     }
 
     setState(() => _state = const FhcAsyncValue.loading());
-    final result = await repository.search(const {
-      'sort': 'title',
+    final result = await repository.search({
+      'sort': '-publication_date',
       'per_page': 50,
+      if (_publicationType != null) 'publication_type': _publicationType,
+      if (_formatFilter != null) 'format': _formatFilter,
+      if (_languageFilter != null) 'language': _languageFilter,
     });
     if (!mounted) return;
     switch (result) {
@@ -90,23 +96,141 @@ class _PressLibraryScreenState extends State<PressLibraryScreen> {
 
   List<JsonObject> _filtered(List<JsonObject> publications) {
     final q = _searchController.text.trim().toLowerCase();
-    final category = _categoryFilter;
+    if (q.isEmpty) return publications;
     return publications.where((item) {
       final title = '${item['title'] ?? ''}'.toLowerCase();
       final subtitle = '${item['subtitle'] ?? ''}'.toLowerCase();
       final publisher = '${item['publisher'] ?? ''}'.toLowerCase();
       final itemCategory = '${item['category'] ?? ''}'.toLowerCase();
       final format = '${item['format'] ?? ''}'.toLowerCase();
-      final haystack = '$title $subtitle $publisher $itemCategory $format';
-      if (category != null &&
-          !itemCategory.contains(category) &&
-          !format.contains(category) &&
-          !haystack.contains(category)) {
-        return false;
-      }
-      if (q.isEmpty) return true;
-      return haystack.contains(q);
+      return '$title $subtitle $publisher $itemCategory $format'.contains(q);
     }).toList(growable: false);
+  }
+
+  Future<void> _openFilterSheet() async {
+    final applied = await showModalBottomSheet<(String?, String?, String?)>(
+      context: context,
+      useSafeArea: true,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        String? type = _publicationType;
+        String? format = _formatFilter;
+        String? language = _languageFilter;
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return Padding(
+              padding: const EdgeInsets.fromLTRB(24, 4, 24, 28),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      fhcT(context, 'nav.pressFilter', fallback: 'Filter publications'),
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      fhcT(context, 'nav.pressType', fallback: 'Type'),
+                      style: FhcTypography.label,
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        for (final option in const [
+                          (null, 'All'),
+                          ('book', 'Books'),
+                          ('sermon', 'Sermons'),
+                          ('devotional', 'Devotionals'),
+                          ('bible_study', 'Bible Study'),
+                        ])
+                          ChoiceChip(
+                            label: Text(option.$2),
+                            selected: type == option.$1,
+                            onSelected: (_) =>
+                                setSheetState(() => type = option.$1),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      fhcT(context, 'nav.pressFormat', fallback: 'Format'),
+                      style: FhcTypography.label,
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        for (final option in const [
+                          (null, 'All'),
+                          ('pdf', 'PDF'),
+                          ('epub', 'EPUB'),
+                          ('audio', 'Audio'),
+                          ('video', 'Video'),
+                          ('print', 'Print'),
+                        ])
+                          ChoiceChip(
+                            label: Text(option.$2),
+                            selected: format == option.$1,
+                            onSelected: (_) =>
+                                setSheetState(() => format = option.$1),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      fhcT(context, 'nav.pressLanguage', fallback: 'Language'),
+                      style: FhcTypography.label,
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      children: [
+                        ChoiceChip(
+                          label: Text(fhcT(context, 'common.all', fallback: 'All')),
+                          selected: language == null,
+                          onSelected: (_) => setSheetState(() => language = null),
+                        ),
+                        ChoiceChip(
+                          label: const Text('EN'),
+                          selected: language == 'en',
+                          onSelected: (_) =>
+                              setSheetState(() => language = 'en'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton(
+                        onPressed: () => Navigator.of(sheetContext).pop(
+                          (type, format, language),
+                        ),
+                        child: Text(fhcT(context, 'common.apply', fallback: 'Apply')),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+    if (!mounted || applied == null) return;
+    setState(() {
+      _publicationType = applied.$1;
+      _formatFilter = applied.$2;
+      _languageFilter = applied.$3;
+    });
+    await _load();
   }
 
   String _subtitle(JsonObject item) {
@@ -129,15 +253,6 @@ class _PressLibraryScreenState extends State<PressLibraryScreen> {
         .where((p) => p.isNotEmpty)
         .map((p) => '${p[0].toUpperCase()}${p.substring(1).toLowerCase()}')
         .join(' ');
-  }
-
-  static IconData _iconFor(JsonObject item) {
-    final format = '${item['format'] ?? ''}'.toLowerCase();
-    if (format.contains('audio')) return Icons.headphones_outlined;
-    if (format.contains('sermon') || format.contains('video')) {
-      return Icons.campaign_outlined;
-    }
-    return Icons.menu_book_outlined;
   }
 
   void _goBack() {
@@ -163,14 +278,7 @@ class _PressLibraryScreenState extends State<PressLibraryScreen> {
             child: _SearchFilterRow(
               controller: _searchController,
               onChanged: (_) => setState(() {}),
-              onFilter: () => fhcApiUnavailable(
-                context,
-                action: fhcT(
-                  context,
-                  'nav.pressAdvancedFilter',
-                  fallback: 'Advanced Press filtering',
-                ),
-              ),
+              onFilter: _openFilterSheet,
             ),
           ),
           Expanded(child: _buildBody()),
@@ -239,13 +347,9 @@ class _PressLibraryScreenState extends State<PressLibraryScreen> {
                     final description =
                         '${featured['description'] ?? ''}'.trim();
                     if (description.isNotEmpty) return description;
-                    return fhcT(
-                      context,
-                      'nav.pressDiscoverPublication',
-                      fallback:
-                          'Discover this Family House Press publication.',
-                    );
+                    return _subtitle(featured);
                   }(),
+                  imageUrl: '${featured['image_url'] ?? ''}',
                   onReadNow: () => _openPublication('${featured['id'] ?? ''}'),
                 ),
                 const SizedBox(height: 18),
@@ -259,8 +363,11 @@ class _PressLibraryScreenState extends State<PressLibraryScreen> {
               ),
               const SizedBox(height: 10),
               _CategoryRow(
-                selected: _categoryFilter,
-                onSelect: (value) => setState(() => _categoryFilter = value),
+                selected: _publicationType,
+                onSelect: (value) {
+                  setState(() => _publicationType = value);
+                  _load();
+                },
               ),
               const SizedBox(height: 18),
               _SectionHeader(
@@ -282,7 +389,7 @@ class _PressLibraryScreenState extends State<PressLibraryScreen> {
                         title:
                             '${items[i]['title'] ?? fhcT(context, 'nav.pressPublication', fallback: 'Publication')}',
                         subtitle: _subtitle(items[i]),
-                        icon: _iconFor(items[i]),
+                        imageUrl: '${items[i]['image_url'] ?? ''}',
                         onTap: () =>
                             _openPublication('${items[i]['id'] ?? ''}'),
                       ),
@@ -346,7 +453,7 @@ class _SearchFilterRow extends StatelessWidget {
                 hintText: fhcT(
                   context,
                   'common.searchPressHint',
-                  fallback: 'Search books, sermons, devotionals...',
+                  fallback: 'Search books, sermons, devotionals, Bible studies...',
                 ),
                 hintStyle: FhcTypography.hint,
                 filled: true,
@@ -409,11 +516,13 @@ class _NewReleaseCard extends StatelessWidget {
     required this.title,
     required this.description,
     required this.onReadNow,
+    this.imageUrl,
   });
 
   final String title;
   final String description;
   final VoidCallback onReadNow;
+  final String? imageUrl;
 
   @override
   Widget build(BuildContext context) {
@@ -426,11 +535,23 @@ class _NewReleaseCard extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: Stack(
         children: [
-          const Positioned(
-            right: 16,
-            top: 24,
-            child: Icon(Icons.menu_book, color: FhcColors.gold, size: 64),
-          ),
+          if ((imageUrl ?? '').trim().isNotEmpty)
+            Positioned.fill(
+              child: Opacity(
+                opacity: 0.28,
+                child: Image.network(
+                  imageUrl!.trim(),
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                ),
+              ),
+            )
+          else
+            const Positioned(
+              right: 16,
+              top: 24,
+              child: Icon(Icons.menu_book, color: FhcColors.gold, size: 64),
+            ),
           Padding(
             padding: const EdgeInsets.fromLTRB(14, 12, 90, 12),
             child: Column(
@@ -514,13 +635,19 @@ class _CategoryRow extends StatelessWidget {
 
   static const _items = <(IconData, String, String, String?)>[
     (Icons.apps_outlined, 'common.all', 'All', null),
-    (Icons.menu_book_outlined, 'nav.pressBooks', 'Books', 'books'),
-    (Icons.campaign_outlined, 'nav.pressSermons', 'Sermons', 'sermons'),
+    (Icons.menu_book_outlined, 'nav.pressBooks', 'Books', 'book'),
+    (Icons.campaign_outlined, 'nav.pressSermons', 'Sermons', 'sermon'),
     (
       Icons.auto_stories_outlined,
       'nav.pressDevotionals',
       'Devotionals',
-      'devotionals',
+      'devotional',
+    ),
+    (
+      Icons.import_contacts,
+      'nav.pressBibleStudy',
+      'Bible Study',
+      'bible_study',
     ),
   ];
 
@@ -529,7 +656,7 @@ class _CategoryRow extends StatelessWidget {
     return Row(
       children: [
         for (var i = 0; i < _items.length; i++) ...[
-          if (i > 0) const SizedBox(width: 8),
+          if (i > 0) const SizedBox(width: 6),
           Expanded(
             child: _CategoryTile(
               icon: _items[i].$1,
@@ -566,7 +693,7 @@ class _CategoryTile extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(FhcRadius.md),
         child: Ink(
-          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 2),
           decoration: BoxDecoration(
             color: active
                 ? FhcColors.press.withValues(alpha: 0.08)
@@ -586,7 +713,7 @@ class _CategoryTile extends StatelessWidget {
               const SizedBox(height: 6),
               Text(
                 label,
-                maxLines: 1,
+                maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.center,
                 style: TextStyle(
@@ -608,14 +735,14 @@ class _ResourceRow extends StatelessWidget {
   const _ResourceRow({
     required this.title,
     required this.subtitle,
-    required this.icon,
     required this.onTap,
+    this.imageUrl,
   });
 
   final String title;
   final String subtitle;
-  final IconData icon;
   final VoidCallback onTap;
+  final String? imageUrl;
 
   @override
   Widget build(BuildContext context) {
@@ -627,15 +754,16 @@ class _ResourceRow extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 12),
           child: Row(
             children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: ColoredBox(
-                  color: FhcColors.press.withValues(alpha: 0.10),
-                  child: SizedBox(
-                    width: 40,
-                    height: 40,
-                    child: Icon(icon, color: FhcColors.press, size: 20),
-                  ),
+              SizedBox(
+                width: 40,
+                height: 40,
+                child: PressCover(
+                  title: title,
+                  imageUrl: imageUrl,
+                  width: 40,
+                  height: 40,
+                  iconSize: 18,
+                  borderRadius: BorderRadius.circular(8),
                 ),
               ),
               const SizedBox(width: 12),

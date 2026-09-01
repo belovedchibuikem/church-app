@@ -81,6 +81,7 @@ final class LaravelAuthRepository implements AuthRepository, SessionRefresher {
   final FamilyHouseProtectedApiClient _client;
 
   DateTime? _mfaVerifiedAt;
+  Future<AppResult<String>>? _refreshInFlight;
 
   DateTime? get mfaVerifiedAt => _mfaVerifiedAt;
 
@@ -121,6 +122,9 @@ final class LaravelAuthRepository implements AuthRepository, SessionRefresher {
         );
       }
       await _persistIssued(issued);
+      if (email.isNotEmpty) {
+        await tokenStore.writeRememberedEmail(email);
+      }
       return AppSuccess(Map<String, Object?>.from(data));
     } on ProtectedApiException catch (error) {
       return AppError(_mapApiException(error, loginContext: true));
@@ -211,6 +215,9 @@ final class LaravelAuthRepository implements AuthRepository, SessionRefresher {
         );
       }
       await _persistIssued(issued);
+      if (email.isNotEmpty) {
+        await tokenStore.writeRememberedEmail(email);
+      }
       return AppSuccess(Map<String, Object?>.from(data));
     } on ProtectedApiException catch (error) {
       return AppError(_mapApiException(error));
@@ -335,6 +342,27 @@ final class LaravelAuthRepository implements AuthRepository, SessionRefresher {
 
   @override
   Future<AppResult<JsonObject>> restoreSession() async {
+    final access = await tokenStore.readAccessToken();
+    final refresh = await tokenStore.readRefreshToken();
+    final accessExpires = await tokenStore.readAccessTokenExpiresAt();
+    final now = DateTime.now().toUtc();
+    final accessStillValid = access != null &&
+        access.isNotEmpty &&
+        (accessExpires == null ||
+            accessExpires.isAfter(now.add(const Duration(minutes: 2))));
+
+    if (accessStillValid) {
+      await authorizationGateway?.prefetchCapabilities();
+      return AppSuccess(<String, Object?>{
+        'access_token': access,
+        'mfa_verified_at': _mfaVerifiedAt?.toIso8601String(),
+      });
+    }
+
+    if (refresh == null || refresh.isEmpty) {
+      return const AppError(UnauthorizedFailure('Missing refresh credential.'));
+    }
+
     final refreshResult = await refreshAccessToken();
     switch (refreshResult) {
       case AppSuccess():
@@ -349,11 +377,24 @@ final class LaravelAuthRepository implements AuthRepository, SessionRefresher {
 
   @override
   Future<AppResult<String>> refreshAccessToken() async {
+    final inFlight = _refreshInFlight;
+    if (inFlight != null) return inFlight;
+    final future = _refreshAccessTokenBody();
+    _refreshInFlight = future;
+    try {
+      return await future;
+    } finally {
+      if (identical(_refreshInFlight, future)) {
+        _refreshInFlight = null;
+      }
+    }
+  }
+
+  Future<AppResult<String>> _refreshAccessTokenBody() async {
     try {
       final refresh = await tokenStore.readRefreshToken();
       final deviceId = await ensureDeviceIdentifier(tokenStore);
       if (refresh == null || refresh.isEmpty) {
-        await _clearLocalSession();
         return const AppError(UnauthorizedFailure('Missing refresh credential.'));
       }
 
@@ -377,8 +418,9 @@ final class LaravelAuthRepository implements AuthRepository, SessionRefresher {
       await _persistIssued(issued);
       return AppSuccess(issued.accessToken);
     } on ProtectedApiException catch (error) {
-      // Reuse detection / invalid refresh → wipe local tokens (keep device id).
-      await _clearLocalSession();
+      if (error.statusCode == 401 || error.statusCode == 403) {
+        await _clearLocalSession();
+      }
       return AppError(_mapApiException(error));
     } on AppFailure catch (failure) {
       return AppError(failure);
@@ -479,6 +521,8 @@ final class LaravelAuthRepository implements AuthRepository, SessionRefresher {
       accessToken: issued.accessToken,
       refreshToken: issued.refreshToken,
       deviceIdentifier: issued.deviceIdentifier,
+      accessTokenExpiresAt: issued.accessTokenExpiresAt,
+      refreshTokenExpiresAt: issued.refreshTokenExpiresAt,
     );
     _mfaVerifiedAt = issued.mfaVerifiedAt;
     final gateway = authorizationGateway;

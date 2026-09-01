@@ -60,6 +60,8 @@ abstract interface class MissionRepository {
 abstract interface class KcaRepository {
   Future<AppResult<JsonObject>> getAccess();
   Future<AppResult<JsonObject>> getDashboard();
+  Future<AppResult<JsonObject>> getOrientation();
+  Future<AppResult<JsonObject>> getPracticalService();
   Future<AppResult<List<JsonObject>>> listModules();
   Future<AppResult<JsonObject>> getModule(String moduleId);
   Future<AppResult<JsonObject>> evaluateModulePrerequisites(String moduleId);

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -7,6 +8,7 @@ import '../api/api_transport.dart';
 import '../api/app_failure.dart';
 import '../api/fhc_api_config.dart';
 import 'authorization.dart';
+import 'session_lifetime.dart';
 import 'session_token_store.dart';
 
 export 'session_token_store.dart'
@@ -29,7 +31,7 @@ final class LaravelAuthorizationGateway implements AuthorizationGateway {
   final SessionTokenStore tokenStore;
   final http.Client _http;
   SessionRefresher? _sessionRefresher;
-  bool _refreshInFlight = false;
+  Completer<bool>? _refreshCompleter;
 
   /// Wired after [LaravelAuthRepository] is constructed in [AppServices].
   set sessionRefresher(SessionRefresher? value) => _sessionRefresher = value;
@@ -38,9 +40,25 @@ final class LaravelAuthorizationGateway implements AuthorizationGateway {
   DateTime? _cacheExpiresAt;
 
   Set<String>? _capabilityPermissions;
-  DateTime? _capabilitiesExpiresAt;
+  DateTime? _capabilitiesFetchedAt;
+
+  /// Test helper: treat the cached capability snapshot as idle/stale.
+  @visibleForTesting
+  void markCapabilitiesStale() {
+    _capabilitiesFetchedAt = DateTime.now().toUtc().subtract(
+      kCapabilityRevalidateAfter + const Duration(minutes: 1),
+    );
+  }
 
   Uri get _root => Uri.parse(baseUrl.replaceAll(RegExp(r'/$'), ''));
+
+  bool get _capabilitiesAreStale {
+    final fetchedAt = _capabilitiesFetchedAt;
+    if (fetchedAt == null) return true;
+    return !DateTime.now().toUtc().isBefore(
+          fetchedAt.add(kCapabilityRevalidateAfter),
+        );
+  }
 
   @override
   Future<void> bindSession({
@@ -48,10 +66,14 @@ final class LaravelAuthorizationGateway implements AuthorizationGateway {
     required String deviceIdentifier,
   }) async {
     final refresh = await tokenStore.readRefreshToken() ?? '';
+    final accessExpires = await tokenStore.readAccessTokenExpiresAt();
+    final refreshExpires = await tokenStore.readRefreshTokenExpiresAt();
     await tokenStore.writeSession(
       accessToken: accessToken,
       refreshToken: refresh,
       deviceIdentifier: deviceIdentifier,
+      accessTokenExpiresAt: accessExpires,
+      refreshTokenExpiresAt: refreshExpires,
     );
     clearCache();
     await prefetchCapabilities();
@@ -71,25 +93,19 @@ final class LaravelAuthorizationGateway implements AuthorizationGateway {
     try {
       final snapshot = await _fetchCapabilities(credentials);
       _capabilityPermissions = snapshot;
-      _capabilitiesExpiresAt =
-          DateTime.now().toUtc().add(const Duration(minutes: 5));
+      _capabilitiesFetchedAt = DateTime.now().toUtc();
     } on UnauthorizedFailure {
       final refreshed = await _refreshOnce();
-      if (!refreshed) {
-        await tokenStore.clear();
-        clearCache();
-        return;
-      }
+      if (!refreshed) return;
       credentials = await _readCredentials();
       if (credentials == null) return;
       try {
         final snapshot = await _fetchCapabilities(credentials);
         _capabilityPermissions = snapshot;
-        _capabilitiesExpiresAt =
-            DateTime.now().toUtc().add(const Duration(minutes: 5));
+        _capabilitiesFetchedAt = DateTime.now().toUtc();
       } on UnauthorizedFailure {
-        await tokenStore.clear();
-        clearCache();
+        // Refresh already persisted or cleared credentials. Do not wipe
+        // a still-valid 30-day refresh token from a second 401.
       }
     } catch (error, stack) {
       debugPrint('Capabilities prefetch failed: $error\n$stack');
@@ -116,7 +132,12 @@ final class LaravelAuthorizationGateway implements AuthorizationGateway {
 
     if (!needsScopedCheck) {
       final fromSnapshot = _decisionFromCapabilities(permission);
-      if (fromSnapshot != null) return fromSnapshot;
+      if (fromSnapshot != null) {
+        if (_capabilitiesAreStale) {
+          unawaited(prefetchCapabilities());
+        }
+        return fromSnapshot;
+      }
     }
 
     final cacheKey =
@@ -136,7 +157,7 @@ final class LaravelAuthorizationGateway implements AuthorizationGateway {
         resourceId: resourceId,
       );
       _decisionCache[cacheKey] = decision;
-      _cacheExpiresAt = now.add(const Duration(minutes: 2));
+      _cacheExpiresAt = now.add(kCapabilityRevalidateAfter);
       return decision;
     } on UnauthorizedFailure {
       final refreshed = await _refreshOnce();
@@ -152,22 +173,32 @@ final class LaravelAuthorizationGateway implements AuthorizationGateway {
             );
             _decisionCache[cacheKey] = decision;
             _cacheExpiresAt = DateTime.now().toUtc().add(
-              const Duration(minutes: 2),
+              kCapabilityRevalidateAfter,
             );
             return decision;
           } on UnauthorizedFailure {
-            // Fall through to clear below.
+            // Fall through.
           }
         }
       }
-      await tokenStore.clear();
-      clearCache();
+      final stale = _decisionFromCapabilities(permission);
+      if (stale != null && !needsScopedCheck) return stale;
+      final refresh = await tokenStore.readRefreshToken();
+      if (refresh != null && refresh.isNotEmpty) {
+        return const AuthorizationDecision(
+          AuthorizationState.restricted,
+          reason:
+              'Unable to verify access with the Family House authorization service. Check your connection and try again.',
+        );
+      }
       return const AuthorizationDecision(
         AuthorizationState.unauthenticated,
         reason: 'Your session expired. Sign in again to continue.',
       );
     } catch (error, stack) {
       debugPrint('Authorization gateway error: $error\n$stack');
+      final stale = _decisionFromCapabilities(permission);
+      if (stale != null && !needsScopedCheck) return stale;
       return const AuthorizationDecision(
         AuthorizationState.restricted,
         reason:
@@ -177,28 +208,33 @@ final class LaravelAuthorizationGateway implements AuthorizationGateway {
   }
 
   Future<bool> _refreshOnce() async {
+    final inFlight = _refreshCompleter;
+    if (inFlight != null) return inFlight.future;
+
     final refresher = _sessionRefresher;
-    if (refresher == null || _refreshInFlight) return false;
-    _refreshInFlight = true;
+    if (refresher == null) return false;
+
+    final completer = Completer<bool>();
+    _refreshCompleter = completer;
     try {
       final result = await refresher.refreshAccessToken();
-      return result is AppSuccess;
+      final ok = result is AppSuccess;
+      if (!completer.isCompleted) completer.complete(ok);
+      return ok;
     } catch (error, stack) {
       debugPrint('Authorization refresh failed: $error\n$stack');
+      if (!completer.isCompleted) completer.complete(false);
       return false;
     } finally {
-      _refreshInFlight = false;
+      if (identical(_refreshCompleter, completer)) {
+        _refreshCompleter = null;
+      }
     }
   }
 
   AuthorizationDecision? _decisionFromCapabilities(String permission) {
     final permissions = _capabilityPermissions;
-    final expiresAt = _capabilitiesExpiresAt;
-    if (permissions == null ||
-        expiresAt == null ||
-        !DateTime.now().toUtc().isBefore(expiresAt)) {
-      return null;
-    }
+    if (permissions == null) return null;
 
     final canonical = canonicalizeMobilePermission(permission);
     if (permissions.contains(canonical)) {
@@ -317,7 +353,7 @@ final class LaravelAuthorizationGateway implements AuthorizationGateway {
     _decisionCache.clear();
     _cacheExpiresAt = null;
     _capabilityPermissions = null;
-    _capabilitiesExpiresAt = null;
+    _capabilitiesFetchedAt = null;
   }
 }
 

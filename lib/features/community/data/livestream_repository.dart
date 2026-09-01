@@ -9,8 +9,18 @@ import '../../../core/contracts/mobile_repository_contracts.dart';
 import '../../account/data/profile_repository.dart';
 import '../../account/data/user_api_client.dart';
 
+abstract interface class LivestreamSource {
+  Future<AppResult<JsonObject?>> getCurrent();
+  Future<AppResult<List<JsonObject>>> listComments(
+    String livestreamId, {
+    String? since,
+  });
+  Future<AppResult<JsonObject>> postComment(String livestreamId, String body);
+  Future<AppResult<JsonObject>> react(String livestreamId);
+}
+
 /// Public livestream catalogue + authenticated chat/reactions.
-final class LivestreamRepository {
+final class LivestreamRepository implements LivestreamSource {
   LivestreamRepository({
     String? baseUrl,
     http.Client? httpClient,
@@ -30,6 +40,7 @@ final class LivestreamRepository {
 
   Uri get _root => Uri.parse(baseUrl.replaceAll(RegExp(r'/$'), ''));
 
+  @override
   Future<AppResult<JsonObject?>> getCurrent() async {
     try {
       final response = await _http.get(
@@ -66,6 +77,7 @@ final class LivestreamRepository {
     }
   }
 
+  @override
   Future<AppResult<List<JsonObject>>> listComments(
     String livestreamId, {
     String? since,
@@ -77,6 +89,7 @@ final class LivestreamRepository {
     return _user.getList(path);
   }
 
+  @override
   Future<AppResult<JsonObject>> postComment(
     String livestreamId,
     String body,
@@ -87,6 +100,7 @@ final class LivestreamRepository {
     );
   }
 
+  @override
   Future<AppResult<JsonObject>> react(String livestreamId) {
     return _user.postObject(
       '/user/livestreams/${Uri.encodeComponent(livestreamId)}/reactions',

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 abstract final class FhcRoutes {
   static const splash = '/splash';
@@ -84,6 +85,11 @@ abstract final class FhcRoutes {
   static const kcaAdmission = '/kca/admission';
   static const kcaAdmissionLetter = '/kca/admission-letter';
   static const kcaOrientation = '/kca/orientation';
+  static const kcaOrientationOverview = '/kca/orientation/overview';
+  static const kcaOrientationRules = '/kca/orientation/rules';
+  static const kcaOrientationPath = '/kca/orientation/path';
+  static const kcaOrientationMentors = '/kca/orientation/mentors';
+  static const kcaPracticalService = '/kca/practical-service';
   static const kcaAttendance = '/kca/attendance';
   static const kcaMentees = '/kca/mentees';
   static const kcaReview = '/kca/review';
@@ -173,4 +179,24 @@ Future<void> fhcApiUnavailable(
 void fhcTab(BuildContext context, int index) {
   if (index < 0 || index >= FhcRoutes.tabs.length) return;
   fhcGo(context, FhcRoutes.tabs[index]);
+}
+
+/// Copies [text] so the member can share it from any app.
+Future<void> fhcShareText(
+  BuildContext context, {
+  required String text,
+  String? confirmation,
+}) async {
+  final payload = text.trim();
+  if (payload.isEmpty) return;
+  await Clipboard.setData(ClipboardData(text: payload));
+  if (!context.mounted) return;
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Text(
+        confirmation ??
+            'Copied. Paste it into Messages, WhatsApp, or email to share.',
+      ),
+    ),
+  );
 }

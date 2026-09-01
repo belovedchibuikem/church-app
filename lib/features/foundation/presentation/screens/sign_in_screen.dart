@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../../core/api/app_failure.dart';
 import '../../../../core/auth/auth_session.dart';
+import '../../../../core/auth/biometric_unlock.dart';
 import '../../../../core/contracts/mobile_repository_contracts.dart';
 import '../../../../core/design_system/fhc_tokens.dart';
 import '../../../../core/di/app_services_scope.dart';
@@ -13,7 +16,9 @@ import '../../data/auth_repository.dart';
 import '../fhc_nav.dart';
 
 class SignInScreen extends StatefulWidget {
-  const SignInScreen({super.key});
+  const SignInScreen({super.key, this.biometricUnlock});
+
+  final BiometricUnlock? biometricUnlock;
 
   @override
   State<SignInScreen> createState() => _SignInScreenState();
@@ -23,10 +28,37 @@ class _SignInScreenState extends State<SignInScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _submitting = false;
+  bool _unlocking = false;
+  bool _showFingerprint = false;
   String? _error;
+  BiometricUnlock? _biometric;
 
   AuthRepository? get _auth =>
       AppServicesScope.maybeOf(context)?.authRepository;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_biometric != null) return;
+    final store = AppServicesScope.maybeOf(context)?.tokenStore;
+    _biometric =
+        widget.biometricUnlock ??
+        (store == null ? null : BiometricUnlock(tokenStore: store));
+    unawaited(_hydrate());
+  }
+
+  Future<void> _hydrate() async {
+    final store = AppServicesScope.maybeOf(context)?.tokenStore;
+    final biometric = _biometric;
+    if (store != null) {
+      final email = await store.readRememberedEmail();
+      if (email != null && email.isNotEmpty && mounted) {
+        _emailController.text = email;
+      }
+    }
+    final show = biometric != null && await biometric.canOfferUnlock;
+    if (mounted) setState(() => _showFingerprint = show);
+  }
 
   @override
   void dispose() {
@@ -36,7 +68,7 @@ class _SignInScreenState extends State<SignInScreen> {
   }
 
   Future<void> _submit() async {
-    if (_submitting) return;
+    if (_submitting || _unlocking) return;
     final auth = _auth;
     if (auth == null) {
       setState(() => _error = fhcT(context, 'errors.authNotConfigured'));
@@ -65,22 +97,127 @@ class _SignInScreenState extends State<SignInScreen> {
     switch (result) {
       case AppSuccess(:final value):
         setState(() => _submitting = false);
-        final mfaVerifiedAt = AuthCredentials.parseIso8601(
-          value['mfa_verified_at'],
-        );
-        final role = AppLaunchScope.maybeOf(context)?.selectedRole;
-        final next =
-            (role != null && role.isNotEmpty) ? '/hub' : '/role-selection';
-        if (mfaVerifiedAt == null) {
-          fhcGo(context, '/2fa');
-        } else {
-          fhcReset(context, next);
-        }
+        await _maybeEnableFingerprint();
+        if (!mounted) return;
+        _continueAfterAuth(value);
       case AppError(:final failure):
         setState(() {
           _submitting = false;
           _error = authFailureMessage(failure);
         });
+    }
+  }
+
+  Future<void> _unlockWithFingerprint() async {
+    if (_submitting || _unlocking) return;
+    final auth = _auth;
+    final biometric = _biometric;
+    if (auth == null || biometric == null) return;
+
+    setState(() {
+      _unlocking = true;
+      _error = null;
+    });
+
+    final ok = await biometric.authenticate(
+      reason: fhcT(
+        context,
+        'auth.fingerprintReason',
+        fallback: 'Confirm it is you to open Family House Connect.',
+      ),
+    );
+    if (!mounted) return;
+    if (!ok) {
+      setState(() {
+        _unlocking = false;
+        _error = fhcT(
+          context,
+          'auth.fingerprintFailed',
+          fallback:
+              'Fingerprint was not recognized. Try again or use your password.',
+        );
+      });
+      return;
+    }
+
+    final restored = await auth.restoreSession();
+    if (!mounted) return;
+    switch (restored) {
+      case AppSuccess(:final value):
+        setState(() => _unlocking = false);
+        _continueAfterAuth(value);
+      case AppError(:final failure):
+        setState(() {
+          _unlocking = false;
+          _error = authFailureMessage(failure);
+        });
+    }
+  }
+
+  Future<void> _maybeEnableFingerprint() async {
+    final biometric = _biometric;
+    if (biometric == null) return;
+    if (!await biometric.isHardwareAvailable) return;
+    if (await biometric.isEnabled) return;
+    if (!mounted) return;
+
+    final enable = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: Text(
+            fhcT(
+              dialogContext,
+              'auth.enableFingerprint',
+              fallback: 'Use fingerprint next time?',
+            ),
+          ),
+          content: Text(
+            fhcT(
+              dialogContext,
+              'auth.enableFingerprintCopy',
+              fallback:
+                  'Unlock this device with your fingerprint for 30 days. You can change this in Settings.',
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: Text(
+                fhcT(dialogContext, 'auth.notNow', fallback: 'Not now'),
+              ),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              style: FilledButton.styleFrom(backgroundColor: FhcColors.green),
+              child: Text(
+                fhcT(
+                  dialogContext,
+                  'auth.enableFingerprintAction',
+                  fallback: 'Enable',
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+    if (enable == true) {
+      await biometric.setEnabled(true);
+    }
+  }
+
+  void _continueAfterAuth(Map<String, Object?> value) {
+    final mfaVerifiedAt = AuthCredentials.parseIso8601(
+      value['mfa_verified_at'],
+    );
+    final role = AppLaunchScope.maybeOf(context)?.selectedRole;
+    final next =
+        (role != null && role.isNotEmpty) ? '/hub' : '/role-selection';
+    if (mfaVerifiedAt == null) {
+      fhcGo(context, '/2fa');
+    } else {
+      fhcReset(context, next);
     }
   }
 
@@ -135,8 +272,11 @@ class _SignInScreenState extends State<SignInScreen> {
                       emailController: _emailController,
                       passwordController: _passwordController,
                       submitting: _submitting,
+                      unlocking: _unlocking,
+                      showFingerprint: _showFingerprint,
                       error: _error,
                       onSubmit: _submit,
+                      onFingerprint: _unlockWithFingerprint,
                     ),
                   ),
                 );
@@ -154,18 +294,25 @@ class _SignInBody extends StatelessWidget {
     required this.emailController,
     required this.passwordController,
     required this.submitting,
+    required this.unlocking,
+    required this.showFingerprint,
     required this.error,
     required this.onSubmit,
+    required this.onFingerprint,
   });
 
   final TextEditingController emailController;
   final TextEditingController passwordController;
   final bool submitting;
+  final bool unlocking;
+  final bool showFingerprint;
   final String? error;
   final VoidCallback onSubmit;
+  final VoidCallback onFingerprint;
 
   @override
   Widget build(BuildContext context) {
+    final busy = submitting || unlocking;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -222,8 +369,42 @@ class _SignInBody extends StatelessWidget {
               submitting
                   ? fhcT(context, 'auth.signingIn')
                   : fhcT(context, 'auth.signIn'),
-          onPressed: submitting ? null : onSubmit,
+          onPressed: busy ? null : onSubmit,
         ),
+        if (showFingerprint) ...[
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            height: FhcSizes.buttonHeight,
+            child: OutlinedButton.icon(
+              onPressed: busy ? null : onFingerprint,
+              icon: Icon(
+                Icons.fingerprint,
+                color: busy ? FhcColors.muted : FhcColors.green,
+              ),
+              label: Text(
+                unlocking
+                    ? fhcT(context, 'auth.unlocking', fallback: 'Unlocking…')
+                    : fhcT(
+                      context,
+                      'auth.useFingerprint',
+                      fallback: 'Sign in with fingerprint',
+                    ),
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  color: busy ? FhcColors.muted : FhcColors.green,
+                ),
+              ),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: FhcColors.green,
+                side: const BorderSide(color: FhcColors.green),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(FhcRadius.button),
+                ),
+              ),
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -292,4 +473,3 @@ class _TabItem extends StatelessWidget {
     );
   }
 }
-

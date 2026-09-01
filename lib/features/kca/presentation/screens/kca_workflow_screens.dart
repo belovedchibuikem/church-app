@@ -76,46 +76,90 @@ class KcaEvidenceUploadScreen extends StatelessWidget {
   }
 }
 
-class KcaSubmissionsScreen extends StatelessWidget {
+class KcaSubmissionsScreen extends StatefulWidget {
   const KcaSubmissionsScreen({super.key});
 
   @override
+  State<KcaSubmissionsScreen> createState() => _KcaSubmissionsScreenState();
+}
+
+class _KcaSubmissionsScreenState extends State<KcaSubmissionsScreen> {
+  FhcAsyncValue<List<JsonObject>> _state = const FhcAsyncValue.loading();
+
+  KcaRepository? get _repo =>
+      AppServicesScope.maybeOf(context)?.kcaRepository;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_state is FhcAsyncLoading) _load();
+  }
+
+  Future<void> _load() async {
+    final repo = _repo;
+    if (repo == null) {
+      setState(() {
+        _state = const FhcAsyncValue.unavailable(
+          message:
+              'Submissions require the authenticated assignments API. '
+              'No fixture list is shown.',
+        );
+      });
+      return;
+    }
+    setState(() => _state = const FhcAsyncValue.loading());
+    final result = await repo.listAssignments();
+    if (!mounted) return;
+    switch (result) {
+      case AppSuccess(:final value):
+        setState(() {
+          _state = value.isEmpty
+              ? const FhcAsyncValue.empty(message: 'No submissions yet.')
+              : FhcAsyncValue.data(value);
+        });
+      case AppError(:final failure):
+        setState(() => _state = FhcAsyncValue.error(failure));
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    const items = [
-      ('Door to Door Evangelism', 'Submitted May 18, 2025', 'Under Review'),
-      ('Youth Outreach Program', 'Submitted May 17, 2025', 'Under Review'),
-      ('Community Clean Up', 'Submitted May 10, 2025', 'Approved'),
-      ('Food Distribution', 'Submitted May 8, 2025', 'Approved'),
-      ('Prison Outreach', 'Submitted May 3, 2025', 'Rejected'),
-    ];
     return WorkflowPage(
       title: 'My Submissions',
       domain: WorkflowDomain.kca,
+      actionLabel: 'Refresh',
+      onAction: _load,
       children: [
-        const WorkflowSegments(
-          labels: ['Under Review (2)', 'Approved (4)', 'Rejected (1)'],
-        ),
-        const SizedBox(height: 10),
-        WorkflowCard(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: Column(
-            children: [
-              for (final item in items)
-                WorkflowRow(
-                  title: item.$1,
-                  subtitle: item.$2,
-                  leading: Icons.assignment_outlined,
-                  trailing: WorkflowPill(
-                    item.$3,
-                    color:
-                        item.$3 == 'Rejected'
-                            ? FhcColors.red
-                            : item.$3 == 'Approved'
-                            ? FhcColors.green
-                            : FhcColors.gold,
-                  ),
-                ),
-            ],
+        SizedBox(
+          height: 480,
+          child: FhcAsyncBody<List<JsonObject>>(
+            value: _state,
+            onRetry: _load,
+            emptyTitle: 'No submissions',
+            unavailableTitle: 'Submissions unavailable',
+            builder: (context, items) {
+              return ListView.separated(
+                itemCount: items.length,
+                separatorBuilder: (_, __) => const Divider(height: 1),
+                itemBuilder: (context, index) {
+                  final item = items[index];
+                  return WorkflowRow(
+                    title: '${item['title'] ?? 'Assignment'}',
+                    subtitle: '${item['state'] ?? item['due_at'] ?? ''}',
+                    leading: Icons.assignment_outlined,
+                    onTap: () {
+                      final id = '${item['id'] ?? ''}'.trim();
+                      fhcPush(
+                        context,
+                        id.isEmpty
+                            ? FhcRoutes.kcaAssignments
+                            : '${FhcRoutes.kcaAssignments}?id=${Uri.encodeComponent(id)}',
+                      );
+                    },
+                  );
+                },
+              );
+            },
           ),
         ),
       ],
@@ -864,6 +908,10 @@ class KcaAlumniDirectoryScreen extends StatefulWidget {
 
 class _KcaAlumniDirectoryScreenState extends State<KcaAlumniDirectoryScreen> {
   final _search = TextEditingController();
+  final _country = TextEditingController();
+  final _region = TextEditingController();
+  final _locality = TextEditingController();
+  String _scope = 'all';
   FhcAsyncValue<List<JsonObject>> _state = const FhcAsyncValue.loading();
   final Set<String> _following = {};
   String? _busyId;
@@ -880,6 +928,9 @@ class _KcaAlumniDirectoryScreenState extends State<KcaAlumniDirectoryScreen> {
   @override
   void dispose() {
     _search.dispose();
+    _country.dispose();
+    _region.dispose();
+    _locality.dispose();
     super.dispose();
   }
 
@@ -911,6 +962,10 @@ class _KcaAlumniDirectoryScreenState extends State<KcaAlumniDirectoryScreen> {
     final q = _search.text.trim();
     final result = await repo.listDirectory({
       if (q.isNotEmpty) 'q': q,
+      if (_scope != 'all') 'scope': _scope,
+      if (_country.text.trim().isNotEmpty) 'country': _country.text.trim(),
+      if (_region.text.trim().isNotEmpty) 'region': _region.text.trim(),
+      if (_locality.text.trim().isNotEmpty) 'locality': _locality.text.trim(),
     });
     if (!mounted) return;
     switch (result) {
@@ -940,10 +995,12 @@ class _KcaAlumniDirectoryScreenState extends State<KcaAlumniDirectoryScreen> {
   }
 
   String _subtitle(JsonObject person) {
-    final level = '${person['level'] ?? person['kca_level'] ?? ''}'.trim();
-    final place = '${person['locality'] ?? person['location'] ?? ''}'.trim();
-    return [if (level.isNotEmpty) level, if (place.isNotEmpty) place]
-        .join('  •  ');
+    final place = [
+      '${person['locality'] ?? ''}'.trim(),
+      '${person['region'] ?? ''}'.trim(),
+      '${person['country'] ?? ''}'.trim(),
+    ].where((part) => part.isNotEmpty).join(' • ');
+    return place;
   }
 
   Future<void> _toggleFollow(JsonObject person) async {
@@ -987,11 +1044,76 @@ class _KcaAlumniDirectoryScreenState extends State<KcaAlumniDirectoryScreen> {
             onSubmitted: (_) => _load(),
             decoration: const InputDecoration(
               labelText: 'Search',
-              hintText: 'Search alumni…',
+              hintText: 'Search KCAs…',
               prefixIcon: Icon(Icons.search),
               border: OutlineInputBorder(),
               isDense: true,
             ),
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              for (final item in const [
+                ('all', 'All'),
+                ('own_country', 'My country'),
+                ('own_state', 'My state'),
+                ('own_lga', 'My LGA'),
+                ('other_country', 'Other countries'),
+                ('other_state', 'Other states'),
+                ('other_lga', 'Other LGAs'),
+              ])
+                ChoiceChip(
+                  label: Text(item.$2),
+                  selected: _scope == item.$1,
+                  onSelected: (_) {
+                    setState(() => _scope = item.$1);
+                    _load();
+                  },
+                ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _country,
+                  decoration: const InputDecoration(
+                    labelText: 'Country',
+                    hintText: 'NG',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                  onSubmitted: (_) => _load(),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: TextField(
+                  controller: _region,
+                  decoration: const InputDecoration(
+                    labelText: 'State',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                  onSubmitted: (_) => _load(),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: TextField(
+                  controller: _locality,
+                  decoration: const InputDecoration(
+                    labelText: 'LGA',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                  onSubmitted: (_) => _load(),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 10),
         ],
@@ -1041,54 +1163,88 @@ class _KcaAlumniDirectoryScreenState extends State<KcaAlumniDirectoryScreen> {
   }
 }
 
-class KcaOpportunitiesScreen extends StatelessWidget {
+class KcaOpportunitiesScreen extends StatefulWidget {
   const KcaOpportunitiesScreen({super.key});
 
   @override
+  State<KcaOpportunitiesScreen> createState() => _KcaOpportunitiesScreenState();
+}
+
+class _KcaOpportunitiesScreenState extends State<KcaOpportunitiesScreen> {
+  FhcAsyncValue<List<JsonObject>> _state = const FhcAsyncValue.loading();
+
+  KcaRepository? get _repo =>
+      AppServicesScope.maybeOf(context)?.kcaRepository;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_state is FhcAsyncLoading) _load();
+  }
+
+  Future<void> _load() async {
+    final repo = _repo;
+    if (repo == null) {
+      setState(() {
+        _state = const FhcAsyncValue.unavailable(
+          message:
+              'Opportunities come from the KCA directory API. '
+              'No fixture projects are shown.',
+        );
+      });
+      return;
+    }
+    setState(() => _state = const FhcAsyncValue.loading());
+    final result = await repo.listDirectory({'scope': 'all'});
+    if (!mounted) return;
+    switch (result) {
+      case AppSuccess(:final value):
+        setState(() {
+          _state = value.isEmpty
+              ? const FhcAsyncValue.empty(
+                  message: 'No KCA members are listed yet.',
+                )
+              : FhcAsyncValue.data(value);
+        });
+      case AppError(:final failure):
+        setState(() => _state = FhcAsyncValue.error(failure));
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    const opportunities = [
-      (
-        'Children Outreach Project',
-        'Support a children outreach in rural communities.',
-        'Ongoing',
-      ),
-      (
-        'Bible Study Facilitator',
-        'Help facilitate online Bible studies.',
-        'Apply',
-      ),
-      (
-        'Community Development',
-        'Join a community development initiative.',
-        'Apply',
-      ),
-      (
-        'Media Volunteer',
-        'Help in media production and digital outreach.',
-        'Apply',
-      ),
-    ];
     return WorkflowPage(
       title: 'Opportunities',
       domain: WorkflowDomain.kca,
-      actionLabel: 'View All Opportunities',
+      actionLabel: 'Open directory',
+      onAction: () => fhcPush(context, FhcRoutes.kcaAlumni),
       children: [
-        const WorkflowSegments(
-          labels: ['Projects', 'Mentorship', 'Volunteers', 'Jobs'],
-        ),
-        const SizedBox(height: 10),
-        WorkflowCard(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: Column(
-            children: [
-              for (final item in opportunities)
-                WorkflowRow(
-                  title: item.$1,
-                  subtitle: item.$2,
-                  leading: Icons.work_outline,
-                  trailing: WorkflowPill(item.$3),
-                ),
-            ],
+        SizedBox(
+          height: 480,
+          child: FhcAsyncBody<List<JsonObject>>(
+            value: _state,
+            onRetry: _load,
+            emptyTitle: 'No opportunities',
+            unavailableTitle: 'Opportunities unavailable',
+            builder: (context, people) {
+              return ListView.separated(
+                itemCount: people.length,
+                separatorBuilder: (_, __) => const Divider(height: 1),
+                itemBuilder: (context, index) {
+                  final person = people[index];
+                  return WorkflowRow(
+                    title: '${person['display_name'] ?? 'Member'}',
+                    subtitle: [
+                      '${person['locality'] ?? ''}',
+                      '${person['region'] ?? ''}',
+                      '${person['country'] ?? ''}',
+                    ].where((part) => part.trim().isNotEmpty).join(' • '),
+                    leading: Icons.work_outline,
+                    onTap: () => fhcPush(context, FhcRoutes.kcaAlumni),
+                  );
+                },
+              );
+            },
           ),
         ),
       ],

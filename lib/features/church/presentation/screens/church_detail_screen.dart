@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/api/app_failure.dart';
 import '../../../../core/design_system/fhc_tokens.dart';
@@ -224,7 +225,20 @@ class _ChurchDetailScreenState extends State<ChurchDetailScreen> {
       backgroundColor: FhcColors.white,
       child: Column(
         children: [
-          _Header(onBack: back),
+          _Header(
+            onBack: back,
+            onShare: () async {
+              final current = _state;
+              if (current is! FhcAsyncData<ChurchSummary>) return;
+              final church = current.value;
+              await fhcShareText(
+                context,
+                text:
+                    '${church.name}\n${church.location.placeLabel}\n'
+                    'Family House Connect',
+              );
+            },
+          ),
           Expanded(
             child: RefreshIndicator(
               onRefresh: () async {
@@ -410,6 +424,9 @@ class _ChurchDetailScreenState extends State<ChurchDetailScreen> {
               child: _Actions(
                 membershipBusy: _membershipBusy,
                 onMembership: () => _requestMembership(value),
+                onGroups: () => fhcPush(context, FhcRoutes.churchGroups),
+                onDocuments: () => fhcPush(context, FhcRoutes.churchDocuments),
+                onDirections: () => _openDirections(value),
               ),
             ),
         ],
@@ -437,11 +454,37 @@ class _ChurchDetailScreenState extends State<ChurchDetailScreen> {
     final local = parsed.toLocal();
     return '${months[local.month - 1]} ${local.day}, ${local.year}';
   }
+
+  Future<void> _openDirections(ChurchSummary church) async {
+    final query = [
+      church.name,
+      church.location.placeLabel,
+      church.location.administrativeUnitName ?? '',
+    ].where((part) => part.trim().isNotEmpty).join(', ');
+    final uri = Uri.parse(
+      'https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(query)}',
+    );
+    final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!launched && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            fhcT(
+              context,
+              'church.directionsFailed',
+              fallback: 'Could not open maps for directions.',
+            ),
+          ),
+        ),
+      );
+    }
+  }
 }
 
 class _Header extends StatelessWidget {
-  const _Header({required this.onBack});
+  const _Header({required this.onBack, required this.onShare});
   final VoidCallback onBack;
+  final VoidCallback onShare;
 
   @override
   Widget build(BuildContext context) {
@@ -458,15 +501,7 @@ class _Header extends StatelessWidget {
               icon: const Icon(Icons.chevron_left, size: 28),
             ),
             IconButton(
-              onPressed:
-                  () => fhcApiUnavailable(
-                    context,
-                    action: fhcT(
-                      context,
-                      'church.shareAction',
-                      fallback: 'Sharing this church profile',
-                    ),
-                  ),
+              onPressed: onShare,
               tooltip: fhcT(context, 'church.share', fallback: 'Share'),
               icon: const Icon(Icons.ios_share_outlined, size: 23),
             ),
@@ -492,80 +527,108 @@ class _Actions extends StatelessWidget {
   const _Actions({
     required this.onMembership,
     required this.membershipBusy,
+    required this.onGroups,
+    required this.onDocuments,
+    required this.onDirections,
   });
 
   final VoidCallback onMembership;
   final bool membershipBusy;
-
-  static const _secondary = <(IconData, String, String)>[
-    (Icons.groups_outlined, 'church.groups', 'Groups'),
-    (Icons.description_outlined, 'church.documents', 'Documents'),
-  ];
+  final VoidCallback onGroups;
+  final VoidCallback onDocuments;
+  final VoidCallback onDirections;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    return Column(
       children: [
-        Expanded(
-          child: SizedBox(
-            height: 44,
-            child: OutlinedButton.icon(
-              onPressed: membershipBusy ? null : onMembership,
-              icon: membershipBusy
-                  ? const SizedBox(
-                      width: 14,
-                      height: 14,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.add, size: 16),
-              label: Text(
-                fhcT(context, 'church.join', fallback: 'Join'),
-                style: const TextStyle(fontSize: 11),
-              ),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: FhcColors.greenDark,
-                side: const BorderSide(color: FhcColors.green),
-                padding: const EdgeInsets.symmetric(horizontal: 4),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
+        SizedBox(
+          width: double.infinity,
+          height: 44,
+          child: FilledButton.icon(
+            onPressed: onDirections,
+            icon: const Icon(Icons.directions_outlined, size: 18),
+            label: Text(
+              fhcT(context, 'church.directions', fallback: 'Get directions'),
             ),
           ),
         ),
-        for (final item in _secondary) ...[
-          const SizedBox(width: 8),
-          Expanded(
-            child: SizedBox(
-              height: 44,
-              child: OutlinedButton.icon(
-                onPressed:
-                    () => fhcApiUnavailable(
-                      context,
-                      action: fhcT(
-                        context,
-                        'church.featureAction',
-                        args: {'feature': item.$3},
-                        fallback: '{feature} for this church',
-                      ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: SizedBox(
+                height: 44,
+                child: OutlinedButton.icon(
+                  onPressed: membershipBusy ? null : onMembership,
+                  icon: membershipBusy
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.add, size: 16),
+                  label: Text(
+                    fhcT(context, 'church.join', fallback: 'Join'),
+                    style: const TextStyle(fontSize: 11),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: FhcColors.greenDark,
+                    side: const BorderSide(color: FhcColors.green),
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
                     ),
-                icon: Icon(item.$1, size: 16),
-                label: Text(
-                  fhcT(context, item.$2, fallback: item.$3),
-                  style: const TextStyle(fontSize: 11),
-                ),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: FhcColors.greenDark,
-                  side: const BorderSide(color: FhcColors.green),
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
                   ),
                 ),
               ),
             ),
-          ),
-        ],
+            const SizedBox(width: 8),
+            Expanded(
+              child: SizedBox(
+                height: 44,
+                child: OutlinedButton.icon(
+                  onPressed: onGroups,
+                  icon: const Icon(Icons.groups_outlined, size: 16),
+                  label: Text(
+                    fhcT(context, 'church.groups', fallback: 'Groups'),
+                    style: const TextStyle(fontSize: 11),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: FhcColors.greenDark,
+                    side: const BorderSide(color: FhcColors.green),
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: SizedBox(
+                height: 44,
+                child: OutlinedButton.icon(
+                  onPressed: onDocuments,
+                  icon: const Icon(Icons.description_outlined, size: 16),
+                  label: Text(
+                    fhcT(context, 'church.documents', fallback: 'Documents'),
+                    style: const TextStyle(fontSize: 11),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: FhcColors.greenDark,
+                    side: const BorderSide(color: FhcColors.green),
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ],
     );
   }

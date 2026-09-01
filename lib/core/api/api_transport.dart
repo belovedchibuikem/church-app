@@ -75,11 +75,27 @@ abstract interface class SessionTokenStore {
   Future<void> writeDeviceIdentifier(String deviceIdentifier);
 
   /// Writes access, refresh, and device identifier together.
+  ///
+  /// When expiry timestamps are omitted, stores default to a 30-day window.
   Future<void> writeSession({
     required String accessToken,
     required String refreshToken,
     required String deviceIdentifier,
+    DateTime? accessTokenExpiresAt,
+    DateTime? refreshTokenExpiresAt,
   });
+
+  Future<DateTime?> readAccessTokenExpiresAt();
+
+  Future<DateTime?> readRefreshTokenExpiresAt();
+
+  Future<String?> readRememberedEmail();
+
+  Future<void> writeRememberedEmail(String email);
+
+  Future<bool> readBiometricUnlockEnabled();
+
+  Future<void> writeBiometricUnlockEnabled(bool enabled);
 
   Future<void> clear();
 }

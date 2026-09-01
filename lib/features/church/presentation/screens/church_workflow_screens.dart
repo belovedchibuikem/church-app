@@ -1530,8 +1530,6 @@ class _OnlineChurchScreenState extends State<OnlineChurchScreen> {
                 : subtitle,
             metrics: [
               if (status.isNotEmpty) ('Status', status.toUpperCase()),
-              if (_stream?['viewer_count'] != null)
-                ('Viewers', '${_stream!['viewer_count']}'),
             ],
             imageAsset: 'assets/images/live_worship.png',
           ),

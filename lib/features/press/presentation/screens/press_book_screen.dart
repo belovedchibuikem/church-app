@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/api/app_failure.dart';
+import '../../../../core/api/fhc_api_config.dart';
 import '../../../../core/contracts/mobile_repository_contracts.dart';
 import '../../../../core/design_system/fhc_tokens.dart';
 import '../../../../core/di/app_services_scope.dart';
@@ -8,6 +10,7 @@ import '../../../../core/l10n/locale_scope.dart';
 import '../../../../core/routing/fhc_route_args.dart';
 import '../../../../shared/widgets/fhc_components.dart';
 import '../../../foundation/presentation/fhc_nav.dart';
+import '../widgets/press_cover.dart';
 
 class PressBookScreen extends StatefulWidget {
   const PressBookScreen({super.key, this.publicationId, this.repository});
@@ -135,12 +138,16 @@ class _PressBookScreenState extends State<PressBookScreen> {
     final repository = _repository;
     final id = _resolvedId ?? '${_publication?['id'] ?? ''}';
     if (repository == null || id.isEmpty) {
-      await fhcApiUnavailable(
-        context,
-        action: fhcT(
-          context,
-          'nav.pressDownloadingAsset',
-          fallback: 'Downloading a Press asset',
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            fhcT(
+              context,
+              'nav.pressDownloadUnavailable',
+              fallback: 'This title does not have a downloadable file yet.',
+            ),
+          ),
         ),
       );
       return;
@@ -171,21 +178,78 @@ class _PressBookScreenState extends State<PressBookScreen> {
           ),
         );
       case AppError(:final failure):
-        if (failure is IntegrationUnavailableFailure) {
-          await fhcApiUnavailable(
-            context,
-            action: fhcT(
-              context,
-              'nav.pressDownloadingAsset',
-              fallback: 'Downloading a Press asset',
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              failure is NotFoundFailure
+                  ? fhcT(
+                      context,
+                      'nav.pressDownloadUnavailable',
+                      fallback:
+                          'This title does not have a downloadable file yet.',
+                    )
+                  : failure.message,
             ),
-          );
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(failure.message)),
-          );
-        }
+          ),
+        );
     }
+  }
+
+  Future<void> _openReader() async {
+    final id = _resolvedId ?? '${_publication?['id'] ?? ''}'.trim();
+    if (id.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            fhcT(
+              context,
+              'nav.pressOpenFromLibrary',
+              fallback:
+                  'Open a publication from the Press library so its public id can be loaded.',
+            ),
+          ),
+        ),
+      );
+      return;
+    }
+    final uri = Uri.parse(
+      '${resolveFhcApiUrl()}/press/publications/${Uri.encodeComponent(id)}/download',
+    );
+    final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!launched && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            fhcT(
+              context,
+              'nav.pressUnableToOpenFile',
+              fallback: 'Unable to open this publication file.',
+            ),
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _share() async {
+    final publication = _publication;
+    final title = publication == null
+        ? ''
+        : '${publication['title'] ?? ''}'.trim();
+    final slug = publication == null ? '' : '${publication['slug'] ?? ''}'.trim();
+    final host = resolveFhcPublicApiBaseUrl();
+    final url = slug.isEmpty ? '$host/press' : '$host/press/$slug';
+    final text = title.isEmpty ? url : '$title\n$url';
+    await fhcShareText(
+      context,
+      text: text,
+      confirmation: fhcT(
+        context,
+        'nav.pressLinkCopied',
+        fallback: 'Publication link copied.',
+      ),
+    );
   }
 
   void _onBack() {
@@ -267,27 +331,13 @@ class _PressBookScreenState extends State<PressBookScreen> {
             favorited: _favorited,
             onBack: _onBack,
             onFavorite: () => setState(() => _favorited = !_favorited),
-            onShare: () => fhcApiUnavailable(
-              context,
-              action: fhcT(
-                context,
-                'nav.pressSharingPublication',
-                fallback: 'Sharing a publication',
-              ),
-            ),
+            onShare: _share,
           ),
           Expanded(child: _buildBody(title, formats, about, publication)),
           if (!_loading && _error == null && publication != null)
             _ActionBar(
               downloading: _downloading,
-              onRead: () => fhcApiUnavailable(
-                context,
-                action: fhcT(
-                  context,
-                  'nav.pressOpeningReader',
-                  fallback: 'Opening a Press asset reader',
-                ),
-              ),
+              onRead: _openReader,
               onDownload: _downloading ? null : _download,
             ),
         ],
@@ -338,7 +388,11 @@ class _PressBookScreenState extends State<PressBookScreen> {
         return ListView(
           padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
           children: [
-            _BookCover(height: coverH, title: title),
+            _BookCover(
+              height: coverH,
+              title: title,
+              imageUrl: '${publication['image_url'] ?? ''}',
+            ),
             const SizedBox(height: 16),
             Text(
               title,
@@ -480,51 +534,32 @@ class _BookTopBar extends StatelessWidget {
 }
 
 class _BookCover extends StatelessWidget {
-  const _BookCover({required this.height, required this.title});
+  const _BookCover({
+    required this.height,
+    required this.title,
+    this.imageUrl,
+  });
 
   final double height;
   final String title;
+  final String? imageUrl;
 
   @override
   Widget build(BuildContext context) {
     final width = height * 0.68;
     return Center(
-      child: Container(
-        width: width,
-        height: height,
+      child: DecoratedBox(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(FhcRadius.md),
           boxShadow: FhcElevation.card,
-          color: FhcColors.press,
         ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(FhcRadius.md),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                Icons.menu_book,
-                size: height * 0.28,
-                color: FhcColors.white.withValues(alpha: 0.92),
-              ),
-              const SizedBox(height: 10),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                child: Text(
-                  title,
-                  textAlign: TextAlign.center,
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: FhcColors.white,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    height: 1.2,
-                  ),
-                ),
-              ),
-            ],
-          ),
+        child: PressCover(
+          title: title,
+          imageUrl: imageUrl,
+          width: width,
+          height: height,
+          iconSize: height * 0.28,
+          showTitle: (imageUrl ?? '').trim().isEmpty,
         ),
       ),
     );

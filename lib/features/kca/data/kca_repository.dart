@@ -61,6 +61,33 @@ final class HttpKcaRepository
   }
 
   @override
+  Future<AppResult<JsonObject>> getOrientation() {
+    final transport = _transport;
+    if (transport == null) {
+      return Future.value(_needsTransport('KCA orientation'));
+    }
+    return sendObject(
+      transport,
+      const ApiRequest(method: ApiMethod.get, path: '/user/kca/orientation'),
+    );
+  }
+
+  @override
+  Future<AppResult<JsonObject>> getPracticalService() {
+    final transport = _transport;
+    if (transport == null) {
+      return Future.value(_needsTransport('KCA practical service'));
+    }
+    return sendObject(
+      transport,
+      const ApiRequest(
+        method: ApiMethod.get,
+        path: '/user/kca/practical-service',
+      ),
+    );
+  }
+
+  @override
   Future<AppResult<List<JsonObject>>> listModules() {
     final transport = _transport;
     if (transport == null) {
@@ -309,12 +336,13 @@ final class HttpKcaRepository
     for (final entry in filters.entries) {
       if (entry.value == null) continue;
       final key = entry.key;
+      final value = entry.value;
       if (key == 'q' || key == 'search') {
-        query['filter[q]'] = entry.value;
+        query['q'] = value;
       } else if (key.startsWith('filter[')) {
-        query[key] = entry.value;
+        query[key] = value;
       } else {
-        query[key] = entry.value;
+        query[key] = value;
       }
     }
     return sendList(

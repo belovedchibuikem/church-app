@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../../core/api/app_failure.dart';
+import '../../../../core/auth/biometric_unlock.dart';
 import '../../../../core/contracts/mobile_repository_contracts.dart';
 import '../../../../core/design_system/fhc_tokens.dart';
 import '../../../../core/di/app_services_scope.dart';
@@ -29,6 +32,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String _timezone = 'Africa/Lagos';
   List<String> _channels = const ['email', 'in_app'];
   bool _started = false;
+  bool _fingerprintAvailable = false;
+  bool _fingerprintEnabled = false;
 
   List<(String, String)> get _localeChoices => [
     for (final code in kFhcSupportedLocales)
@@ -48,7 +53,91 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (!_started) {
       _started = true;
       _load();
+      unawaited(_loadFingerprint());
     }
+  }
+
+  Future<void> _loadFingerprint() async {
+    final store = AppServicesScope.maybeOf(context)?.tokenStore;
+    if (store == null) return;
+    final biometric = BiometricUnlock(tokenStore: store);
+    final available = await biometric.isHardwareAvailable;
+    final enabled = await biometric.isEnabled;
+    if (!mounted) return;
+    setState(() {
+      _fingerprintAvailable = available;
+      _fingerprintEnabled = enabled;
+    });
+  }
+
+  String _fingerprintSubtitle(BuildContext context) {
+    if (!_fingerprintAvailable) {
+      return fhcT(
+        context,
+        'settings.fingerprintNotAvailable',
+        fallback: 'This device does not support fingerprint or Face ID',
+      );
+    }
+    return _fingerprintEnabled
+        ? fhcT(
+          context,
+          'settings.fingerprintUnlockOn',
+          fallback:
+              'On — use this device’s fingerprint instead of your password',
+        )
+        : fhcT(
+          context,
+          'settings.fingerprintUnlockOff',
+          fallback: 'Off — sign in with email and password',
+        );
+  }
+
+  Future<void> _toggleFingerprint() async {
+    final store = AppServicesScope.maybeOf(context)?.tokenStore;
+    if (store == null) return;
+    final biometric = BiometricUnlock(tokenStore: store);
+    if (!_fingerprintAvailable) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            fhcT(
+              context,
+              'auth.fingerprintUnavailable',
+              fallback: 'Fingerprint is not available on this device.',
+            ),
+          ),
+        ),
+      );
+      return;
+    }
+    if (!_fingerprintEnabled) {
+      final ok = await biometric.authenticate(
+        reason: fhcT(
+          context,
+          'auth.fingerprintReason',
+          fallback: 'Confirm it is you to open Family House Connect.',
+        ),
+      );
+      if (!ok) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              fhcT(
+                context,
+                'auth.fingerprintFailed',
+                fallback:
+                    'Fingerprint was not recognized. Try again or use your password.',
+              ),
+            ),
+          ),
+        );
+        return;
+      }
+    }
+    await biometric.setEnabled(!_fingerprintEnabled);
+    if (!mounted) return;
+    setState(() => _fingerprintEnabled = !_fingerprintEnabled);
   }
 
   Future<void> _load() async {
@@ -219,7 +308,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
               icon: Icons.lock_outline,
               title: fhcT(context, 'settings.privacySecurity'),
               subtitle: fhcT(context, 'settings.privacySecurityCopy'),
+              showDivider: true,
               onTap: () => fhcPush(context, '/settings/privacy'),
+            ),
+            FhcMenuTile(
+              icon: Icons.fingerprint,
+              title: fhcT(
+                context,
+                'settings.fingerprintUnlock',
+                fallback: 'Fingerprint unlock',
+              ),
+              subtitle: _fingerprintSubtitle(context),
+              onTap: _toggleFingerprint,
             ),
           ],
         ),

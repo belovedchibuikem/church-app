@@ -636,11 +636,27 @@ class _FamilyHouseConnectAppState extends State<FamilyHouseConnectApp> {
           ),
           '/kca/orientation' => guarded(
             'kca.orientation.view',
-            const KcaLifecycleScreen(kind: KcaLifecycleKind.orientation),
+            const KcaOrientationHubScreen(),
+          ),
+          '/kca/orientation/overview' => guarded(
+            'kca.orientation.view',
+            const KcaOrientationStageScreen(stageKey: 'overview'),
+          ),
+          '/kca/orientation/rules' => guarded(
+            'kca.orientation.view',
+            const KcaOrientationStageScreen(stageKey: 'rules'),
+          ),
+          '/kca/orientation/path' => guarded(
+            'kca.orientation.view',
+            const KcaOrientationStageScreen(stageKey: 'path'),
+          ),
+          '/kca/orientation/mentors' => guarded(
+            'kca.orientation.view',
+            const KcaOrientationStageScreen(stageKey: 'mentors'),
           ),
           '/kca/practical-service' => guarded(
             'kca.practical_service.manage',
-            const KcaLifecycleScreen(kind: KcaLifecycleKind.practicalService),
+            const KcaPracticalServiceScreen(),
           ),
           '/kca/written-assessments' => guarded(
             'kca.assessments.view_own',

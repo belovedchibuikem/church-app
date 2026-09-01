@@ -3,16 +3,33 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../api/api_transport.dart';
+import 'session_lifetime.dart';
 
 const _accessTokenKey = 'fhc.mobile.access_token';
 const _refreshTokenKey = 'fhc.mobile.refresh_token';
 const _deviceIdentifierKey = 'fhc.mobile.device_identifier';
+const _accessExpiresKey = 'fhc.mobile.access_token_expires_at';
+const _refreshExpiresKey = 'fhc.mobile.refresh_token_expires_at';
+const _rememberedEmailKey = 'fhc.mobile.remembered_email';
+const _biometricEnabledKey = 'fhc.mobile.biometric_unlock';
+
+DateTime _defaultSessionExpiry() =>
+    DateTime.now().toUtc().add(kMobileSessionLifetime);
+
+DateTime? _parseExpiry(String? raw) {
+  if (raw == null || raw.isEmpty) return null;
+  return DateTime.tryParse(raw)?.toUtc();
+}
 
 /// In-memory store for tests and web (tokens do not survive reloads).
 final class MemorySessionTokenStore implements SessionTokenStore {
   String? _accessToken;
   String? _refreshToken;
   String? _deviceIdentifier;
+  DateTime? _accessExpiresAt;
+  DateTime? _refreshExpiresAt;
+  String? _rememberedEmail;
+  bool _biometricEnabled = false;
 
   @override
   Future<String?> readAccessToken() async => _accessToken;
@@ -38,17 +55,46 @@ final class MemorySessionTokenStore implements SessionTokenStore {
     required String accessToken,
     required String refreshToken,
     required String deviceIdentifier,
+    DateTime? accessTokenExpiresAt,
+    DateTime? refreshTokenExpiresAt,
   }) async {
     _accessToken = accessToken;
     _refreshToken = refreshToken;
     _deviceIdentifier = deviceIdentifier;
+    _accessExpiresAt =
+        accessTokenExpiresAt?.toUtc() ?? _defaultSessionExpiry();
+    _refreshExpiresAt =
+        refreshTokenExpiresAt?.toUtc() ?? _accessExpiresAt;
   }
+
+  @override
+  Future<DateTime?> readAccessTokenExpiresAt() async => _accessExpiresAt;
+
+  @override
+  Future<DateTime?> readRefreshTokenExpiresAt() async => _refreshExpiresAt;
+
+  @override
+  Future<String?> readRememberedEmail() async => _rememberedEmail;
+
+  @override
+  Future<void> writeRememberedEmail(String email) async =>
+      _rememberedEmail = email.trim();
+
+  @override
+  Future<bool> readBiometricUnlockEnabled() async => _biometricEnabled;
+
+  @override
+  Future<void> writeBiometricUnlockEnabled(bool enabled) async =>
+      _biometricEnabled = enabled;
 
   @override
   Future<void> clear() async {
     _accessToken = null;
     _refreshToken = null;
     _deviceIdentifier = null;
+    _accessExpiresAt = null;
+    _refreshExpiresAt = null;
+    _biometricEnabled = false;
   }
 }
 
@@ -57,7 +103,12 @@ final class MemorySessionTokenStore implements SessionTokenStore {
 /// Not used on web — prefer [createSessionTokenStore].
 final class SecureSessionTokenStore implements SessionTokenStore {
   SecureSessionTokenStore({FlutterSecureStorage? storage})
-      : _storage = storage ?? const FlutterSecureStorage();
+      : _storage = storage ??
+            const FlutterSecureStorage(
+              iOptions: IOSOptions(
+                accessibility: KeychainAccessibility.first_unlock_this_device,
+              ),
+            );
 
   final FlutterSecureStorage _storage;
 
@@ -88,13 +139,53 @@ final class SecureSessionTokenStore implements SessionTokenStore {
     required String accessToken,
     required String refreshToken,
     required String deviceIdentifier,
+    DateTime? accessTokenExpiresAt,
+    DateTime? refreshTokenExpiresAt,
   }) async {
+    final accessExpiry =
+        (accessTokenExpiresAt ?? _defaultSessionExpiry()).toUtc();
+    final refreshExpiry =
+        (refreshTokenExpiresAt ?? accessExpiry).toUtc();
     await Future.wait([
       writeAccessToken(accessToken),
       writeRefreshToken(refreshToken),
       writeDeviceIdentifier(deviceIdentifier),
+      _storage.write(
+        key: _accessExpiresKey,
+        value: accessExpiry.toIso8601String(),
+      ),
+      _storage.write(
+        key: _refreshExpiresKey,
+        value: refreshExpiry.toIso8601String(),
+      ),
     ]);
   }
+
+  @override
+  Future<DateTime?> readAccessTokenExpiresAt() async =>
+      _parseExpiry(await _storage.read(key: _accessExpiresKey));
+
+  @override
+  Future<DateTime?> readRefreshTokenExpiresAt() async =>
+      _parseExpiry(await _storage.read(key: _refreshExpiresKey));
+
+  @override
+  Future<String?> readRememberedEmail() =>
+      _storage.read(key: _rememberedEmailKey);
+
+  @override
+  Future<void> writeRememberedEmail(String email) =>
+      _storage.write(key: _rememberedEmailKey, value: email.trim());
+
+  @override
+  Future<bool> readBiometricUnlockEnabled() async {
+    final raw = await _storage.read(key: _biometricEnabledKey);
+    return raw == '1' || raw == 'true';
+  }
+
+  @override
+  Future<void> writeBiometricUnlockEnabled(bool enabled) =>
+      _storage.write(key: _biometricEnabledKey, value: enabled ? '1' : '0');
 
   @override
   Future<void> clear() async {
@@ -102,6 +193,9 @@ final class SecureSessionTokenStore implements SessionTokenStore {
       _storage.delete(key: _accessTokenKey),
       _storage.delete(key: _refreshTokenKey),
       _storage.delete(key: _deviceIdentifierKey),
+      _storage.delete(key: _accessExpiresKey),
+      _storage.delete(key: _refreshExpiresKey),
+      _storage.delete(key: _biometricEnabledKey),
     ]);
   }
 }

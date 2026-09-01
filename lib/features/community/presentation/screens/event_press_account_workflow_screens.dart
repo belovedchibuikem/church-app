@@ -1,3 +1,4 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -497,6 +498,9 @@ class _EventPaymentScreenState extends State<EventPaymentScreen> {
   bool _started = false;
   String? _error;
   JsonObject? _registration;
+  bool _manualGateway = false;
+  String? _proofName;
+  List<int>? _proofBytes;
 
   PaymentRepository? get _payments =>
       widget.paymentRepository ??
@@ -520,6 +524,36 @@ class _EventPaymentScreenState extends State<EventPaymentScreen> {
     if (_started) return;
     _started = true;
     _load();
+    _detectGateway();
+  }
+
+  Future<void> _detectGateway() async {
+    final repo = _payments;
+    if (repo == null) return;
+    final result = await repo.getConfiguration();
+    if (!mounted) return;
+    if (result case AppSuccess(:final value)) {
+      final code = '${value['provider_code'] ?? value['gateway'] ?? ''}'.toLowerCase();
+      setState(() => _manualGateway = code.contains('manual') || code.contains('local'));
+    }
+  }
+
+  Future<void> _pickProof() async {
+    final picked = await FilePicker.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const ['jpg', 'jpeg', 'png', 'webp', 'pdf'],
+      withData: true,
+      allowMultiple: false,
+    );
+    if (picked == null || picked.files.isEmpty) return;
+    final file = picked.files.first;
+    final bytes = file.bytes ?? const <int>[];
+    if (bytes.isEmpty) return;
+    setState(() {
+      _proofName = file.name;
+      _proofBytes = bytes;
+      _error = null;
+    });
   }
 
   Future<void> _load() async {
@@ -579,16 +613,60 @@ class _EventPaymentScreenState extends State<EventPaymentScreen> {
           return;
         }
         if (provider == 'local_manual' && intentId.isNotEmpty) {
-          setState(() {
-            _submitting = false;
-            _error = fhcT(
-              context,
-              'events.manualPaymentReceiptRequired',
-              fallback:
-                  'Manual event payment needs a receipt upload from Give, or wait for the provider webhook.',
-            );
-          });
-          return;
+          final bytes = _proofBytes;
+          if (bytes == null || bytes.isEmpty) {
+            setState(() {
+              _submitting = false;
+              _manualGateway = true;
+              _error = fhcT(
+                context,
+                'events.uploadReceiptRequired',
+                fallback:
+                    'Upload a photo or PDF of your payment receipt, then tap Pay again.',
+              );
+            });
+            return;
+          }
+          final uploaded = await repo.uploadPaymentProof(
+            bytes: bytes,
+            filename: _proofName ?? 'event-receipt.jpg',
+          );
+          if (!mounted) return;
+          switch (uploaded) {
+            case AppError(:final failure):
+              setState(() {
+                _submitting = false;
+                _error = paymentFailureMessage(failure);
+              });
+              return;
+            case AppSuccess(:final value):
+              final proofId = '${value['id'] ?? value['public_id'] ?? ''}';
+              final completed = await repo.completeGivingIntent(
+                intentId,
+                proofFileAssetId: proofId,
+              );
+              if (!mounted) return;
+              switch (completed) {
+                case AppError(:final failure):
+                  setState(() {
+                    _submitting = false;
+                    _error = paymentFailureMessage(failure);
+                  });
+                  return;
+                case AppSuccess(:final value):
+                  setState(() => _submitting = false);
+                  final intent = value['intent'];
+                  if (intent is Map) {
+                    fhcGo(
+                      context,
+                      paymentIntentRoute(Map<String, Object?>.from(intent)),
+                    );
+                    return;
+                  }
+                  fhcGo(context, paymentIntentRoute(value));
+                  return;
+              }
+          }
         }
         final checkoutUrl = hostedCheckoutUrlOf(value);
         if (checkoutUrl != null) {
@@ -702,6 +780,47 @@ class _EventPaymentScreenState extends State<EventPaymentScreen> {
             style: FhcTypography.caption,
           ),
         ),
+        if (_manualGateway) ...[
+          const SizedBox(height: 12),
+          WorkflowCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  fhcT(
+                    context,
+                    'events.uploadReceipt',
+                    fallback: 'Upload payment receipt',
+                  ),
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  fhcT(
+                    context,
+                    'events.uploadReceiptCopy',
+                    fallback:
+                        'For bank transfer or other manual settlement, attach the receipt here. The same Laravel proof used for giving completes this event fee.',
+                  ),
+                  style: FhcTypography.caption,
+                ),
+                const SizedBox(height: 10),
+                OutlinedButton.icon(
+                  onPressed: _submitting ? null : _pickProof,
+                  icon: const Icon(Icons.upload_file_outlined, size: 18),
+                  label: Text(
+                    _proofName ??
+                        fhcT(
+                          context,
+                          'events.chooseReceipt',
+                          fallback: 'Choose photo or PDF',
+                        ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
         if (_error != null) ...[
           const SizedBox(height: 12),
           Text(
