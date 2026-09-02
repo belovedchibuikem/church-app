@@ -3,11 +3,13 @@ import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 
+import '../../../core/api/api_envelope.dart';
 import '../../../core/api/api_transport.dart';
 import '../../../core/api/app_failure.dart';
 import '../../../core/api/fhc_api_config.dart';
 import '../../../core/auth/session_token_store.dart';
 import '../../../core/contracts/mobile_repository_contracts.dart';
+import '../../../core/l10n/locale_holder.dart';
 import 'user_api_client.dart';
 
 /// Laravel-backed profile + preferences repository (`/user/me`, preferences).
@@ -162,6 +164,8 @@ final class LaravelProfileRepository implements ProfileRepository {
       final request = http.MultipartRequest('POST', uri);
       request.headers.addAll({
         'Accept': 'application/json',
+        'Accept-Language': FhcLocaleHolder.languageCode,
+        'X-Client-Channel': 'mobile',
         'Authorization': 'Bearer $access',
         'X-Device-Identifier': deviceId,
         'Idempotency-Key': idempotencyKey,
@@ -274,17 +278,31 @@ final class LaravelProfileRepository implements ProfileRepository {
       );
     }
 
-    final errorNode = envelope['error'];
-    final errorMap =
-        errorNode is Map
-            ? Map<String, Object?>.from(
-              errorNode.map((key, value) => MapEntry('$key', value)),
-            )
-            : const <String, Object?>{};
-    final message =
-        (errorMap['message'] as String?) ??
-        'Request failed (${response.statusCode}).';
-    return AppError(_failureFromStatus(response.statusCode, message));
+    final parsedError = ApiEnvelope.errorOf(envelope);
+    final validationErrors = parsedError == null
+        ? const <String, List<String>>{}
+        : ApiEnvelope.validationFieldsOf(parsedError);
+    if (parsedError != null) {
+      return AppError(
+        mapHttpStatusToFailure(
+          statusCode: response.statusCode,
+          message: parsedError.message,
+          code: parsedError.code,
+          correlationId:
+              ApiEnvelope.correlationIdOf(envelope) ?? parsedError.correlationId,
+          validationErrors: validationErrors,
+          cause: envelope,
+        ),
+      );
+    }
+
+    return AppError(
+      mapHttpStatusToFailure(
+        statusCode: response.statusCode,
+        message: 'Request failed (${response.statusCode}).',
+        cause: envelope,
+      ),
+    );
   }
 
   AppFailure _failureFromStatus(int status, String message) {

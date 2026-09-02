@@ -19,49 +19,31 @@ class ModulesScreen extends StatelessWidget {
       route: FhcRoutes.churchHome,
     ),
     _ModuleSpec(
-      icon: Icons.school_outlined,
-      titleKey: 'auth.moduleKca',
-      titleFallback: 'KCA',
-      subtitleKey: 'auth.moduleKcaAcademy',
-      subtitleFallback: 'Kingdom Christian Academy',
-      color: FhcColors.purple,
-      route: FhcRoutes.kcaGate,
-    ),
-    _ModuleSpec(
       icon: Icons.public,
-      titleKey: 'auth.moduleMission',
+      titleKey: 'nav.mission',
       titleFallback: 'MISSION',
-      subtitleKey: 'auth.moduleMissionCopy',
+      subtitleKey: 'member.missionTagline',
       subtitleFallback: 'Go, Preach, Disciple',
-      color: FhcColors.navy,
+      color: FhcColors.purple,
       route: FhcRoutes.mission,
     ),
     _ModuleSpec(
-      icon: Icons.volunteer_activism_outlined,
-      titleKey: 'auth.moduleGive',
-      titleFallback: 'GIVE',
-      subtitleKey: 'auth.moduleGiveCopy',
-      subtitleFallback: 'Tithe, Donate, Support',
-      color: FhcColors.gold,
-      route: FhcRoutes.give,
+      icon: Icons.school,
+      titleKey: 'nav.kca',
+      titleFallback: 'KCA',
+      subtitleKey: 'member.kcaTagline',
+      subtitleFallback: 'Grow, Learn, Lead',
+      color: FhcColors.blue,
+      route: FhcRoutes.kcaGate,
     ),
     _ModuleSpec(
-      icon: Icons.smart_display_outlined,
-      titleKey: 'auth.moduleMedia',
-      titleFallback: 'MEDIA',
-      subtitleKey: 'auth.moduleMediaCopy',
-      subtitleFallback: 'Watch, Listen, Read',
-      color: FhcColors.media,
-      route: FhcRoutes.media,
-    ),
-    _ModuleSpec(
-      icon: Icons.calendar_month_outlined,
-      titleKey: 'auth.moduleEvents',
-      titleFallback: 'EVENTS',
-      subtitleKey: 'auth.moduleEventsCopy',
-      subtitleFallback: 'Conferences, Meetings',
-      color: FhcColors.eventsAccent,
-      route: FhcRoutes.events,
+      icon: Icons.menu_book,
+      titleKey: 'nav.press',
+      titleFallback: 'PRESS',
+      subtitleKey: 'member.pressTagline',
+      subtitleFallback: 'Publish, Teach, Inspire',
+      color: FhcColors.wine,
+      route: FhcRoutes.press,
     ),
   ];
 
@@ -138,7 +120,7 @@ class ModulesScreen extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
               child: Column(
                 children: [
-                  for (var row = 0; row < 3; row++) ...[
+                  for (var row = 0; row < 2; row++) ...[
                     if (row > 0) const SizedBox(height: 12),
                     Expanded(
                       child: Row(

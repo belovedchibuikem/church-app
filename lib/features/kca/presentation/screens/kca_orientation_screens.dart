@@ -55,6 +55,19 @@ class _KcaOrientationHubScreenState extends State<KcaOrientationHubScreen> {
     }
   }
 
+  Future<void> _completeOrientation() async {
+    final repo = _repo;
+    if (repo == null) return;
+    final result = await repo.completeOrientation();
+    if (!mounted) return;
+    switch (result) {
+      case AppSuccess():
+        await _load();
+      case AppError(:final failure):
+        setState(() => _state = FhcAsyncValue.error(failure));
+    }
+  }
+
   List<JsonObject> _stages(JsonObject payload) {
     final raw = payload['stages'];
     if (raw is! List) return const [];
@@ -109,6 +122,10 @@ class _KcaOrientationHubScreenState extends State<KcaOrientationHubScreen> {
             builder: (context, payload) {
               final welcome = '${payload['welcome'] ?? ''}'.trim();
               final stages = _stages(payload);
+              final canComplete = payload['can_complete'] == true;
+              final allComplete = stages.isNotEmpty &&
+                  stages.every((stage) => stage['completed'] == true);
+              final orientationDone = '${payload['orientation_completed_at'] ?? ''}'.trim().isNotEmpty;
               return ListView(
                 children: [
                   WorkflowSummary(
@@ -134,9 +151,11 @@ class _KcaOrientationHubScreenState extends State<KcaOrientationHubScreen> {
                       children: [
                         for (final stage in stages)
                           WorkflowRow(
-                            title: '${stage['title'] ?? ''}',
+                            title: '${stage['completed'] == true ? '✓ ' : ''}${stage['title'] ?? ''}',
                             subtitle: '${stage['subtitle'] ?? ''}',
-                            leading: Icons.check_circle_outline,
+                            leading: stage['completed'] == true
+                                ? Icons.check_circle
+                                : Icons.check_circle_outline,
                             trailing: const Icon(
                               Icons.chevron_right,
                               color: FhcColors.muted,
@@ -149,6 +168,31 @@ class _KcaOrientationHubScreenState extends State<KcaOrientationHubScreen> {
                       ],
                     ),
                   ),
+                  if (canComplete && allComplete && !orientationDone) ...[
+                    const SizedBox(height: 16),
+                    FilledButton(
+                      onPressed: _completeOrientation,
+                      child: Text(
+                        fhcT(
+                          context,
+                          'member.kca.submitOrientation',
+                          fallback: 'Submit orientation',
+                        ),
+                      ),
+                    ),
+                  ],
+                  if (orientationDone) ...[
+                    const SizedBox(height: 16),
+                    Text(
+                      fhcT(
+                        context,
+                        'member.kca.orientationSubmitted',
+                        fallback:
+                            'Orientation submitted. Track your admission progress from the application status screen.',
+                      ),
+                      style: FhcTypography.caption,
+                    ),
+                  ],
                 ],
               );
             },
@@ -198,6 +242,19 @@ class _KcaOrientationStageScreenState extends State<KcaOrientationStageScreen> {
     switch (result) {
       case AppSuccess(:final value):
         setState(() => _state = FhcAsyncValue.data(value));
+      case AppError(:final failure):
+        setState(() => _state = FhcAsyncValue.error(failure));
+    }
+  }
+
+  Future<void> _markStageComplete() async {
+    final repo = _repo;
+    if (repo == null) return;
+    final result = await repo.completeOrientationStage(widget.stageKey);
+    if (!mounted) return;
+    switch (result) {
+      case AppSuccess():
+        await _load();
       case AppError(:final failure):
         setState(() => _state = FhcAsyncValue.error(failure));
     }
@@ -261,6 +318,8 @@ class _KcaOrientationStageScreenState extends State<KcaOrientationStageScreen> {
               final body = '${stage['body'] ?? ''}'.trim();
               final modules = stage['modules'];
               final mentor = stage['mentor'];
+              final canComplete = payload['can_complete'] == true;
+              final stageComplete = stage['completed'] == true;
               return ListView(
                 children: [
                   Text(
@@ -338,6 +397,19 @@ class _KcaOrientationStageScreenState extends State<KcaOrientationStageScreen> {
                           context,
                           'member.kca.openModule',
                           fallback: 'Open related module',
+                        ),
+                      ),
+                    ),
+                  ],
+                  if (canComplete && !stageComplete) ...[
+                    const SizedBox(height: 16),
+                    FilledButton(
+                      onPressed: _markStageComplete,
+                      child: Text(
+                        fhcT(
+                          context,
+                          'member.kca.markStageComplete',
+                          fallback: 'Mark stage complete',
                         ),
                       ),
                     ),

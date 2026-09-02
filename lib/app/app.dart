@@ -95,13 +95,14 @@ class _FamilyHouseConnectAppState extends State<FamilyHouseConnectApp> {
       listenable: resolvedLaunch,
       builder: (context, _) {
         final localeCode = normalizeFhcLocale(resolvedLaunch.languageCode);
+        final materialLocaleCode = materialLocaleCodeFor(localeCode);
 
         final app = MaterialApp(
       title: 'Family House Connect',
       debugShowCheckedModeBanner: false,
       navigatorKey: _navigatorKey,
       theme: buildFhcTheme(),
-      locale: Locale(localeCode),
+      locale: Locale(materialLocaleCode),
       localeResolutionCallback: (locale, supported) {
         if (locale == null) return supported.first;
         for (final item in supported) {
@@ -110,7 +111,7 @@ class _FamilyHouseConnectAppState extends State<FamilyHouseConnectApp> {
         return const Locale('en');
       },
       supportedLocales: [
-        for (final code in kFhcSupportedLocales) Locale(code),
+        for (final code in kFhcFlutterMaterialLocales) Locale(code),
       ],
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,

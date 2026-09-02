@@ -1,4 +1,8 @@
+import 'dart:io';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/api/app_failure.dart';
 import '../../../../core/design_system/fhc_tokens.dart';
@@ -50,6 +54,9 @@ class _KcaLifecycleScreenState extends State<KcaLifecycleScreen> {
   bool _submitting = false;
   bool _hydrated = false;
   bool _fieldsReady = false;
+  bool _letterLoading = false;
+  bool _letterDownloading = false;
+  Map<String, Object?>? _admissionLetter;
   int _choiceIndex = 0;
   final Set<int> _checked = {};
   final Set<int> _interests = {};
@@ -95,6 +102,26 @@ class _KcaLifecycleScreenState extends State<KcaLifecycleScreen> {
       _hydrated = true;
       _hydrate();
     }
+    if (kind == KcaLifecycleKind.admissionLetter && _admissionLetter == null && !_letterLoading) {
+      _letterLoading = true;
+      _loadAdmissionLetter();
+    }
+  }
+
+  Future<void> _loadAdmissionLetter() async {
+    final repo = AppServicesScope.maybeOf(context)?.kcaRepository;
+    if (repo == null) {
+      if (mounted) setState(() => _letterLoading = false);
+      return;
+    }
+    final result = await repo.getAdmissionLetter();
+    if (!mounted) return;
+    setState(() {
+      _letterLoading = false;
+      if (result case AppSuccess(:final value)) {
+        _admissionLetter = value;
+      }
+    });
   }
 
   Future<void> _hydrate() async {
@@ -194,6 +221,11 @@ class _KcaLifecycleScreenState extends State<KcaLifecycleScreen> {
   }
 
   Future<void> _handleAction(_KcaSpec spec) async {
+    if (kind == KcaLifecycleKind.admissionLetter) {
+      await _downloadAdmissionLetter();
+      return;
+    }
+
     if (spec.next == null) return;
 
     if (_isEnrolmentStep) {
@@ -252,6 +284,79 @@ class _KcaLifecycleScreenState extends State<KcaLifecycleScreen> {
     fhcPush(context, spec.next!);
   }
 
+  Future<void> _downloadAdmissionLetter() async {
+    if (_letterDownloading) return;
+    if (_admissionLetter == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            fhcT(
+              context,
+              'member.kca.letterPending',
+              fallback: 'Your admission letter is being prepared by KCA administration.',
+            ),
+          ),
+        ),
+      );
+      return;
+    }
+
+    final repo = AppServicesScope.maybeOf(context)?.kcaRepository;
+    if (repo == null) {
+      await fhcApiUnavailable(
+        context,
+        action: fhcT(
+          context,
+          'member.kca.downloadLetter',
+          fallback: 'Download Letter',
+        ),
+      );
+      return;
+    }
+
+    setState(() => _letterDownloading = true);
+    final result = await repo.downloadAdmissionLetter();
+    if (!mounted) return;
+    setState(() => _letterDownloading = false);
+
+    switch (result) {
+      case AppSuccess(:final value):
+        final bytes = value['bytes'];
+        if (bytes is! List<int> && bytes is! Uint8List) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Download failed: empty file.')),
+          );
+          return;
+        }
+        final normalized = bytes is Uint8List ? bytes : Uint8List.fromList(bytes);
+        final file = File(
+          '${Directory.systemTemp.path}/kca-admission-letter-${DateTime.now().millisecondsSinceEpoch}.pdf',
+        );
+        await file.writeAsBytes(normalized);
+        final uri = Uri.file(file.path);
+        if (await canLaunchUrl(uri)) {
+          await launchUrl(uri);
+        }
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              fhcT(
+                context,
+                'member.kca.letterDownloadReady',
+                fallback: 'Admission letter downloaded.',
+              ),
+            ),
+          ),
+        );
+      case AppError(:final failure):
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(failure.message)),
+        );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final spec = _spec(context, kind);
@@ -264,10 +369,16 @@ class _KcaLifecycleScreenState extends State<KcaLifecycleScreen> {
       domain: WorkflowDomain.kca,
       actionLabel: _submitting
           ? fhcT(context, 'common.submitting', fallback: 'Submitting…')
-          : spec.action,
-      onAction: spec.next == null || _submitting
+          : kind == KcaLifecycleKind.admissionLetter && _letterDownloading
+              ? fhcT(context, 'common.downloading', fallback: 'Downloading…')
+              : spec.action,
+      onAction: _submitting || _letterDownloading
           ? null
-          : () => _handleAction(spec),
+          : kind == KcaLifecycleKind.admissionLetter
+              ? () => _handleAction(spec)
+              : spec.next == null
+                  ? null
+                  : () => _handleAction(spec),
       children: [
         if (_isEnrolmentStep)
           Form(key: _formKey, child: Column(children: body))
@@ -957,25 +1068,45 @@ class _KcaLifecycleScreenState extends State<KcaLifecycleScreen> {
               'You have been admitted to the Kingdom Change Agent Training Program.',
         ),
       ),
-      _details([
-        (
-          fhcT(context, 'member.kca.applicantName', fallback: 'Applicant Name'),
-          'Glory Samuel',
-        ),
-        (fhcT(context, 'member.kca.kcaId', fallback: 'KCA ID'), 'KCA-2025-00156'),
-        (
-          fhcT(context, 'member.kca.admissionDate', fallback: 'Admission Date'),
-          'May 18, 2025',
-        ),
-        (
-          fhcT(context, 'member.kca.nextStep', fallback: 'Next Step'),
-          fhcT(
-            context,
-            'member.kca.attendOrientation',
-            fallback: 'Attend Orientation',
+      if (_letterLoading)
+        const Padding(
+          padding: EdgeInsets.all(16),
+          child: Center(child: CircularProgressIndicator()),
+        )
+      else if (_admissionLetter == null)
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: Text(
+            fhcT(
+              context,
+              'member.kca.letterPending',
+              fallback: 'Your admission letter is being prepared by KCA administration.',
+            ),
           ),
-        ),
-      ]),
+        )
+      else
+        _details([
+          (
+            fhcT(context, 'member.kca.applicantName', fallback: 'Applicant Name'),
+            '${_admissionLetter?['applicant_name'] ?? '—'}',
+          ),
+          (
+            fhcT(context, 'member.kca.kcaId', fallback: 'Reference'),
+            '${_admissionLetter?['reference_code'] ?? '—'}',
+          ),
+          (
+            fhcT(context, 'member.kca.admissionDate', fallback: 'Admission Date'),
+            '${_admissionLetter?['issued_at'] ?? '—'}',
+          ),
+          (
+            fhcT(context, 'member.kca.nextStep', fallback: 'Next Step'),
+            fhcT(
+              context,
+              'member.kca.attendOrientation',
+              fallback: 'Attend Orientation',
+            ),
+          ),
+        ]),
     ],
     KcaLifecycleKind.orientation => [
       WorkflowSummary(

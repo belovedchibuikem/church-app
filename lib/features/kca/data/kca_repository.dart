@@ -81,6 +81,33 @@ final class HttpKcaRepository
   }
 
   @override
+  Future<AppResult<JsonObject>> completeOrientationStage(String stage) {
+    final transport = _transport;
+    if (transport == null) {
+      return Future.value(_needsTransport('KCA orientation stage'));
+    }
+    return sendObject(
+      transport,
+      ApiRequest(
+        method: ApiMethod.post,
+        path: '/user/kca/orientation/stages/${Uri.encodeComponent(stage)}/complete',
+      ),
+    );
+  }
+
+  @override
+  Future<AppResult<JsonObject>> completeOrientation() {
+    final transport = _transport;
+    if (transport == null) {
+      return Future.value(_needsTransport('KCA orientation completion'));
+    }
+    return sendObject(
+      transport,
+      const ApiRequest(method: ApiMethod.post, path: '/user/kca/orientation/complete'),
+    );
+  }
+
+  @override
   Future<AppResult<JsonObject>> getPracticalService() {
     final transport = _transport;
     if (transport == null) {
@@ -608,6 +635,85 @@ final class HttpKcaRepository
       }
     }
     return const AppSuccess(null);
+  }
+
+  @override
+  Future<AppResult<JsonObject>> getAdmissionLetter() {
+    final transport = _transport;
+    if (transport == null) {
+      return Future.value(_needsTransport('KCA admission letter'));
+    }
+    return sendObject(
+      transport,
+      const ApiRequest(
+        method: ApiMethod.get,
+        path: '/user/kca/admission-letter',
+      ),
+    );
+  }
+
+  @override
+  Future<AppResult<JsonObject>> downloadAdmissionLetter() async {
+    final tokenStore = _tokenStore;
+    if (tokenStore == null) {
+      return const AppError(
+        IntegrationUnavailableFailure(
+          'KCA admission letter download requires a session token store.',
+        ),
+      );
+    }
+
+    final access = await tokenStore.readAccessToken();
+    final deviceId = await tokenStore.readDeviceIdentifier();
+    if (access == null ||
+        access.isEmpty ||
+        deviceId == null ||
+        deviceId.isEmpty) {
+      return const AppError(
+        UnauthorizedFailure(
+          'Sign in again. A mobile access token and device identifier are required.',
+        ),
+      );
+    }
+
+    final uri = _root.replace(path: '${_root.path}/user/kca/admission-letter/download');
+
+    try {
+      final response = await _http.get(
+        uri,
+        headers: {
+          'Accept': 'application/pdf, application/json',
+          'Authorization': 'Bearer $access',
+          'X-Device-Identifier': deviceId,
+        },
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return AppSuccess(<String, Object?>{
+          'bytes': response.bodyBytes,
+          'content_type': response.headers['content-type'] ?? 'application/pdf',
+          'filename': 'kca-admission-letter.pdf',
+        });
+      }
+
+      if (response.statusCode == 404) {
+        return const AppError(
+          NotFoundFailure('Your admission letter has not been issued yet.'),
+        );
+      }
+
+      return AppError(
+        ServerFailure('Admission letter download failed (${response.statusCode}).'),
+      );
+    } on http.ClientException catch (error) {
+      return AppError(
+        NetworkFailure('Unable to reach KCA API.', cause: error),
+      );
+    } catch (error) {
+      return AppError(
+        UnknownFailure('Admission letter download failed.', cause: error),
+      );
+    }
   }
 
   @override

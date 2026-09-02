@@ -13,6 +13,17 @@ void main() {
     expect(isRtlLocale('en'), isFalse);
   });
 
+  test('material locale falls back to English for unsupported Flutter delegates', () {
+    expect(materialLocaleCodeFor('en'), 'en');
+    expect(materialLocaleCodeFor('fr'), 'fr');
+    expect(materialLocaleCodeFor('ar'), 'ar');
+    expect(materialLocaleCodeFor('zh'), 'zh');
+    expect(materialLocaleCodeFor('yo'), 'en');
+    expect(materialLocaleCodeFor('ig'), 'en');
+    expect(materialLocaleCodeFor('ha'), 'en');
+    expect(materialLocaleCodeFor('sw'), 'en');
+  });
+
   test('lookup interpolates and falls back to English', () {
     expect(
       lookupFhcMessage('fr', 'common.continueWith', args: {'language': 'Français'}),

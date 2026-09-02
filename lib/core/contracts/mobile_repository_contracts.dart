@@ -65,6 +65,8 @@ abstract interface class KcaRepository {
   Future<AppResult<JsonObject>> getAccess();
   Future<AppResult<JsonObject>> getDashboard();
   Future<AppResult<JsonObject>> getOrientation();
+  Future<AppResult<JsonObject>> completeOrientationStage(String stage);
+  Future<AppResult<JsonObject>> completeOrientation();
   Future<AppResult<JsonObject>> getPracticalService();
   Future<AppResult<List<JsonObject>>> listModules();
   Future<AppResult<JsonObject>> getModule(String moduleId);
@@ -94,6 +96,8 @@ abstract interface class KcaRepository {
   Future<AppResult<JsonObject>> createNote(JsonObject body);
   Future<AppResult<void>> syncQueuedCompletions();
   Future<AppResult<JsonObject>> getCurrentApplication();
+  Future<AppResult<JsonObject>> getAdmissionLetter();
+  Future<AppResult<JsonObject>> downloadAdmissionLetter();
   Future<AppResult<JsonObject>> submitApplication(
     JsonObject applicationData, {
     bool finalize = true,

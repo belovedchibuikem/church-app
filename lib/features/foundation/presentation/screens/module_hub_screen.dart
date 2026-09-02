@@ -30,31 +30,49 @@ class _ModuleHubScreenState extends State<ModuleHubScreen> {
       route: FhcRoutes.churchHome,
     ),
     _ModuleSpec(
-      icon: Icons.public,
-      titleKey: 'nav.mission',
-      titleFallback: 'MISSION',
-      subtitleKey: 'member.missionTagline',
-      subtitleFallback: 'Go, Preach, Disciple',
-      color: FhcColors.purple,
-      route: FhcRoutes.mission,
-    ),
-    _ModuleSpec(
-      icon: Icons.school,
-      titleKey: 'nav.kca',
+      icon: Icons.school_outlined,
+      titleKey: 'auth.moduleKca',
       titleFallback: 'KCA',
-      subtitleKey: 'member.kcaTagline',
-      subtitleFallback: 'Grow, Learn, Lead',
-      color: FhcColors.blue,
+      subtitleKey: 'auth.moduleKcaAcademy',
+      subtitleFallback: 'Kingdom Christian Academy',
+      color: FhcColors.purple,
       route: FhcRoutes.kcaGate,
     ),
     _ModuleSpec(
-      icon: Icons.menu_book,
-      titleKey: 'nav.press',
-      titleFallback: 'PRESS',
-      subtitleKey: 'member.pressTagline',
-      subtitleFallback: 'Publish, Teach, Inspire',
-      color: FhcColors.wine,
-      route: FhcRoutes.press,
+      icon: Icons.public,
+      titleKey: 'auth.moduleMission',
+      titleFallback: 'MISSION',
+      subtitleKey: 'auth.moduleMissionCopy',
+      subtitleFallback: 'Go, Preach, Disciple',
+      color: FhcColors.navy,
+      route: FhcRoutes.mission,
+    ),
+    _ModuleSpec(
+      icon: Icons.volunteer_activism_outlined,
+      titleKey: 'auth.moduleGive',
+      titleFallback: 'GIVE',
+      subtitleKey: 'auth.moduleGiveCopy',
+      subtitleFallback: 'Tithe, Donate, Support',
+      color: FhcColors.gold,
+      route: FhcRoutes.give,
+    ),
+    _ModuleSpec(
+      icon: Icons.smart_display_outlined,
+      titleKey: 'auth.moduleMedia',
+      titleFallback: 'MEDIA',
+      subtitleKey: 'auth.moduleMediaCopy',
+      subtitleFallback: 'Watch, Listen, Read',
+      color: FhcColors.media,
+      route: FhcRoutes.media,
+    ),
+    _ModuleSpec(
+      icon: Icons.calendar_month_outlined,
+      titleKey: 'auth.moduleEvents',
+      titleFallback: 'EVENTS',
+      subtitleKey: 'auth.moduleEventsCopy',
+      subtitleFallback: 'Conferences, Meetings',
+      color: FhcColors.eventsAccent,
+      route: FhcRoutes.events,
     ),
   ];
 
@@ -211,8 +229,9 @@ class _ModuleHubScreenState extends State<ModuleHubScreen> {
               child: LayoutBuilder(
                 builder: (context, constraints) {
                   const gap = 12.0;
+                  const rows = 3;
                   final tileW = (constraints.maxWidth - gap) / 2;
-                  final maxH = (constraints.maxHeight - gap) / 2;
+                  final maxH = (constraints.maxHeight - gap * (rows - 1)) / rows;
                   final tileH = maxH < tileW * 1.12 ? maxH : tileW * 1.12;
                   final aspect = tileW / tileH;
                   return GridView.count(

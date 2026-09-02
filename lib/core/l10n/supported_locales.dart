@@ -11,6 +11,16 @@ const kFhcSupportedLocales = <String>[
 
 const kFhcDefaultLocale = 'en';
 
+/// Locales supported by flutter_localizations Material/Cupertino delegates.
+const kFhcFlutterMaterialLocales = <String>{'en', 'fr', 'ar', 'zh'};
+
+/// MaterialApp locale for TextField and other Material widgets. Custom catalog
+/// locales (yo, ig, ha, sw) fall back to English for widget chrome only.
+String materialLocaleCodeFor(String fhcLanguageCode) {
+  final code = normalizeFhcLocale(fhcLanguageCode);
+  return kFhcFlutterMaterialLocales.contains(code) ? code : kFhcDefaultLocale;
+}
+
 class FhcLocaleMeta {
   const FhcLocaleMeta({
     required this.endonym,

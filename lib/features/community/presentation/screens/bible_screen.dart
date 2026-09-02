@@ -330,22 +330,22 @@ class _BibleScreenState extends State<BibleScreen> {
     final nt = filtered.where((book) => book['testament'] == 'nt').toList();
     final enrollment = _progress?['enrollment'];
     final enrollmentMap = enrollment is Map
-        ? Map<String, Object?>.from(
-            enrollment.map((key, value) => MapEntry('$key', value)),
-          )
-        : null;
+            ? Map<String, Object?>.from(
+              enrollment.map((key, value) => MapEntry('$key', value)),
+            )
+            : null;
     final due = enrollmentMap?['due'];
     final dueMap = due is Map
-        ? Map<String, Object?>.from(
-            due.map((key, value) => MapEntry('$key', value)),
-          )
-        : null;
+            ? Map<String, Object?>.from(
+              due.map((key, value) => MapEntry('$key', value)),
+            )
+            : null;
     final position = _progress?['position'];
     final positionMap = position is Map
-        ? Map<String, Object?>.from(
-            position.map((key, value) => MapEntry('$key', value)),
-          )
-        : null;
+            ? Map<String, Object?>.from(
+              position.map((key, value) => MapEntry('$key', value)),
+            )
+            : null;
 
     return FhcDevicePage(
       backgroundColor: _kParchment,
@@ -450,8 +450,8 @@ class _BibleScreenState extends State<BibleScreen> {
                   position: positionMap,
                   completing: _completing,
                   onMarkDone: enrollmentMap == null || dueMap == null
-                      ? null
-                      : () => _markDone(enrollmentMap, dueMap),
+                              ? null
+                              : () => _markDone(enrollmentMap, dueMap),
                   onOpenPassage: _openChapter,
                   onPlans: () => fhcPush(context, FhcRoutes.biblePlans),
                 ),
@@ -495,7 +495,7 @@ class _BibleScreenState extends State<BibleScreen> {
                           padding: const EdgeInsets.symmetric(horizontal: 3),
                           child: ChoiceChip(
                             label: Center(child: Text(entry.$2)),
-                            selected: _testament == entry.$1,
+                        selected: _testament == entry.$1,
                             onSelected: (_) =>
                                 setState(() => _testament = entry.$1),
                           ),
@@ -818,8 +818,8 @@ class _BookGrid extends StatelessWidget {
               return Wrap(
                 spacing: gap,
                 runSpacing: gap,
-                children: [
-                  for (final book in books)
+            children: [
+              for (final book in books)
                     SizedBox(
                       width: width,
                       child: Material(
