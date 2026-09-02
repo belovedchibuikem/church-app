@@ -68,7 +68,7 @@ class _NeedRequestScreenState extends State<NeedRequestScreen> {
           context,
           'member.needs.submitUnavailable',
           fallback:
-              'Need submission is waiting on the Laravel needs API. '
+              'Need submission is waiting on the needs service. '
               'No fixture submit path is used.',
         );
       });
@@ -140,7 +140,7 @@ class _NeedRequestScreenState extends State<NeedRequestScreen> {
                 context,
                 'member.needs.formUnavailable',
                 fallback:
-                    'Pastoral needs are waiting on the Laravel needs API. '
+                    'Pastoral needs are waiting on the needs service. '
                     'No fixture form is shown in production.',
               ),
             ),

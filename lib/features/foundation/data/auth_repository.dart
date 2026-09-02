@@ -139,7 +139,7 @@ final class LaravelAuthRepository implements AuthRepository, SessionRefresher {
           kIsWeb
               ? 'Browser blocked the sign-in request (CORS). '
                   'Use Android/iOS/desktop for production API testing, run against '
-                  'local Laravel with --dart-define, or deploy the latest API CORS update.'
+                  'Check your API base URL with --dart-define, or deploy the latest API CORS update.'
               : 'Unable to reach the server. Check your internet connection and try again.',
           cause: error,
         ),

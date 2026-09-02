@@ -43,7 +43,7 @@ class _GivingHistoryScreenState extends State<GivingHistoryScreen> {
             context,
             'give.historyRequiresApi',
             fallback:
-                'Giving history is waiting on the Laravel payments API. '
+                'Giving history is waiting on the payments service. '
                 'No fixture totals are shown.',
           ),
         );

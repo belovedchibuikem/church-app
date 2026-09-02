@@ -90,7 +90,7 @@ class _PressBookScreenState extends State<PressBookScreen> {
           context,
           'errors.pressPublicationsRequireApi',
           fallback:
-              'Press publications require the Laravel public catalogue API. '
+              'Press publications require the publications catalogue. '
               'No fixture detail is shown.',
         );
       });

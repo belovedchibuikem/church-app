@@ -64,7 +64,7 @@ class LeadershipContinuationScreen extends StatelessWidget {
               context,
               'errors.leadershipMetricsUnavailableCopy',
               fallback:
-                  'There is no Laravel KPI endpoint for this dashboard. '
+                  'KPI data is not available for this dashboard. '
                   'Membership, attendance, and similar totals are not shown.',
             ),
           ),

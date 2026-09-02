@@ -44,7 +44,7 @@ class _EventsScreenState extends State<EventsScreen> {
             context,
             'events.catalogueRequiresApi',
             fallback:
-                'Events catalogue requires the Laravel public events API. '
+                'Events catalogue requires the events service. '
                 'No fixture list is shown.',
           ),
         );

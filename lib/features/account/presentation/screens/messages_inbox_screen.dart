@@ -43,7 +43,7 @@ class _MessagesInboxScreenState extends State<MessagesInboxScreen> {
             context,
             'account.messagingWaiting',
             fallback:
-                'Messaging is waiting on the Laravel messages API. '
+                'Messaging is waiting on the messaging service. '
                 'No fixture threads are shown.',
           ),
         );

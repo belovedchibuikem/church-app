@@ -198,7 +198,7 @@ class _GiveScreenState extends State<GiveScreen> {
           context,
           'give.notConnected',
           fallback:
-              'Giving is not connected to the Laravel payments API in this build.',
+              'Giving is not connected to the payments service in this build.',
         );
       });
       return;

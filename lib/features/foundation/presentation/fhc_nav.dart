@@ -85,6 +85,7 @@ abstract final class FhcRoutes {
   static const kcaAdmission = '/kca/admission';
   static const kcaAdmissionLetter = '/kca/admission-letter';
   static const kcaOrientation = '/kca/orientation';
+  static const kcaOrientationStage = '/kca/orientation/stage';
   static const kcaOrientationOverview = '/kca/orientation/overview';
   static const kcaOrientationRules = '/kca/orientation/rules';
   static const kcaOrientationPath = '/kca/orientation/path';
@@ -164,7 +165,7 @@ Future<void> fhcApiUnavailable(
             ),
             const SizedBox(height: 10),
             Text(
-              '$action is ready for its repository contract, but the Laravel/OpenAPI operation is not available in this build. No success state has been created.',
+              '$action is ready for its repository contract, but the platform operation is not available in this build. No success state has been created.',
             ),
             const SizedBox(height: 20),
             SizedBox(

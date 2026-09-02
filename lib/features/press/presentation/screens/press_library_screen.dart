@@ -57,7 +57,7 @@ class _PressLibraryScreenState extends State<PressLibraryScreen> {
             context,
             'errors.pressLibraryRequiresApi',
             fallback:
-                'Press library requires the Laravel public publications API. '
+                'Press library requires the publications catalogue. '
                 'No fixture catalogue is shown.',
           ),
         );

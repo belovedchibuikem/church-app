@@ -83,7 +83,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
           context,
           'events.detailsRequireApi',
           fallback:
-              'Event details require the Laravel public events API. '
+              'Event details require the events service. '
               'No fixture detail is shown.',
         );
       });

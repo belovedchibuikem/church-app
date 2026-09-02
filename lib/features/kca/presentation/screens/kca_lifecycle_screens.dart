@@ -2,7 +2,8 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:open_file/open_file.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../../../../core/api/app_failure.dart';
 import '../../../../core/design_system/fhc_tokens.dart';
@@ -304,7 +305,7 @@ class _KcaLifecycleScreenState extends State<KcaLifecycleScreen> {
 
   Future<void> _handleAction(_KcaSpec spec) async {
     if (kind == KcaLifecycleKind.admissionLetter) {
-      await _downloadAdmissionLetter();
+      await _handleAdmissionLetterAction(spec);
       return;
     }
 
@@ -366,8 +367,7 @@ class _KcaLifecycleScreenState extends State<KcaLifecycleScreen> {
     fhcPush(context, spec.next!);
   }
 
-  Future<void> _downloadAdmissionLetter() async {
-    if (_letterDownloading) return;
+  Future<void> _handleAdmissionLetterAction(_KcaSpec spec) async {
     if (_admissionLetter == null) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -384,6 +384,37 @@ class _KcaLifecycleScreenState extends State<KcaLifecycleScreen> {
       return;
     }
 
+    final accepted = _admissionLetter?['acceptance_status'] == 'accepted';
+    if (!accepted) {
+      await _acceptAdmissionLetter();
+      return;
+    }
+
+    final downloaded = await _downloadAdmissionLetter();
+    if (!mounted || !downloaded) return;
+    if (spec.next != null) {
+      fhcPush(context, spec.next!);
+    }
+  }
+
+  Future<bool> _downloadAdmissionLetter() async {
+    if (_letterDownloading) return false;
+    if (_admissionLetter == null) {
+      if (!mounted) return false;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            fhcT(
+              context,
+              'member.kca.letterPending',
+              fallback: 'Your admission letter is being prepared by KCA administration.',
+            ),
+          ),
+        ),
+      );
+      return false;
+    }
+
     final repo = AppServicesScope.maybeOf(context)?.kcaRepository;
     if (repo == null) {
       await fhcApiUnavailable(
@@ -394,12 +425,12 @@ class _KcaLifecycleScreenState extends State<KcaLifecycleScreen> {
           fallback: 'Download Letter',
         ),
       );
-      return;
+      return false;
     }
 
     setState(() => _letterDownloading = true);
     final result = await repo.downloadAdmissionLetter();
-    if (!mounted) return;
+    if (!mounted) return false;
     setState(() => _letterDownloading = false);
 
     switch (result) {
@@ -418,32 +449,47 @@ class _KcaLifecycleScreenState extends State<KcaLifecycleScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Download failed: empty file.')),
           );
-          return;
+          return false;
         }
+
+        final directory = await getApplicationDocumentsDirectory();
         final file = File(
-          '${Directory.systemTemp.path}/kca-admission-letter-${DateTime.now().millisecondsSinceEpoch}.pdf',
+          '${directory.path}/kca-admission-letter-${DateTime.now().millisecondsSinceEpoch}.pdf',
         );
-        await file.writeAsBytes(normalized);
-        final uri = Uri.file(file.path);
-        if (await canLaunchUrl(uri)) {
-          await launchUrl(uri);
-        }
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              fhcT(
-                context,
-                'member.kca.letterDownloadReady',
-                fallback: 'Admission letter downloaded.',
+        await file.writeAsBytes(normalized, flush: true);
+
+        final opened = await OpenFile.open(file.path);
+        if (opened.type != ResultType.done && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                fhcT(
+                  context,
+                  'member.kca.letterSavedLocally',
+                  fallback: 'Admission letter saved on this device.',
+                ),
               ),
             ),
-          ),
-        );
+          );
+        } else if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                fhcT(
+                  context,
+                  'member.kca.letterDownloadReady',
+                  fallback: 'Admission letter downloaded.',
+                ),
+              ),
+            ),
+          );
+        }
+        return true;
       case AppError(:final failure):
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(failure.message)),
         );
+        return false;
     }
   }
 
@@ -465,7 +511,7 @@ class _KcaLifecycleScreenState extends State<KcaLifecycleScreen> {
       onAction: _submitting || _letterDownloading
           ? null
           : kind == KcaLifecycleKind.admissionLetter
-              ? () => _handleAction(spec)
+              ? (_admissionLetter == null ? null : () => _handleAction(spec))
               : spec.next == null
                   ? null
                   : () => _handleAction(spec),

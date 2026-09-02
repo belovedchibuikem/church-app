@@ -397,7 +397,7 @@ class _OtherRequestsTab extends StatelessWidget {
             'homeChurch.otherRequestsUnavailableMessage',
             fallback:
                 'Membership and ministry request lists have no public or '
-                '/user Laravel endpoints yet. Fixture rows are hidden.',
+                'platform user endpoints yet. Fixture rows are hidden.',
           ),
         ),
       );

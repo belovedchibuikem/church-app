@@ -100,7 +100,7 @@ class FhcAsyncBody<T> extends StatelessWidget {
               context,
               'errors.featureWaitingOnApi',
               fallback:
-                  'This feature is waiting on its Laravel API contract. '
+                  'This feature is waiting on its platform service. '
                   'No live data is shown.',
             ),
       ),
@@ -214,7 +214,7 @@ class FhcFeatureUnavailablePage extends StatelessWidget {
                     'errors.featureNotBound',
                     args: {'feature': feature},
                     fallback:
-                        'Family House Connect has not bound a live Laravel API for '
+                        'Family House Connect has not bound a live platform API for '
                         '$feature in this build. Fixture success states are '
                         'disabled so the app does not pretend a backend exists.',
                   ),

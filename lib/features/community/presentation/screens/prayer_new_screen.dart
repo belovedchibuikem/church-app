@@ -96,7 +96,7 @@ class _PrayerNewScreenState extends State<PrayerNewScreen> {
         _error = fhcT(
           context,
           'member.prayer.submitUnavailable',
-          fallback: 'Prayer submission is waiting on the Laravel prayers API.',
+          fallback: 'Prayer submission is waiting on the prayer service.',
         );
       });
       return;

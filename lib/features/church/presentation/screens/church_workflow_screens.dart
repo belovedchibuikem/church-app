@@ -1193,7 +1193,7 @@ class _ShareNeedScreenState extends State<ShareNeedScreen> {
           context,
           'errors.shareNeedRequiresApi',
           fallback:
-              'Sharing a need requires the Laravel /user/needs API. '
+              'Sharing a need requires the needs service. '
               'No fixture submit is available.',
         );
       });
@@ -1367,7 +1367,7 @@ class _NeedsManagementScreenState extends State<NeedsManagementScreen> {
             context,
             'errors.needsRequireApi',
             fallback:
-                'Needs require the Laravel /user/needs API. '
+                'Needs require the needs service. '
                 'No design fixtures are shown.',
           ),
         );

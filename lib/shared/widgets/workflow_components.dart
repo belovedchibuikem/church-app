@@ -66,7 +66,7 @@ class WorkflowPage extends StatelessWidget {
                 'errors.actionRequiresLaravel',
                 args: {'action': actionLabel ?? ''},
                 fallback:
-                    '$actionLabel requires the Laravel integration and is not available in this build.',
+                    '$actionLabel requires the platform integration and is not available in this build.',
               ),
             ),
           ),

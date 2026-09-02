@@ -64,7 +64,7 @@ class _OfflineSyncScreenState extends State<OfflineSyncScreen> {
             context,
             'account.syncWaiting',
             fallback:
-                'Offline sync is waiting on the Laravel sync checkpoint API.',
+                'Offline sync is waiting on the sync service.',
           ),
         );
       });
@@ -101,7 +101,7 @@ class _OfflineSyncScreenState extends State<OfflineSyncScreen> {
           context,
           'account.syncNotConnected',
           fallback:
-              'Sync is not connected to the Laravel checkpoint API in this build.',
+              'Sync is not connected to the sync service in this build.',
         ),
       );
       return;
@@ -473,7 +473,7 @@ class _OfflineSyncScreenState extends State<OfflineSyncScreen> {
         fhcT(
           context,
           'account.allSyncedCopy',
-          fallback: 'Your checkpoint was updated with the Laravel sync API.',
+          fallback: 'Your checkpoint was updated.',
         ),
       ),
       WorkflowSectionTitle(

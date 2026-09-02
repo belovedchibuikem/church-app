@@ -651,6 +651,12 @@ class _FamilyHouseConnectAppState extends State<FamilyHouseConnectApp> {
             'kca.orientation.view',
             const KcaOrientationHubScreen(),
           ),
+          '/kca/orientation/stage' => guarded(
+            'kca.orientation.view',
+            KcaOrientationStageScreen(
+              stageKey: routeArgs.entityId ?? 'overview',
+            ),
+          ),
           '/kca/orientation/overview' => guarded(
             'kca.orientation.view',
             const KcaOrientationStageScreen(stageKey: 'overview'),

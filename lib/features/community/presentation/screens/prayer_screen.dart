@@ -43,7 +43,7 @@ class _PrayerScreenState extends State<PrayerScreen> {
             context,
             'member.prayer.apiUnavailable',
             fallback:
-                'Prayer requests are waiting on the Laravel prayers API. '
+                'Prayer requests are waiting on the prayer service. '
                 'No fixture list is shown.',
           ),
         );

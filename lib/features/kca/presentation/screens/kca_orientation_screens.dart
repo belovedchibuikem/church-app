@@ -77,13 +77,7 @@ class _KcaOrientationHubScreenState extends State<KcaOrientationHubScreen> {
     ];
   }
 
-  String _routeFor(String key) => switch (key) {
-        'overview' => FhcRoutes.kcaOrientationOverview,
-        'rules' => FhcRoutes.kcaOrientationRules,
-        'path' => FhcRoutes.kcaOrientationPath,
-        'mentors' => FhcRoutes.kcaOrientationMentors,
-        _ => FhcRoutes.kcaOrientationOverview,
-      };
+  String _routeFor(String key) => '/kca/orientation/$key';
 
   @override
   Widget build(BuildContext context) {
@@ -123,9 +117,11 @@ class _KcaOrientationHubScreenState extends State<KcaOrientationHubScreen> {
               final welcome = '${payload['welcome'] ?? ''}'.trim();
               final stages = _stages(payload);
               final canComplete = payload['can_complete'] == true;
+              final reviewMode = payload['review_mode'] == true ||
+                  '${payload['orientation_completed_at'] ?? ''}'.trim().isNotEmpty;
               final allComplete = stages.isNotEmpty &&
                   stages.every((stage) => stage['completed'] == true);
-              final orientationDone = '${payload['orientation_completed_at'] ?? ''}'.trim().isNotEmpty;
+              final orientationDone = reviewMode;
               return ListView(
                 children: [
                   WorkflowSummary(
@@ -186,9 +182,9 @@ class _KcaOrientationHubScreenState extends State<KcaOrientationHubScreen> {
                     Text(
                       fhcT(
                         context,
-                        'member.kca.orientationSubmitted',
+                        'member.kca.orientationReviewCopy',
                         fallback:
-                            'Orientation submitted. Track your admission progress from the application status screen.',
+                            'Revisit vision, mission, and why KCA any time from this programme.',
                       ),
                       style: FhcTypography.caption,
                     ),
@@ -290,13 +286,20 @@ class _KcaOrientationStageScreenState extends State<KcaOrientationStageScreen> {
       domain: WorkflowDomain.kca,
       actionLabel: fhcT(context, 'common.continue', fallback: 'Continue'),
       onAction: () {
-        final next = switch (widget.stageKey) {
-          'overview' => FhcRoutes.kcaOrientationRules,
-          'rules' => FhcRoutes.kcaOrientationPath,
-          'path' => FhcRoutes.kcaOrientationMentors,
-          _ => FhcRoutes.kcaPracticalService,
-        };
-        fhcPush(context, next);
+        final data = _state is FhcAsyncData<JsonObject>
+            ? (_state as FhcAsyncData<JsonObject>).value
+            : null;
+        final stages = data == null ? const <JsonObject>[] : _stages(data);
+        final keys = stages.map((stage) => '${stage['key'] ?? ''}').where((key) => key.isNotEmpty).toList();
+        final currentIndex = keys.indexOf(widget.stageKey);
+        final nextKey = currentIndex >= 0 && currentIndex + 1 < keys.length
+            ? keys[currentIndex + 1]
+            : null;
+        if (nextKey != null) {
+          fhcPush(context, '/kca/orientation/$nextKey');
+          return;
+        }
+        fhcPush(context, FhcRoutes.kcaPracticalService);
       },
       children: [
         SizedBox(
@@ -319,6 +322,8 @@ class _KcaOrientationStageScreenState extends State<KcaOrientationStageScreen> {
               final modules = stage['modules'];
               final mentor = stage['mentor'];
               final canComplete = payload['can_complete'] == true;
+              final reviewMode = payload['review_mode'] == true ||
+                  '${payload['orientation_completed_at'] ?? ''}'.trim().isNotEmpty;
               final stageComplete = stage['completed'] == true;
               return ListView(
                 children: [
@@ -401,7 +406,7 @@ class _KcaOrientationStageScreenState extends State<KcaOrientationStageScreen> {
                       ),
                     ),
                   ],
-                  if (canComplete && !stageComplete) ...[
+                  if (canComplete && !stageComplete && !reviewMode) ...[
                     const SizedBox(height: 16),
                     FilledButton(
                       onPressed: _markStageComplete,

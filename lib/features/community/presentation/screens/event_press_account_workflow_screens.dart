@@ -47,7 +47,7 @@ class _WalletScreenState extends State<WalletScreen> {
           message: fhcT(
             context,
             'give.walletRequiresApi',
-            fallback: 'Wallet transactions require the Laravel payments API.',
+            fallback: 'Wallet transactions require the payments service.',
           ),
         );
       });
@@ -286,7 +286,7 @@ class _EventRegistrationScreenState extends State<EventRegistrationScreen> {
             context,
             'events.registrationRequiresApi',
             fallback:
-                'Event registration requires the Laravel events API. '
+                'Event registration requires the events service. '
                 'No fixture registration form is shown.',
           ),
         );
@@ -456,7 +456,7 @@ class _EventRegistrationScreenState extends State<EventRegistrationScreen> {
                       'events.registrationUsesProfile',
                       fallback:
                           'Registration uses your signed-in person profile. '
-                          'Attendee fields are owned by Laravel and are not collected here.',
+                          'Attendee fields are managed by the platform and are not collected here.',
                     ),
                     style: FhcTypography.caption,
                   ),
@@ -592,7 +592,7 @@ class _EventPaymentScreenState extends State<EventPaymentScreen> {
         _error = fhcT(
           context,
           'events.paymentRequiresApi',
-          fallback: 'Event payment requires the Laravel payments API.',
+          fallback: 'Event payment requires the payments service.',
         );
       });
       return;
@@ -800,7 +800,7 @@ class _EventPaymentScreenState extends State<EventPaymentScreen> {
                     context,
                     'events.uploadReceiptCopy',
                     fallback:
-                        'For bank transfer or other manual settlement, attach the receipt here. The same Laravel proof used for giving completes this event fee.',
+                        'For bank transfer or other manual settlement, attach the receipt here. The same payment proof used for giving completes this event fee.',
                   ),
                   style: FhcTypography.caption,
                 ),
@@ -834,7 +834,7 @@ class _EventPaymentScreenState extends State<EventPaymentScreen> {
             fhcT(
               context,
               'events.securedPaymentIntent',
-              fallback: 'Secured payment intent via Laravel',
+              fallback: 'Secured payment intent via the platform',
             ),
             style: FhcTypography.caption,
           ),
@@ -894,7 +894,7 @@ class _EventTicketsScreenState extends State<EventTicketsScreen> {
             context,
             'events.ticketsRequireApi',
             fallback:
-                'Event tickets require the Laravel ticket read API. '
+                'Event tickets require the ticket service. '
                 'No fixture ticket is shown.',
           ),
         );

@@ -43,7 +43,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             context,
             'account.notificationsWaiting',
             fallback:
-                'Notifications are waiting on the Laravel notifications API.',
+                'Notifications are waiting on the notifications service.',
           ),
         );
       });

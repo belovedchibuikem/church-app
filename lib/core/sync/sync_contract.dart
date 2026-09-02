@@ -40,7 +40,7 @@ final class UnconfiguredSyncRepository implements SyncRepository {
 
   AppError<T> _unavailable<T>() => const AppError(
     IntegrationUnavailableFailure(
-      'The Laravel synchronization contract is not configured.',
+      'The synchronization service is not configured.',
     ),
   );
 

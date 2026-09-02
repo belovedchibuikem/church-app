@@ -443,7 +443,7 @@ class _AddSoulScreenState extends State<AddSoulScreen> {
         const SizedBox(height: 8),
         const Text(
           'Uses POST /admin/mission/crusades/{crusade}/souls. '
-          'No invented soul IDs — success only after Laravel returns data.id.',
+          'No invented soul IDs — success only after the platform returns data.id.',
           style: FhcTypography.caption,
         ),
       ],
@@ -561,7 +561,7 @@ class _SoulProfileScreenState extends State<SoulProfileScreen> {
                 const SizedBox(height: 8),
                 Text(
                   _error ??
-                      'Soul detail GET is not exposed by Laravel. List and capture responses remain the source of truth.',
+                      'Soul detail is not available separately. List and capture responses remain the source of truth.',
                   style: FhcTypography.caption,
                 ),
                 if (id != null && looksLikeMissionUlid(id)) ...[
@@ -672,7 +672,7 @@ class _AssignMentorScreenState extends State<AssignMentorScreen> {
         setState(() {
           _submitting = false;
           _info =
-              'Mentor assignment accepted by Laravel for soul ${_soulId.text.trim()}.';
+              'Mentor assignment accepted for soul ${_soulId.text.trim()}.';
         });
       case AppError(:final failure):
         setState(() {

@@ -8,6 +8,29 @@ import 'kca_lesson_completion_queue.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 
+String _readJsonErrorMessage(List<int> bodyBytes) {
+  try {
+    final decoded = jsonDecode(utf8.decode(bodyBytes));
+    if (decoded is Map) {
+      final error = decoded['error'];
+      if (error is Map && error['message'] is String) {
+        return error['message'] as String;
+      }
+    }
+  } catch (_) {
+    /* ignore malformed error payloads */
+  }
+  return 'Admission letter download failed.';
+}
+
+bool _looksLikePdf(List<int> bytes) {
+  return bytes.length >= 4 &&
+      bytes[0] == 0x25 &&
+      bytes[1] == 0x50 &&
+      bytes[2] == 0x44 &&
+      bytes[3] == 0x46;
+}
+
 /// KCA member curriculum + public certificate verify.
 final class HttpKcaRepository
     with TransportRepositoryHelpers
@@ -712,9 +735,24 @@ final class HttpKcaRepository
       );
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
+        final contentType = response.headers['content-type'] ?? 'application/pdf';
+        if (contentType.contains('application/json')) {
+          return AppError(
+            ServerFailure(_readJsonErrorMessage(response.bodyBytes)),
+          );
+        }
+        if (response.bodyBytes.isEmpty || !_looksLikePdf(response.bodyBytes)) {
+          return AppError(
+            ServerFailure(
+              response.bodyBytes.isEmpty
+                  ? 'Admission letter download returned an empty file.'
+                  : 'Admission letter download did not return a valid PDF.',
+            ),
+          );
+        }
         return AppSuccess(<String, Object?>{
           'bytes': response.bodyBytes,
-          'content_type': response.headers['content-type'] ?? 'application/pdf',
+          'content_type': contentType,
           'filename': 'kca-admission-letter.pdf',
         });
       }
@@ -725,8 +763,11 @@ final class HttpKcaRepository
         );
       }
 
+      final errorMessage = response.bodyBytes.isEmpty
+          ? 'Admission letter download failed (${response.statusCode}).'
+          : _readJsonErrorMessage(response.bodyBytes);
       return AppError(
-        ServerFailure('Admission letter download failed (${response.statusCode}).'),
+        ServerFailure(errorMessage),
       );
     } on http.ClientException catch (error) {
       return AppError(

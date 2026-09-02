@@ -109,7 +109,7 @@ final class UnconfiguredAuthorizationGateway implements AuthorizationGateway {
   }) async => const AuthorizationDecision(
     AuthorizationState.restricted,
     reason:
-        'This protected feature is unavailable until the Laravel authorization service is configured.',
+        'This protected feature is unavailable until the authorization service is configured.',
   );
 
   @override

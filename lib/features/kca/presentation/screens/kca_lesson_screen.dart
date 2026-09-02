@@ -387,5 +387,3 @@ class _PlayOverlay extends StatelessWidget {
     );
   }
 }
-
-class _LessonPhoto extends StatelessWidget {

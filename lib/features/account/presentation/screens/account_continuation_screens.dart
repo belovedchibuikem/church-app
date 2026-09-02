@@ -172,7 +172,7 @@ class _AccountContinuationScreenState extends State<AccountContinuationScreen>
           context,
           'account.paymentHistoryRequiresApi',
           fallback:
-              'Payment history requires the Laravel payments API. '
+              'Payment history requires the payments service. '
               'No fixture amounts are shown.',
         );
         _loading = false;
@@ -485,7 +485,7 @@ class _AccountContinuationScreenState extends State<AccountContinuationScreen>
             _error = fhcT(
               context,
               'account.receiptsRequireApi',
-              fallback: 'Receipts require the Laravel payments API.',
+              fallback: 'Receipts require the payments service.',
             );
             _loading = false;
           });
@@ -1129,7 +1129,7 @@ class _AccountContinuationScreenState extends State<AccountContinuationScreen>
               context,
               'account.noPaymentRecordsCopy',
               fallback:
-                  'Transactions from the Laravel payments API will appear here. '
+                  'Transactions will appear here once payment records are available. '
                   'No fixture amounts are shown.',
             ),
           ),
@@ -1149,7 +1149,7 @@ class _AccountContinuationScreenState extends State<AccountContinuationScreen>
               : fhcT(
                 context,
                 'account.recordedOnLaravel',
-                fallback: 'Recorded on Laravel',
+                fallback: 'Recorded on platform',
               ),
           kind != AccountContinuationKind.paymentPending,
         ),
@@ -1250,7 +1250,7 @@ class _AccountContinuationScreenState extends State<AccountContinuationScreen>
             context,
             'account.noPaymentRecordsCopy',
             fallback:
-                'Transactions from the Laravel payments API will appear here. '
+                'Transactions will appear here once payment records are available. '
                 'No fixture amounts are shown.',
           ),
         ),
@@ -1262,7 +1262,7 @@ class _AccountContinuationScreenState extends State<AccountContinuationScreen>
           context,
           'account.livePaymentRecords',
           fallback:
-              'Live payment records from Laravel. Hosted checkout completes through signed provider webhooks.',
+              'Live payment records from the platform. Hosted checkout completes through signed provider webhooks.',
         ),
       ),
       WorkflowCard(
@@ -1302,7 +1302,7 @@ class _AccountContinuationScreenState extends State<AccountContinuationScreen>
             context,
             'account.noReceiptAvailableCopy',
             fallback:
-                'Receipts require a successful payment on the Laravel API.',
+                'Receipts require a successful payment.',
           ),
         ),
       ];

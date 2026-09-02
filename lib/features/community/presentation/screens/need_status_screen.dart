@@ -46,7 +46,7 @@ class _NeedStatusScreenState extends State<NeedStatusScreen> {
             context,
             'member.needs.apiUnavailable',
             fallback:
-                'Needs are waiting on the Laravel needs API. '
+                'Needs are waiting on the needs service. '
                 'No fixture inbox is shown.',
           ),
         );
@@ -221,7 +221,7 @@ class _NeedDetailsScreenState extends State<NeedDetailsScreen> {
           message: fhcT(
             context,
             'member.needs.detailsUnavailable',
-            fallback: 'Need details require the Laravel needs API.',
+            fallback: 'Need details require the needs service.',
           ),
         );
       });

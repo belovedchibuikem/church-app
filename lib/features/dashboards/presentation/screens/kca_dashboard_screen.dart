@@ -234,6 +234,30 @@ class _KcaDashboardScreenState extends State<KcaDashboardScreen> {
                               ),
                             ],
                           ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _KcaMetric(
+                                  icon: Icons.flag_outlined,
+                                  title: fhcT(
+                                    context,
+                                    'member.kcaOrientation',
+                                    fallback: 'Orientation',
+                                  ),
+                                  value: fhcT(
+                                    context,
+                                    'member.kcaOrientationReview',
+                                    fallback: 'Review',
+                                  ),
+                                  onTap: () => fhcPush(
+                                    context,
+                                    FhcRoutes.kcaOrientation,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                           if (!dash.enrolled) ...[
                             const SizedBox(height: 14),
                             Text(
@@ -350,7 +374,7 @@ class _KcaHeader extends StatelessWidget {
                   fhcT(
                     context,
                     'member.kcaAcademy',
-                    fallback: 'Kingdom Citizens Academy',
+                    fallback: 'Kingdom Change Agents',
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -370,7 +394,7 @@ class _KcaHeader extends StatelessWidget {
               fhcT(
                 context,
                 'member.kcaLiveCurriculum',
-                fallback: 'Live curriculum summary from Laravel',
+                fallback: 'Your curriculum progress',
               ),
               style: const TextStyle(fontSize: 12, color: Color(0xFFD7E8DC)),
             ),
