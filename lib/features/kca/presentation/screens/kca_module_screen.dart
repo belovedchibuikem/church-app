@@ -485,17 +485,20 @@ class _LessonRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final locked = !lesson.unlocked;
     return Material(
       color: Colors.transparent,
       child: Ink(
         decoration: BoxDecoration(
           color: FhcColors.white,
           borderRadius: BorderRadius.circular(FhcRadius.card),
-          border: Border.all(color: FhcColors.border),
-          boxShadow: FhcElevation.card,
+          border: Border.all(
+            color: locked ? FhcColors.border : FhcColors.border,
+          ),
+          boxShadow: locked ? null : FhcElevation.card,
         ),
         child: InkWell(
-          onTap: lesson.id.isEmpty
+          onTap: lesson.id.isEmpty || locked
               ? null
               : () => Navigator.of(context).pushNamed(
                     '/kca/lesson/${lesson.id}',
@@ -504,9 +507,9 @@ class _LessonRow extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
           child: Row(
             children: [
-              const Icon(
-                Icons.play_circle_outline,
-                color: FhcColors.green,
+              Icon(
+                locked ? Icons.lock_outline : Icons.play_circle_outline,
+                color: locked ? FhcColors.muted : FhcColors.green,
                 size: 22,
               ),
               const SizedBox(width: 10),
@@ -523,34 +526,39 @@ class _LessonRow extends StatelessWidget {
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 10,
-                        color: FhcColors.muted,
+                        color: locked ? FhcColors.muted : FhcColors.muted,
                         height: 1.2,
                       ),
                     ),
                     const SizedBox(height: 3),
                     Text(
                       lesson.title,
-                      maxLines: 1,
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w700,
-                        color: FhcColors.ink,
+                        color: locked ? FhcColors.muted : FhcColors.ink,
                         height: 1.2,
                       ),
                     ),
                     if (lesson.chapters.isNotEmpty)
                       Text(
-                        '${lesson.chapters.length} chapters',
+                        fhcT(
+                          context,
+                          'member.kca.chapterCount',
+                          args: {'n': '${lesson.chapters.length}'},
+                          fallback: '{n} chapters',
+                        ),
                         style: const TextStyle(
                           fontSize: 11,
                           color: FhcColors.muted,
                           height: 1.2,
                         ),
                       ),
-                    if (!lesson.unlocked && lesson.lockReason.isNotEmpty)
+                    if (locked && lesson.lockReason.isNotEmpty)
                       Text(
                         lesson.lockReason,
                         maxLines: 2,
@@ -564,6 +572,15 @@ class _LessonRow extends StatelessWidget {
                   ],
                 ),
               ),
+              if (locked)
+                Text(
+                  fhcT(context, 'member.kca.locked', fallback: 'Locked'),
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: FhcColors.muted,
+                  ),
+                ),
             ],
           ),
         ),

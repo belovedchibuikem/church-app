@@ -2,7 +2,6 @@ import '../../../core/api/api_transport.dart';
 import '../../../core/api/app_failure.dart';
 import '../../../core/api/fhc_api_config.dart';
 import '../../../core/api/transport_repository_helpers.dart';
-import '../../../core/auth/session_token_store.dart';
 import '../../../core/contracts/mobile_repository_contracts.dart';
 import 'kca_evidence_queue.dart';
 import 'kca_lesson_completion_queue.dart';
@@ -648,6 +647,30 @@ final class HttpKcaRepository
       const ApiRequest(
         method: ApiMethod.get,
         path: '/user/kca/admission-letter',
+      ),
+    );
+  }
+
+  @override
+  Future<AppResult<JsonObject>> acceptAdmissionLetter(JsonObject body) {
+    final transport = _transport;
+    if (transport == null) {
+      return Future.value(_needsTransport('KCA admission letter acceptance'));
+    }
+    final signature = body['applicant_signature_name'];
+    if (signature is! String || signature.trim().isEmpty) {
+      return Future.value(
+        const AppError(
+          ValidationFailure('Applicant signature is required.'),
+        ),
+      );
+    }
+    return sendObject(
+      transport,
+      ApiRequest(
+        method: ApiMethod.post,
+        path: '/user/kca/admission-letter/accept',
+        body: body,
       ),
     );
   }

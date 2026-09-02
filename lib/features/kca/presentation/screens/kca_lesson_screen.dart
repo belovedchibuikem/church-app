@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/api/app_failure.dart';
 import '../../../../core/contracts/mobile_repository_contracts.dart';
@@ -171,7 +172,7 @@ class _KcaLessonScreenState extends State<KcaLessonScreen> {
                     children: [
                       if (contentUrl.isNotEmpty) ...[
                         const SizedBox(height: 12),
-                        const _VideoPlayer(),
+                        _LessonMediaCard(contentUrl: contentUrl),
                         const SizedBox(height: 12),
                       ],
                       Text(
@@ -205,12 +206,25 @@ class _KcaLessonScreenState extends State<KcaLessonScreen> {
                             title: Text('${chapter['title'] ?? 'Chapter'}'),
                             subtitle: Text(
                               chapter['completed'] == true
-                                  ? 'Completed'
+                                  ? fhcT(
+                                      context,
+                                      'member.kca.completed',
+                                      fallback: 'Completed',
+                                    )
                                   : chapter['unlocked'] == false
-                                  ? 'Locked'
-                                  : 'Open',
+                                  ? fhcT(
+                                      context,
+                                      'member.kca.locked',
+                                      fallback: 'Locked',
+                                    )
+                                  : fhcT(
+                                      context,
+                                      'member.kca.open',
+                                      fallback: 'Open',
+                                    ),
                             ),
-                            onTap: '${chapter['id'] ?? ''}'.isEmpty
+                            onTap: '${chapter['id'] ?? ''}'.isEmpty ||
+                                chapter['unlocked'] == false
                                 ? null
                                 : () => Navigator.of(context).pushNamed(
                                     '/kca/chapter/${chapter['id']}',
@@ -245,63 +259,78 @@ class _KcaLessonScreenState extends State<KcaLessonScreen> {
   }
 }
 
-class _LessonItem {
-  const _LessonItem({
-    required this.icon,
-    required this.label,
-    required this.done,
-  });
+class _LessonMediaCard extends StatelessWidget {
+  const _LessonMediaCard({required this.contentUrl});
 
-  final IconData icon;
-  final String label;
-  final bool done;
-}
+  final String contentUrl;
 
-class _VideoPlayer extends StatelessWidget {
-  const _VideoPlayer();
+  Future<void> _open(BuildContext context) async {
+    final uri = Uri.tryParse(contentUrl);
+    if (uri == null) return;
+    final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!launched && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            fhcT(
+              context,
+              'member.kca.resourceOpenFailed',
+              fallback: 'Could not open the lesson resource.',
+            ),
+          ),
+        ),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(FhcRadius.card),
-      child: AspectRatio(
-        aspectRatio: 16 / 9,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            const _LessonPhoto(),
-            const ColoredBox(color: Color(0x40000000)),
-            const Center(child: _PlayOverlay()),
-            Positioned(
-              left: 10,
-              right: 10,
-              bottom: 8,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => _open(context),
+        borderRadius: BorderRadius.circular(FhcRadius.card),
+        child: Ink(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(FhcRadius.card),
+            border: Border.all(color: FhcColors.border),
+            boxShadow: FhcElevation.card,
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(FhcRadius.card),
+            child: AspectRatio(
+              aspectRatio: 16 / 9,
+              child: Stack(
+                fit: StackFit.expand,
                 children: [
-                  const Text(
-                    '18:45',
-                    style: TextStyle(
-                      color: FhcColors.white,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      height: 1.2,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(2),
-                    child: const LinearProgressIndicator(
-                      value: 0.38,
-                      minHeight: 3,
-                      backgroundColor: Color(0x66FFFFFF),
-                      valueColor: AlwaysStoppedAnimation(FhcColors.white),
+                  const _LessonPhoto(),
+                  const ColoredBox(color: Color(0x40000000)),
+                  Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const _PlayOverlay(),
+                        const SizedBox(height: 10),
+                        Text(
+                          fhcT(
+                            context,
+                            'member.kca.openLessonResource',
+                            fallback: 'Open lesson resource',
+                          ),
+                          style: const TextStyle(
+                            color: FhcColors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            height: 1.2,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
               ),
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -359,61 +388,4 @@ class _PlayOverlay extends StatelessWidget {
   }
 }
 
-class _ChecklistRow extends StatelessWidget {
-  const _ChecklistRow({required this.item});
-
-  final _LessonItem item;
-
-  @override
-  Widget build(BuildContext context) {
-    return ConstrainedBox(
-      constraints: const BoxConstraints(minHeight: FhcSizes.minTap),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-        child: Row(
-          children: [
-            Container(
-              width: 28,
-              height: 28,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: FhcColors.green,
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Icon(item.icon, size: 16, color: FhcColors.white),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                item.label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  height: 1.2,
-                  color: FhcColors.ink,
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            if (item.done)
-              const Icon(Icons.check_circle, size: 20, color: FhcColors.green)
-            else
-              Text(
-                fhcT(context, 'member.kca.pending', fallback: 'Pending'),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  height: 1.2,
-                  color: FhcColors.hint,
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-}
+class _LessonPhoto extends StatelessWidget {

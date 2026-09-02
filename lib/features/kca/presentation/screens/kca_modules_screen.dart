@@ -111,7 +111,7 @@ class _KcaModulesScreenState extends State<KcaModulesScreen> {
                 fhcT(
                   context,
                   'member.kca.modulesSubtitle',
-                  fallback: 'Published curriculum from Laravel',
+                  fallback: 'Published curriculum modules for your enrollment year.',
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
@@ -215,12 +215,17 @@ class _ModuleSpec {
             : fallbackNumber;
     final progress = '${json['progress_state'] ?? json['status'] ?? ''}'
         .toLowerCase();
-    final status =
-        progress.contains('complete')
-            ? _ModuleStatus.completed
-            : progress.contains('progress') || progress.contains('active')
-            ? _ModuleStatus.inProgress
-            : _ModuleStatus.notStarted;
+    final lessonsCompleted = json['lessons_completed'];
+    final lessonsTotal = json['lessons_total'] ?? json['lessons_count'];
+    final status = progress.contains('complete')
+        ? _ModuleStatus.completed
+        : progress.contains('progress') || progress.contains('active')
+        ? _ModuleStatus.inProgress
+        : lessonsCompleted is num &&
+            lessonsTotal is num &&
+            lessonsCompleted > 0
+        ? _ModuleStatus.inProgress
+        : _ModuleStatus.notStarted;
     return _ModuleSpec(
       id: id,
       number: number,
