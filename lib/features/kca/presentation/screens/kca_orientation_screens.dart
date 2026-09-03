@@ -256,6 +256,15 @@ class _KcaOrientationStageScreenState extends State<KcaOrientationStageScreen> {
     }
   }
 
+  List<JsonObject> _stages(JsonObject payload) {
+    final raw = payload['stages'];
+    if (raw is! List) return const [];
+    return [
+      for (final item in raw)
+        if (item is Map) Map<String, Object?>.from(item),
+    ];
+  }
+
   JsonObject? _stageOf(JsonObject payload) {
     final raw = payload['stages'];
     if (raw is! List) return null;

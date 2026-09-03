@@ -226,10 +226,17 @@ class _Assignment {
             ? _Bucket.submitted
             : _Bucket.pending;
     final module = json['module'];
+    final lesson = json['lesson'];
     final moduleTitle =
         module is Map
             ? '${module['title'] ?? module['code'] ?? 'Module'}'
             : 'Module';
+    final lessonTitle =
+        lesson is Map
+            ? '${lesson['title'] ?? lesson['code'] ?? ''}'
+            : '';
+    final scopeLabel =
+        lessonTitle.isEmpty ? moduleTitle : '$moduleTitle · $lessonTitle';
     final due = json['due_at'] ?? json['submitted_at'] ?? json['updated_at'];
     final recorded = tree is Map ? '${tree['recorded_souls'] ?? 0}' : '';
     final required = tree is Map ? '${tree['required_souls'] ?? 0}' : '';
@@ -237,10 +244,10 @@ class _Assignment {
     return _Assignment(
       title: '${json['title'] ?? 'Assignment'}',
       moduleLabel: treeOpen
-          ? '$moduleTitle • souls $recorded/$required (open)'
+          ? '$scopeLabel • souls $recorded/$required (open)'
           : kind == 'soul_winning'
-          ? '$moduleTitle • soul tree complete'
-          : moduleTitle,
+          ? '$scopeLabel • soul tree complete'
+          : scopeLabel,
       dateLabel: due == null ? '' : due.toString(),
       priority: switch ('${json['priority'] ?? ''}'.toLowerCase()) {
         'high' => _Priority.high,
