@@ -30,6 +30,7 @@ class _KcaLessonScreenState extends State<KcaLessonScreen> {
   bool _started = false;
   AppFailure? _failure;
   JsonObject? _lesson;
+  double _fontScale = 1;
 
   KcaRepository? get _repo =>
       widget.kcaRepository ??
@@ -170,6 +171,26 @@ class _KcaLessonScreenState extends State<KcaLessonScreen> {
                 : ListView(
                     padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
                     children: [
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          IconButton(
+                            tooltip: 'Zoom out',
+                            onPressed: () => setState(() {
+                              _fontScale = (_fontScale - 0.1).clamp(0.85, 1.6);
+                            }),
+                            icon: const Icon(Icons.text_decrease),
+                          ),
+                          Text('${(_fontScale * 100).round()}%'),
+                          IconButton(
+                            tooltip: 'Zoom in',
+                            onPressed: () => setState(() {
+                              _fontScale = (_fontScale + 0.1).clamp(0.85, 1.6);
+                            }),
+                            icon: const Icon(Icons.text_increase),
+                          ),
+                        ],
+                      ),
                       if (contentUrl.isNotEmpty) ...[
                         const SizedBox(height: 12),
                         _LessonMediaCard(contentUrl: contentUrl),
@@ -183,10 +204,11 @@ class _KcaLessonScreenState extends State<KcaLessonScreen> {
                                 fallback: 'Lesson body is empty.',
                               )
                             : body,
-                        style: const TextStyle(
-                          fontSize: 14,
-                          height: 1.4,
+                        style: TextStyle(
+                          fontSize: 15 * _fontScale,
+                          height: 1.7,
                           color: FhcColors.ink,
+                          letterSpacing: 0.1,
                         ),
                       ),
                       if (chapters.isNotEmpty) ...[

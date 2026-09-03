@@ -350,7 +350,17 @@ class _KcaOrientationStageScreenState extends State<KcaOrientationStageScreen> {
                   ),
                   if (body.isNotEmpty) ...[
                     const SizedBox(height: 16),
-                    WorkflowCard(child: Text(body, style: FhcTypography.body)),
+                    WorkflowCard(
+                      child: Text(
+                        body,
+                        style: const TextStyle(
+                          fontSize: 15.5,
+                          height: 1.7,
+                          color: FhcColors.ink,
+                          letterSpacing: 0.1,
+                        ),
+                      ),
+                    ),
                   ],
                   if (modules is List) ...[
                     const SizedBox(height: 16),
@@ -492,8 +502,8 @@ class _KcaPracticalServiceScreenState extends State<KcaPracticalServiceScreen> {
       domain: WorkflowDomain.kca,
       actionLabel: fhcT(
         context,
-        'member.kca.addAnotherDepartment',
-        fallback: 'Add Another Department',
+        'member.kca.viewPracticalAssignments',
+        fallback: 'View Practical Assignments',
       ),
       onAction: () => fhcPush(context, FhcRoutes.kcaAssignments),
       children: [
@@ -505,7 +515,7 @@ class _KcaPracticalServiceScreenState extends State<KcaPracticalServiceScreen> {
             emptyTitle: fhcT(
               context,
               'member.kca.noDepartments',
-              fallback: 'No departments yet',
+              fallback: 'No practical assignments yet',
             ),
             unavailableTitle: fhcT(
               context,
@@ -533,17 +543,18 @@ class _KcaPracticalServiceScreenState extends State<KcaPracticalServiceScreen> {
                     ),
                     fhcT(
                       context,
-                      'member.kca.practicalServiceCopy',
-                      fallback: 'Serve in at least two departments.',
+                      'member.kca.practicalServiceFlowCopy',
+                      fallback:
+                          'Serve through practical assignments (Type = practical). Complete at least two departments.',
                     ),
                   ),
                   if (rows.isEmpty)
                     Text(
                       fhcT(
                         context,
-                        'member.kca.noDepartmentsCopy',
+                        'member.kca.noPracticalAssignmentsCopy',
                         fallback:
-                            'Your assigned departments will appear here from KCA.',
+                            'When your admin issues practical assignments, they appear here with module and lesson context.',
                       ),
                       style: FhcTypography.caption,
                     )
@@ -553,10 +564,12 @@ class _KcaPracticalServiceScreenState extends State<KcaPracticalServiceScreen> {
                         children: [
                           for (final row in rows)
                             WorkflowRow(
-                              title: '${row['title'] ?? 'Department'}',
+                              title: '${row['title'] ?? 'Practical assignment'}',
                               subtitle: [
                                 if (row['module'] is Map)
                                   '${(row['module'] as Map)['title'] ?? ''}',
+                                if (row['lesson'] is Map)
+                                  '${(row['lesson'] as Map)['title'] ?? ''}',
                                 '${row['state'] ?? ''}',
                               ].where((part) => part.trim().isNotEmpty).join(' • '),
                               trailing: const Icon(Icons.chevron_right),
