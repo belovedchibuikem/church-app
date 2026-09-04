@@ -78,6 +78,7 @@ abstract final class FhcRoutes {
   static const kcaModule = '/kca/module';
   static const kcaLesson = '/kca/lesson';
   static const kcaAssignments = '/kca/assignments';
+  static const kcaAssignment = '/kca/assignment';
   static const kcaMentor = '/kca/mentor';
   static const kcaEvidence = '/kca/evidence';
   static const kcaSubmissions = '/kca/submissions';

@@ -27,4 +27,11 @@ void main() {
     expect(resolved.canonical, '/mission/crusade');
     expect(resolved.entityId, ulid);
   });
+
+  test('resolveCanonicalRoute preserves KCA assignment id', () {
+    const ulid = '01JASSIGNMENT00000000000001';
+    final resolved = resolveCanonicalRoute('/kca/assignment/$ulid');
+    expect(resolved.canonical, '/kca/assignment');
+    expect(resolved.entityId, ulid);
+  });
 }

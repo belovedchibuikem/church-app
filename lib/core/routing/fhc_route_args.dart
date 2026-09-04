@@ -163,7 +163,7 @@ CanonicalRoute resolveCanonicalRoute(String requestedRoute) {
     }
     if (parts.length >= 3 && parts[0] == 'kca' && parts[1] == 'assignment') {
       return CanonicalRoute(
-        canonical: '/kca/assignments',
+        canonical: '/kca/assignment',
         entityId: parts[2],
       );
     }

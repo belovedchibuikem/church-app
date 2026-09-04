@@ -218,7 +218,7 @@ class _KcaSubmissionsScreenState extends State<KcaSubmissionsScreen> {
                         context,
                         id.isEmpty
                             ? FhcRoutes.kcaAssignments
-                            : '${FhcRoutes.kcaAssignments}?id=${Uri.encodeComponent(id)}',
+                            : '${FhcRoutes.kcaAssignment}/${Uri.encodeComponent(id)}',
                       );
                     },
                   );

@@ -556,7 +556,15 @@ class _FamilyHouseConnectAppState extends State<FamilyHouseConnectApp> {
             lessonId: routeArgs.entityId ?? routeQuery['id'],
             chapter: true,
           ),
-          '/kca/assignments' => const KcaAssignmentsScreen(),
+          '/kca/assignments' =>
+            (routeArgs.entityId ?? routeQuery['id'])?.trim().isNotEmpty == true
+                ? KcaAssignmentDetailScreen(
+                    assignmentId: routeArgs.entityId ?? routeQuery['id'],
+                  )
+                : const KcaAssignmentsScreen(),
+          '/kca/assignment' => KcaAssignmentDetailScreen(
+            assignmentId: routeArgs.entityId ?? routeQuery['id'],
+          ),
           '/kca/mentor' => const MentorChatScreen(),
           '/kca/evidence' => PermissionGuard(
             gateway: authorizationGateway,

@@ -8,6 +8,7 @@ import '../../../../core/l10n/locale_scope.dart';
 import '../../../../shared/widgets/async_state.dart';
 import '../../../../shared/widgets/fhc_components.dart';
 import '../../../foundation/presentation/fhc_nav.dart';
+import '../kca_assignment_kind.dart';
 
 class KcaAssignmentsScreen extends StatefulWidget {
   const KcaAssignmentsScreen({super.key, this.kcaRepository});
@@ -185,7 +186,17 @@ class _KcaAssignmentsScreenState extends State<KcaAssignmentsScreen> {
                   itemCount: items.length,
                   separatorBuilder: (_, __) => const SizedBox(height: 8),
                   itemBuilder: (context, index) {
-                    return _AssignmentCard(assignment: items[index]);
+                    return _AssignmentCard(
+                      assignment: items[index],
+                      onOpen: () async {
+                        final id = items[index].id;
+                        if (id.isEmpty) return;
+                        await Navigator.of(context).pushNamed(
+                          '${FhcRoutes.kcaAssignment}/${Uri.encodeComponent(id)}',
+                        );
+                        if (context.mounted) await _load();
+                      },
+                    );
                   },
                 );
               },
@@ -204,6 +215,7 @@ enum _Priority { high, medium, low }
 
 class _Assignment {
   const _Assignment({
+    required this.id,
     required this.title,
     required this.moduleLabel,
     required this.dateLabel,
@@ -240,14 +252,16 @@ class _Assignment {
     final due = json['due_at'] ?? json['submitted_at'] ?? json['updated_at'];
     final recorded = tree is Map ? '${tree['recorded_souls'] ?? 0}' : '';
     final required = tree is Map ? '${tree['required_souls'] ?? 0}' : '';
-    final kind = '${json['assignment_kind'] ?? ''}';
+    final kind = parseKcaAssignmentKind(json['assignment_kind']);
+    final kindLabel = kcaAssignmentKindLabel(kind);
     return _Assignment(
+      id: '${json['id'] ?? json['public_id'] ?? ''}'.trim(),
       title: '${json['title'] ?? 'Assignment'}',
       moduleLabel: treeOpen
-          ? '$scopeLabel • souls $recorded/$required (open)'
-          : kind == 'soul_winning'
-          ? '$scopeLabel • soul tree complete'
-          : scopeLabel,
+          ? '$kindLabel · $scopeLabel • souls $recorded/$required (open)'
+          : kind == KcaAssignmentKind.soulWinning
+          ? '$kindLabel · $scopeLabel • soul tree complete'
+          : '$kindLabel · $scopeLabel',
       dateLabel: due == null ? '' : due.toString(),
       priority: switch ('${json['priority'] ?? ''}'.toLowerCase()) {
         'high' => _Priority.high,
@@ -255,11 +269,12 @@ class _Assignment {
         _ => _Priority.medium,
       },
       bucket: bucket,
-      icon: Icons.assignment_outlined,
-      iconColor: FhcColors.greenDark,
+      icon: kcaAssignmentKindIcon(kind),
+      iconColor: kcaAssignmentKindColor(kind),
     );
   }
 
+  final String id;
   final String title;
   final String moduleLabel;
   final String dateLabel;
@@ -318,9 +333,10 @@ class _StatusTab extends StatelessWidget {
 }
 
 class _AssignmentCard extends StatelessWidget {
-  const _AssignmentCard({required this.assignment});
+  const _AssignmentCard({required this.assignment, required this.onOpen});
 
   final _Assignment assignment;
+  final VoidCallback onOpen;
 
   @override
   Widget build(BuildContext context) {
@@ -335,10 +351,14 @@ class _AssignmentCard extends StatelessWidget {
     final meta = '${assignment.moduleLabel} • $date';
 
     return Semantics(
+      button: true,
       label: '${assignment.title}, $meta',
       child: Material(
         color: Colors.transparent,
-        child: Ink(
+        child: InkWell(
+          onTap: onOpen,
+          borderRadius: BorderRadius.circular(FhcRadius.card),
+          child: Ink(
           padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
           decoration: BoxDecoration(
             color: FhcColors.white,
@@ -396,6 +416,7 @@ class _AssignmentCard extends StatelessWidget {
               _PriorityPill(priority: assignment.priority),
             ],
           ),
+        ),
         ),
       ),
     );

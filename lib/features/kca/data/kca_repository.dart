@@ -351,7 +351,7 @@ final class HttpKcaRepository
         'Idempotency-Key': idempotencyKey,
       });
       request.fields['purpose'] = 'kca.evidence';
-      request.fields['classification'] = 'internal';
+      request.fields['classification'] = 'restricted';
       request.fields['idempotency_key'] = idempotencyKey;
       request.files.add(
         http.MultipartFile.fromBytes('file', bytes, filename: safeName),

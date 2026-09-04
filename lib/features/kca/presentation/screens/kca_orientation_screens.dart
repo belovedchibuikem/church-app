@@ -581,7 +581,7 @@ class _KcaPracticalServiceScreenState extends State<KcaPracticalServiceScreen> {
                                 }
                                 fhcPush(
                                   context,
-                                  '${FhcRoutes.kcaAssignments}?id=${Uri.encodeComponent(id)}',
+                                  '${FhcRoutes.kcaAssignment}/${Uri.encodeComponent(id)}',
                                 );
                               },
                             ),
