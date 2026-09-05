@@ -48,7 +48,7 @@ void main() {
     expect(find.text('DISCOVER'), findsOneWidget);
   });
 
-  testWidgets('module hub exposes all four native module tiles', (
+  testWidgets('module hub exposes reordered dashboard module tiles', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(390, 844);
@@ -64,7 +64,8 @@ void main() {
     expect(find.text('CHURCH'), findsOneWidget);
     expect(find.text('MISSION'), findsOneWidget);
     expect(find.text('KCA'), findsOneWidget);
-    expect(find.text('PRESS'), findsOneWidget);
+    expect(find.text('MEDIA'), findsOneWidget);
+    expect(find.text('BIBLE'), findsOneWidget);
     expect(find.bySemanticsLabel('Home'), findsOneWidget);
   });
 

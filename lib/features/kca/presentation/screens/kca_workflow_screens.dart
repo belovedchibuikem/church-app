@@ -288,6 +288,7 @@ class KcaAdmissionStatusScreen extends StatelessWidget {
       title: 'Admission Status',
       domain: WorkflowDomain.kca,
       actionLabel: 'View Details',
+      onAction: () => fhcPush(context, FhcRoutes.kcaAdmissionLetter),
       children: [
         const WorkflowSegments(labels: ['1', '2', '3', '4']),
         const WorkflowSectionTitle('Application ID'),

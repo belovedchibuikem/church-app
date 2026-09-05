@@ -10,18 +10,9 @@ class ModulesScreen extends StatelessWidget {
 
   static const _modules = <_ModuleSpec>[
     _ModuleSpec(
-      icon: Icons.church_outlined,
-      titleKey: 'auth.moduleChurch',
-      titleFallback: 'CHURCH',
-      subtitleKey: 'auth.moduleChurchCopy',
-      subtitleFallback: 'Connect, Grow, Serve',
-      color: FhcColors.green,
-      route: FhcRoutes.churchHome,
-    ),
-    _ModuleSpec(
       icon: Icons.public,
       titleKey: 'nav.mission',
-      titleFallback: 'MISSION',
+      titleFallback: 'Mission',
       subtitleKey: 'member.missionTagline',
       subtitleFallback: 'Go, Preach, Disciple',
       color: FhcColors.purple,
@@ -31,18 +22,27 @@ class ModulesScreen extends StatelessWidget {
       icon: Icons.school,
       titleKey: 'nav.kca',
       titleFallback: 'KCA',
-      subtitleKey: 'member.kcaTagline',
-      subtitleFallback: 'Grow, Learn, Lead',
+      subtitleKey: 'member.kcaLearnGrowLead',
+      subtitleFallback: 'Learn, Grow, and Lead',
       color: FhcColors.blue,
       route: FhcRoutes.kcaGate,
     ),
     _ModuleSpec(
-      icon: Icons.menu_book,
+      icon: Icons.church_outlined,
+      titleKey: 'auth.moduleChurch',
+      titleFallback: 'CHURCH',
+      subtitleKey: 'member.connectGrowServe',
+      subtitleFallback: 'Connect, Grow, Serve',
+      color: FhcColors.green,
+      route: FhcRoutes.churchHome,
+    ),
+    _ModuleSpec(
+      icon: Icons.menu_book_outlined,
       titleKey: 'nav.press',
-      titleFallback: 'PRESS',
-      subtitleKey: 'member.pressTagline',
+      titleFallback: 'Press',
+      subtitleKey: 'member.pressPublishTeachInspire',
       subtitleFallback: 'Publish, Teach, Inspire',
-      color: FhcColors.wine,
+      color: FhcColors.eventsAccent,
       route: FhcRoutes.press,
     ),
   ];
@@ -118,36 +118,28 @@ class ModulesScreen extends StatelessWidget {
           Expanded(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-              child: Column(
-                children: [
-                  for (var row = 0; row < 2; row++) ...[
-                    if (row > 0) const SizedBox(height: 12),
-                    Expanded(
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: _ModuleCard(
-                              spec: _modules[row * 2],
-                              onTap:
-                                  () => fhcGo(context, _modules[row * 2].route),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: _ModuleCard(
-                              spec: _modules[row * 2 + 1],
-                              onTap:
-                                  () => fhcGo(
-                                    context,
-                                    _modules[row * 2 + 1].route,
-                                  ),
-                            ),
-                          ),
-                        ],
-                      ),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  const gap = 12.0;
+                  const rows = 2;
+                  final tileWidth = (constraints.maxWidth - gap) / 2;
+                  final tileHeight = (constraints.maxHeight - gap * (rows - 1)) / rows;
+                  final ratio = tileWidth / tileHeight;
+                  return GridView.builder(
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: _modules.length,
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2,
+                      mainAxisSpacing: gap,
+                      crossAxisSpacing: gap,
+                      childAspectRatio: ratio,
                     ),
-                  ],
-                ],
+                    itemBuilder: (context, index) => _ModuleCard(
+                      spec: _modules[index],
+                      onTap: () => fhcGo(context, _modules[index].route),
+                    ),
+                  );
+                },
               ),
             ),
           ),

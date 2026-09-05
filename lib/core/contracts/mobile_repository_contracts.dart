@@ -98,6 +98,10 @@ abstract interface class KcaRepository {
   Future<AppResult<JsonObject>> getCurrentApplication();
   Future<AppResult<JsonObject>> getAdmissionLetter();
   Future<AppResult<JsonObject>> downloadAdmissionLetter();
+  Future<AppResult<String>> uploadAdmissionSignature({
+    required List<int> bytes,
+    String filename,
+  });
   Future<AppResult<JsonObject>> acceptAdmissionLetter(JsonObject body);
   Future<AppResult<JsonObject>> submitApplication(
     JsonObject applicationData, {

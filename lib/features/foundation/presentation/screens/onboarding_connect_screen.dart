@@ -50,7 +50,7 @@ class OnboardingConnectScreen extends StatelessWidget {
                   fhcT(
                     context,
                     'onboarding.growServe',
-                    fallback: 'Grow. Serve.',
+                    fallback: 'Serve. Grow.',
                   ),
                   textAlign: TextAlign.center,
                   style: const TextStyle(

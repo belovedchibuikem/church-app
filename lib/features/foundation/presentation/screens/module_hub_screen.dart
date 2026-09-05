@@ -21,24 +21,6 @@ class ModuleHubScreen extends StatefulWidget {
 class _ModuleHubScreenState extends State<ModuleHubScreen> {
   static const _modules = <_ModuleSpec>[
     _ModuleSpec(
-      icon: Icons.church_outlined,
-      titleKey: 'auth.moduleChurch',
-      titleFallback: 'CHURCH',
-      subtitleKey: 'auth.moduleChurchCopy',
-      subtitleFallback: 'Connect, Grow, Serve',
-      color: FhcColors.green,
-      route: FhcRoutes.churchHome,
-    ),
-    _ModuleSpec(
-      icon: Icons.school_outlined,
-      titleKey: 'auth.moduleKca',
-      titleFallback: 'KCA',
-      subtitleKey: 'auth.moduleKcaAcademy',
-      subtitleFallback: 'Kingdom Christian Academy',
-      color: FhcColors.purple,
-      route: FhcRoutes.kcaGate,
-    ),
-    _ModuleSpec(
       icon: Icons.public,
       titleKey: 'auth.moduleMission',
       titleFallback: 'MISSION',
@@ -48,13 +30,13 @@ class _ModuleHubScreenState extends State<ModuleHubScreen> {
       route: FhcRoutes.mission,
     ),
     _ModuleSpec(
-      icon: Icons.volunteer_activism_outlined,
-      titleKey: 'auth.moduleGive',
-      titleFallback: 'GIVE',
-      subtitleKey: 'auth.moduleGiveCopy',
-      subtitleFallback: 'Tithe, Donate, Support',
-      color: FhcColors.gold,
-      route: FhcRoutes.give,
+      icon: Icons.school_outlined,
+      titleKey: 'auth.moduleKca',
+      titleFallback: 'KCA',
+      subtitleKey: 'auth.moduleKcaAcademy',
+      subtitleFallback: 'Kingdom Change Agent',
+      color: FhcColors.purple,
+      route: FhcRoutes.kcaGate,
     ),
     _ModuleSpec(
       icon: Icons.smart_display_outlined,
@@ -68,11 +50,38 @@ class _ModuleHubScreenState extends State<ModuleHubScreen> {
     _ModuleSpec(
       icon: Icons.calendar_month_outlined,
       titleKey: 'auth.moduleEvents',
-      titleFallback: 'EVENTS',
+      titleFallback: 'EVENT',
       subtitleKey: 'auth.moduleEventsCopy',
       subtitleFallback: 'Conferences, Meetings',
       color: FhcColors.eventsAccent,
       route: FhcRoutes.events,
+    ),
+    _ModuleSpec(
+      icon: Icons.church_outlined,
+      titleKey: 'auth.moduleChurch',
+      titleFallback: 'CHURCH',
+      subtitleKey: 'auth.moduleChurchCopy',
+      subtitleFallback: 'Serve and Grow',
+      color: FhcColors.green,
+      route: FhcRoutes.churchHome,
+    ),
+    _ModuleSpec(
+      icon: Icons.volunteer_activism_outlined,
+      titleKey: 'auth.moduleGive',
+      titleFallback: 'GIVE',
+      subtitleKey: 'auth.moduleGiveCopy',
+      subtitleFallback: 'Tithe, Donate, Support',
+      color: FhcColors.gold,
+      route: FhcRoutes.give,
+    ),
+    _ModuleSpec(
+      icon: Icons.menu_book_outlined,
+      titleKey: 'nav.bible',
+      titleFallback: 'BIBLE',
+      subtitleKey: 'member.bible',
+      subtitleFallback: 'Read and study Scripture',
+      color: FhcColors.teal,
+      route: FhcRoutes.bible,
     ),
   ];
 
@@ -92,6 +101,7 @@ class _ModuleHubScreenState extends State<ModuleHubScreen> {
   String? _error;
   bool _repoMissing = false;
   bool _started = false;
+  String? _lastImportantEventIdShown;
 
   ProfileRepository? get _repo =>
       widget.profileRepository ??
@@ -125,6 +135,7 @@ class _ModuleHubScreenState extends State<ModuleHubScreen> {
           _error = null;
           _repoMissing = false;
         });
+        _maybeShowImportantEventPopup(value);
       case AppError(:final failure):
         setState(() {
           _dashboard = null;
@@ -168,12 +179,15 @@ class _ModuleHubScreenState extends State<ModuleHubScreen> {
     }
     final unread = _dashboard!['unread_notification_count'] ?? 0;
     final prayers = _dashboard!['open_prayer_count'] ?? 0;
-    return fhcT(
+    final base = fhcT(
       context,
       'auth.hubStats',
       args: {'unread': '$unread', 'prayers': '$prayers'},
       fallback: 'Unread notifications: {unread} · Open prayers: {prayers}',
     );
+    final bibleSummary = _bibleReaderSummary(context);
+    if (bibleSummary == null) return base;
+    return '$base\n$bibleSummary';
   }
 
   String _welcome(BuildContext context) {
@@ -189,112 +203,301 @@ class _ModuleHubScreenState extends State<ModuleHubScreen> {
     );
   }
 
+  int _asInt(Object? value) {
+    if (value is int) return value;
+    if (value is num) return value.round();
+    return int.tryParse('$value') ?? 0;
+  }
+
+  String? _bibleReaderSummary(BuildContext context) {
+    final counts = _dashboard?['bible_reader_counts'];
+    if (counts is! Map) return null;
+    final day = _asInt(counts['day']);
+    final week = _asInt(counts['week']);
+    final year = _asInt(counts['year']);
+    return fhcT(
+      context,
+      'auth.hubBibleReaders',
+      args: {'day': '$day', 'week': '$week', 'year': '$year'},
+      fallback: 'Bible readers - Day: {day} · Week: {week} · Year: {year}',
+    );
+  }
+
+  JsonObject? _importantEventFromDashboard(JsonObject dashboard) {
+    final event = dashboard['important_event'];
+    if (event is! Map) return null;
+    final parsed = Map<String, Object?>.from(
+      event.map((key, value) => MapEntry('$key', value)),
+    );
+    final id = '${parsed['id'] ?? ''}'.trim();
+    final name = '${parsed['name'] ?? ''}'.trim();
+    if (id.isEmpty || name.isEmpty) return null;
+    return parsed;
+  }
+
+  void _maybeShowImportantEventPopup(JsonObject dashboard) {
+    final event = _importantEventFromDashboard(dashboard);
+    if (event == null) return;
+    final eventId = '${event['id']}';
+    if (_lastImportantEventIdShown == eventId) return;
+    _lastImportantEventIdShown = eventId;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _showImportantEventPopup(event);
+    });
+  }
+
+  Future<void> _showImportantEventPopup(JsonObject event) async {
+    final startsAt = DateTime.tryParse('${event['starts_at'] ?? ''}')?.toLocal();
+    final when = startsAt == null
+        ? fhcT(context, 'events.scheduleTba', fallback: 'Schedule TBA')
+        : '${startsAt.day}/${startsAt.month}/${startsAt.year} '
+            '${startsAt.hour.toString().padLeft(2, '0')}:${startsAt.minute.toString().padLeft(2, '0')}';
+    final openDetails = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(
+          fhcT(
+            dialogContext,
+            'events.importantEvent',
+            fallback: 'Important Event',
+          ),
+        ),
+        content: Text(
+          '${event['name']}\n$when',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(fhcT(dialogContext, 'common.later', fallback: 'Later')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(
+              fhcT(
+                dialogContext,
+                'common.view',
+                fallback: 'View',
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || openDetails != true) return;
+    final id = '${event['id']}'.trim();
+    if (id.isEmpty) return;
+    Navigator.of(context).pushNamed(FhcRoutes.eventDetail, arguments: id);
+  }
+
+  String _formatWhen(Object? rawValue, BuildContext context) {
+    final parsed = DateTime.tryParse('${rawValue ?? ''}')?.toLocal();
+    if (parsed == null) {
+      return fhcT(context, 'events.scheduleTba', fallback: 'Schedule TBA');
+    }
+    return '${parsed.day}/${parsed.month}/${parsed.year} '
+        '${parsed.hour.toString().padLeft(2, '0')}:${parsed.minute.toString().padLeft(2, '0')}';
+  }
+
   @override
   Widget build(BuildContext context) {
+    final importantEvent =
+        _dashboard == null ? null : _importantEventFromDashboard(_dashboard!);
     return FhcDevicePage(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  _welcome(context),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w700,
-                    height: 1.2,
-                    color: FhcColors.ink,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  _subtitle(context),
-                  style: const TextStyle(
-                    fontSize: 13,
-                    height: 1.4,
-                    color: FhcColors.muted,
-                  ),
-                ),
-              ],
-            ),
-          ),
           Expanded(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  const gap = 12.0;
-                  const rows = 3;
-                  final tileW = (constraints.maxWidth - gap) / 2;
-                  final maxH = (constraints.maxHeight - gap * (rows - 1)) / rows;
-                  final tileH = maxH < tileW * 1.12 ? maxH : tileW * 1.12;
-                  final aspect = tileW / tileH;
-                  return GridView.count(
-                    physics: const NeverScrollableScrollPhysics(),
-                    crossAxisCount: 2,
-                    mainAxisSpacing: gap,
-                    crossAxisSpacing: gap,
-                    childAspectRatio: aspect,
-                    children: [
-                      for (final module in _modules)
-                        _ModuleTile(
-                          spec: module,
-                          onTap:
-                              module.route == null
-                                  ? () {}
-                                  : () => fhcGo(context, module.route!),
-                        ),
-                    ],
-                  );
-                },
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 4, 20, 10),
-            child: Text(
-              fhcT(
-                context,
-                'common.quickActions',
-                fallback: 'Quick Actions',
-              ),
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-                color: FhcColors.ink,
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-            child: Row(
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
               children: [
-                for (var i = 0; i < _actions.length; i++) ...[
-                  if (i > 0) const SizedBox(width: 8),
-                  Expanded(
-                    child: _QuickAction(
-                      icon: _actions[i].$1,
-                      label: fhcT(
-                        context,
-                        _actions[i].$2,
-                        fallback: _actions[i].$3,
+                Container(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 18),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(20),
+                    gradient: const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [Color(0xFF0A7E57), Color(0xFF0E443A)],
+                    ),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x33000000),
+                        blurRadius: 18,
+                        offset: Offset(0, 10),
                       ),
-                      onTap: () {
-                        final route = _actions[i].$4;
-                        if (route == FhcRoutes.messages) {
-                          fhcGo(context, route);
-                        } else {
-                          fhcPush(context, route);
-                        }
-                      },
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _welcome(context),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        _subtitle(context),
+                        style: const TextStyle(
+                          fontSize: 12,
+                          height: 1.45,
+                          color: Color(0xFFE8FFF7),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (importantEvent != null) ...[
+                  const SizedBox(height: 14),
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF4E6),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFFFFD49A)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.notifications_active_outlined,
+                          color: Color(0xFFB25A00),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                fhcT(
+                                  context,
+                                  'events.importantEvent',
+                                  fallback: 'Important Event',
+                                ),
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF7B3B00),
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                '${importantEvent['name']}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: FhcColors.ink,
+                                ),
+                              ),
+                              Text(
+                                _formatWhen(importantEvent['starts_at'], context),
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: FhcColors.muted,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: () {
+                            final id = '${importantEvent['id']}'.trim();
+                            if (id.isEmpty) return;
+                            Navigator.of(context).pushNamed(
+                              FhcRoutes.eventDetail,
+                              arguments: id,
+                            );
+                          },
+                          child: Text(
+                            fhcT(context, 'common.view', fallback: 'View'),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
+                const SizedBox(height: 16),
+                Text(
+                  fhcT(context, 'auth.chooseModule', fallback: 'Choose a Module'),
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: FhcColors.ink,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  fhcT(
+                    context,
+                    'auth.selectModuleContinue',
+                    fallback: 'Select a module to continue.',
+                  ),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: FhcColors.muted,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: _modules.length,
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    mainAxisSpacing: 12,
+                    crossAxisSpacing: 12,
+                    childAspectRatio: 1.08,
+                  ),
+                  itemBuilder: (context, index) => _ModuleTile(
+                    spec: _modules[index],
+                    onTap:
+                        _modules[index].route == null
+                            ? () {}
+                            : () => fhcGo(context, _modules[index].route!),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  fhcT(context, 'common.quickActions', fallback: 'Quick Actions'),
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: FhcColors.ink,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    for (var i = 0; i < _actions.length; i++) ...[
+                      if (i > 0) const SizedBox(width: 8),
+                      Expanded(
+                        child: _QuickAction(
+                          icon: _actions[i].$1,
+                          label: fhcT(
+                            context,
+                            _actions[i].$2,
+                            fallback: _actions[i].$3,
+                          ),
+                          onTap: () {
+                            final route = _actions[i].$4;
+                            if (route == FhcRoutes.messages) {
+                              fhcGo(context, route);
+                            } else {
+                              fhcPush(context, route);
+                            }
+                          },
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
               ],
             ),
           ),
@@ -353,11 +556,26 @@ class _ModuleTile extends StatelessWidget {
                 Color.lerp(spec.color, const Color(0xFF000000), 0.34)!,
               ],
             ),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x26000000),
+                blurRadius: 12,
+                offset: Offset(0, 8),
+              ),
+            ],
           ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(spec.icon, color: FhcColors.white, size: 42),
+              Container(
+                width: 58,
+                height: 58,
+                decoration: const BoxDecoration(
+                  color: Color(0x22FFFFFF),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(spec.icon, color: FhcColors.white, size: 34),
+              ),
               const SizedBox(height: 10),
               Text(
                 fhcT(

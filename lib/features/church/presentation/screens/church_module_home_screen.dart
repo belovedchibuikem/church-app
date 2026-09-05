@@ -72,6 +72,16 @@ class ChurchModuleHomeScreen extends StatelessWidget {
       ),
       route: FhcRoutes.live,
     ),
+    _MenuSpec(
+      icon: Icons.menu_book_outlined,
+      title: fhcT(context, 'member.bible', fallback: 'Bible'),
+      subtitle: fhcT(
+        context,
+        'member.bibleCopy',
+        fallback: 'Read and study Scripture',
+      ),
+      route: FhcRoutes.bible,
+    ),
   ];
 
   static List<_MenuSpec> _communityOf(BuildContext context) => [

@@ -65,10 +65,10 @@ void main() {
     expect(find.textContaining(RegExp(r'Profile|Chibuikem')), findsWidgets);
   });
 
-  testWidgets('/hub still shows CHURCH and PRESS', (tester) async {
+  testWidgets('/hub still shows CHURCH and BIBLE', (tester) async {
     await pumpRoute(tester, '/hub');
     expect(find.text('CHURCH'), findsOneWidget);
-    expect(find.text('PRESS'), findsOneWidget);
+    expect(find.text('BIBLE'), findsOneWidget);
   });
 
   testWidgets('/church still shows Join Live|Members', (tester) async {

@@ -318,12 +318,36 @@ final class HttpKcaRepository
     required String filename,
     required String idempotencyKey,
   }) async {
+    return _uploadUserFile(
+      bytes: bytes,
+      filename: filename,
+      idempotencyKey: idempotencyKey,
+      purpose: 'kca.evidence',
+      classification: 'restricted',
+      uploadFailureMessage: 'Unable to upload KCA evidence.',
+      invalidSessionMessage: 'Sign in again to upload KCA evidence.',
+      integrationUnavailableMessage:
+          'Evidence upload requires a signed-in session.',
+      unexpectedPayloadMessage:
+          'Evidence upload returned an unexpected payload.',
+    );
+  }
+
+  Future<AppResult<JsonObject>> _uploadUserFile({
+    required List<int> bytes,
+    required String filename,
+    required String idempotencyKey,
+    required String purpose,
+    required String classification,
+    required String uploadFailureMessage,
+    required String invalidSessionMessage,
+    required String integrationUnavailableMessage,
+    required String unexpectedPayloadMessage,
+  }) async {
     final store = _tokenStore;
     if (store == null) {
-      return const AppError(
-        IntegrationUnavailableFailure(
-          'Evidence upload requires a signed-in session.',
-        ),
+      return AppError(
+        IntegrationUnavailableFailure(integrationUnavailableMessage),
       );
     }
     final access = await store.readAccessToken();
@@ -332,13 +356,11 @@ final class HttpKcaRepository
         access.isEmpty ||
         deviceId == null ||
         deviceId.isEmpty) {
-      return const AppError(
-        UnauthorizedFailure(
-          'Sign in again to upload KCA evidence.',
-        ),
+      return AppError(
+        UnauthorizedFailure(invalidSessionMessage),
       );
     }
-    final safeName = filename.trim().isEmpty ? 'kca-evidence.bin' : filename.trim();
+    final safeName = filename.trim().isEmpty ? 'upload.bin' : filename.trim();
     final uri = Uri.parse(
       '${baseUrl.replaceAll(RegExp(r'/$'), '')}/user/files',
     );
@@ -350,8 +372,8 @@ final class HttpKcaRepository
         'X-Device-Identifier': deviceId,
         'Idempotency-Key': idempotencyKey,
       });
-      request.fields['purpose'] = 'kca.evidence';
-      request.fields['classification'] = 'restricted';
+      request.fields['purpose'] = purpose;
+      request.fields['classification'] = classification;
       request.fields['idempotency_key'] = idempotencyKey;
       request.files.add(
         http.MultipartFile.fromBytes('file', bytes, filename: safeName),
@@ -377,22 +399,22 @@ final class HttpKcaRepository
           Map<String, Object?>.from(decoded['data'] as Map),
         );
       }
-      return const AppError(
-        ServerFailure('Evidence upload returned an unexpected payload.'),
+      return AppError(
+        ServerFailure(unexpectedPayloadMessage),
       );
     } on http.ClientException catch (error) {
       return AppError(
-        NetworkFailure('Unable to upload KCA evidence.', cause: error),
+        NetworkFailure(uploadFailureMessage, cause: error),
       );
     } catch (error) {
       final name = error.runtimeType.toString();
       if (name == 'SocketException' || name.contains('Timeout')) {
         return AppError(
-          NetworkFailure('Unable to upload KCA evidence.', cause: error),
+          NetworkFailure(uploadFailureMessage, cause: error),
         );
       }
       return AppError(
-        UploadFailure('KCA evidence upload failed.', cause: error),
+        UploadFailure(uploadFailureMessage, cause: error),
       );
     }
   }
@@ -696,6 +718,39 @@ final class HttpKcaRepository
         body: body,
       ),
     );
+  }
+
+  @override
+  Future<AppResult<String>> uploadAdmissionSignature({
+    required List<int> bytes,
+    String filename = 'kca-admission-signature.png',
+  }) async {
+    final idempotencyKey = newIdempotencyKey('kca-admission-signature');
+    final result = await _uploadUserFile(
+      bytes: bytes,
+      filename: filename,
+      idempotencyKey: idempotencyKey,
+      purpose: 'kca.admission_signature',
+      classification: 'restricted',
+      uploadFailureMessage: 'Unable to upload admission signature.',
+      invalidSessionMessage: 'Sign in again to upload admission signature.',
+      integrationUnavailableMessage:
+          'Admission signature upload requires a signed-in session.',
+      unexpectedPayloadMessage:
+          'Admission signature upload returned an unexpected payload.',
+    );
+    switch (result) {
+      case AppSuccess(:final value):
+        final id = '${value['id'] ?? value['public_id'] ?? ''}'.trim();
+        if (id.isEmpty) {
+          return const AppError(
+            ServerFailure('Admission signature upload did not return an asset id.'),
+          );
+        }
+        return AppSuccess(id);
+      case AppError(:final failure):
+        return AppError(failure);
+    }
   }
 
   @override

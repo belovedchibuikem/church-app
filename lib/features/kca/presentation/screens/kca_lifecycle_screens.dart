@@ -10,6 +10,7 @@ import '../../../../core/design_system/fhc_tokens.dart';
 import '../../../../core/di/app_services_scope.dart';
 import '../../../../core/l10n/locale_scope.dart';
 import '../../../../shared/widgets/geography_select.dart';
+import '../../../../shared/widgets/signature_pad_field.dart';
 import '../../../../shared/widgets/workflow_components.dart';
 import '../../../foundation/presentation/fhc_nav.dart';
 import '../../data/kca_enrolment_draft_store.dart';
@@ -60,6 +61,9 @@ class _KcaLifecycleScreenState extends State<KcaLifecycleScreen> {
   bool _letterAccepting = false;
   bool _letterAcceptConfirmed = false;
   Map<String, Object?>? _admissionLetter;
+  Uint8List? _admissionSignaturePng;
+  Uint8List? _guardianSignaturePng;
+  final GlobalKey _admissionAcceptanceKey = GlobalKey();
   int _choiceIndex = 0;
   final Set<int> _checked = {};
   final Set<int> _interests = {};
@@ -148,7 +152,13 @@ class _KcaLifecycleScreenState extends State<KcaLifecycleScreen> {
       return;
     }
 
-    final signature = _c('letter_signature').text.trim();
+    var signature = _c('letter_signature').text.trim();
+    if (signature.isEmpty && _admissionSignaturePng != null) {
+      signature = '${_admissionLetter?['applicant_name'] ?? ''}'.trim();
+      if (signature.isNotEmpty) {
+        _c('letter_signature').text = signature;
+      }
+    }
     if (signature.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -165,12 +175,39 @@ class _KcaLifecycleScreenState extends State<KcaLifecycleScreen> {
     }
 
     final repo = AppServicesScope.maybeOf(context)?.kcaRepository;
-    if (repo == null) return;
+    if (repo == null) {
+      await fhcApiUnavailable(
+        context,
+        action: fhcT(
+          context,
+          'member.kca.acceptToContinue',
+          fallback: 'Accept to continue',
+        ),
+      );
+      return;
+    }
 
     setState(() => _letterAccepting = true);
     final body = <String, Object?>{
       'applicant_signature_name': signature,
     };
+    if (_admissionSignaturePng != null && _admissionSignaturePng!.isNotEmpty) {
+      final upload = await repo.uploadAdmissionSignature(
+        bytes: _admissionSignaturePng!,
+        filename: 'kca-admission-signature.png',
+      );
+      switch (upload) {
+        case AppSuccess(:final value):
+          body['applicant_signature_file_asset_id'] = value;
+        case AppError(:final failure):
+          if (!mounted) return;
+          setState(() => _letterAccepting = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(failure.message)),
+          );
+          return;
+      }
+    }
     final requiresGuardian = _admissionLetter?['requires_guardian_confirmation'] == true;
     if (requiresGuardian) {
       final guardianName = _c('letter_guardian_name').text.trim();
@@ -179,6 +216,8 @@ class _KcaLifecycleScreenState extends State<KcaLifecycleScreen> {
       if (guardianName.isNotEmpty) body['guardian_name'] = guardianName;
       if (guardianSignature.isNotEmpty) {
         body['guardian_signature_name'] = guardianSignature;
+      } else if (_guardianSignaturePng != null && guardianName.isNotEmpty) {
+        body['guardian_signature_name'] = guardianName;
       }
       if (guardianPhone.isNotEmpty) body['guardian_phone'] = guardianPhone;
     }
@@ -205,6 +244,17 @@ class _KcaLifecycleScreenState extends State<KcaLifecycleScreen> {
           SnackBar(content: Text(failure.message)),
         );
     }
+  }
+
+  Future<void> _scrollToAcceptanceSection() async {
+    final contextForKey = _admissionAcceptanceKey.currentContext;
+    if (contextForKey == null) return;
+    await Scrollable.ensureVisible(
+      contextForKey,
+      duration: const Duration(milliseconds: 260),
+      curve: Curves.easeOut,
+      alignment: 0.08,
+    );
   }
 
   Future<void> _hydrate() async {
@@ -386,7 +436,7 @@ class _KcaLifecycleScreenState extends State<KcaLifecycleScreen> {
 
     final accepted = _admissionLetter?['acceptance_status'] == 'accepted';
     if (!accepted) {
-      await _acceptAdmissionLetter();
+      await _scrollToAcceptanceSection();
       return;
     }
 
@@ -508,10 +558,10 @@ class _KcaLifecycleScreenState extends State<KcaLifecycleScreen> {
           : kind == KcaLifecycleKind.admissionLetter && _letterDownloading
               ? fhcT(context, 'common.downloading', fallback: 'Downloading…')
               : spec.action,
-      onAction: _submitting || _letterDownloading
+      onAction: _submitting || _letterDownloading || _letterAccepting || _letterLoading
           ? null
           : kind == KcaLifecycleKind.admissionLetter
-              ? (_admissionLetter == null ? null : () => _handleAction(spec))
+              ? () => _handleAction(spec)
               : spec.next == null
                   ? null
                   : () => _handleAction(spec),
@@ -607,7 +657,7 @@ class _KcaLifecycleScreenState extends State<KcaLifecycleScreen> {
         ),
         _admissionLetter?['acceptance_status'] == 'accepted'
             ? fhcT(context, 'member.kca.downloadLetter', fallback: 'Download Letter')
-            : fhcT(context, 'member.kca.acceptToContinue', fallback: 'Accept to continue'),
+            : fhcT(context, 'member.kca.acceptToContinue', fallback: 'Go to acceptance form'),
         _admissionLetter?['acceptance_status'] == 'accepted' ? '/kca/orientation' : null,
         null,
       ),
@@ -1005,6 +1055,13 @@ class _KcaLifecycleScreenState extends State<KcaLifecycleScreen> {
         controller: _c('signature_name'),
         required: true,
       ),
+      SignaturePadField(
+        label: fhcT(
+          context,
+          'member.kca.drawSignature',
+          fallback: 'Draw your signature',
+        ),
+      ),
       WorkflowTextField(
         label: fhcT(context, 'member.kca.date', fallback: 'Date'),
         controller: _c('signature_date'),
@@ -1224,19 +1281,29 @@ class _KcaLifecycleScreenState extends State<KcaLifecycleScreen> {
         )
       else
         ...[
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: _admissionLetter?['acceptance_status'] == 'accepted'
+                  ? null
+                  : _scrollToAcceptanceSection,
+              icon: const Icon(Icons.edit_note_outlined),
+              label: Text(
+                fhcT(
+                  context,
+                  'member.kca.jumpToAcceptance',
+                  fallback: 'Jump to acceptance section',
+                ),
+              ),
+            ),
+          ),
           if (('${_admissionLetter?['letter_body'] ?? ''}').trim().isNotEmpty)
             WorkflowCard(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxHeight: 420),
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(4),
-                  child: SelectableText(
-                    '${_admissionLetter?['letter_body'] ?? ''}',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          height: 1.45,
-                        ),
-                  ),
-                ),
+              child: SelectableText(
+                '${_admissionLetter?['letter_body'] ?? ''}',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      height: 1.45,
+                    ),
               ),
             ),
           _details([
@@ -1275,109 +1342,130 @@ class _KcaLifecycleScreenState extends State<KcaLifecycleScreen> {
               ),
             )
           else
-            WorkflowCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text(
-                    fhcT(
-                      context,
-                      'member.kca.acceptAdmission',
-                      fallback: 'Accept admission',
-                    ),
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    fhcT(
-                      context,
-                      'member.kca.acceptAdmissionCopy',
-                      fallback:
-                          'Read the letter above carefully, then sign below to confirm your acceptance.',
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  CheckboxListTile(
-                    contentPadding: EdgeInsets.zero,
-                    controlAffinity: ListTileControlAffinity.leading,
-                    title: Text(
-                      fhcT(
-                        context,
-                        'member.kca.acceptanceConfirm',
-                        fallback: 'I have read and accept this admission letter.',
-                      ),
-                    ),
-                    value: _letterAcceptConfirmed,
-                    onChanged: (value) => setState(
-                      () => _letterAcceptConfirmed = value ?? false,
-                    ),
-                  ),
-                  TextFormField(
-                    controller: _c('letter_signature'),
-                    decoration: InputDecoration(
-                      labelText: fhcT(
-                        context,
-                        'member.kca.signatureName',
-                        fallback: 'Type your full name as signature',
-                      ),
-                    ),
-                  ),
-                  if (_admissionLetter?['requires_guardian_confirmation'] == true) ...[
-                    const SizedBox(height: 12),
+            KeyedSubtree(
+              key: _admissionAcceptanceKey,
+              child: WorkflowCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
                     Text(
                       fhcT(
                         context,
-                        'member.kca.guardianConfirmation',
-                        fallback: 'Parent/Guardian confirmation',
+                        'member.kca.acceptAdmission',
+                        fallback: 'Accept admission',
                       ),
-                      style: Theme.of(context).textTheme.titleSmall,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      fhcT(
+                        context,
+                        'member.kca.acceptAdmissionCopy',
+                        fallback:
+                            'Read the letter above carefully, then sign below to confirm your acceptance.',
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    CheckboxListTile(
+                      contentPadding: EdgeInsets.zero,
+                      controlAffinity: ListTileControlAffinity.leading,
+                      title: Text(
+                        fhcT(
+                          context,
+                          'member.kca.acceptanceConfirm',
+                          fallback: 'I have read and accept this admission letter.',
+                        ),
+                      ),
+                      value: _letterAcceptConfirmed,
+                      onChanged: (value) => setState(
+                        () => _letterAcceptConfirmed = value ?? false,
+                      ),
                     ),
                     TextFormField(
-                      controller: _c('letter_guardian_name'),
+                      controller: _c('letter_signature'),
                       decoration: InputDecoration(
                         labelText: fhcT(
                           context,
-                          'member.kca.guardianName',
-                          fallback: 'Parent/Guardian name',
+                          'member.kca.signatureName',
+                          fallback: 'Type your full name as signature',
                         ),
                       ),
                     ),
-                    TextFormField(
-                      controller: _c('letter_guardian_signature'),
-                      decoration: InputDecoration(
-                        labelText: fhcT(
+                    const SizedBox(height: 10),
+                    SignaturePadField(
+                      label: fhcT(
+                        context,
+                        'member.kca.drawSignature',
+                        fallback: 'Draw your signature',
+                      ),
+                      onChanged: (bytes) => _admissionSignaturePng = bytes,
+                    ),
+                    if (_admissionLetter?['requires_guardian_confirmation'] == true) ...[
+                      const SizedBox(height: 12),
+                      Text(
+                        fhcT(
+                          context,
+                          'member.kca.guardianConfirmation',
+                          fallback: 'Parent/Guardian confirmation',
+                        ),
+                        style: Theme.of(context).textTheme.titleSmall,
+                      ),
+                      TextFormField(
+                        controller: _c('letter_guardian_name'),
+                        decoration: InputDecoration(
+                          labelText: fhcT(
+                            context,
+                            'member.kca.guardianName',
+                            fallback: 'Parent/Guardian name',
+                          ),
+                        ),
+                      ),
+                      TextFormField(
+                        controller: _c('letter_guardian_signature'),
+                        decoration: InputDecoration(
+                          labelText: fhcT(
+                            context,
+                            'member.kca.guardianSignature',
+                            fallback: 'Parent/Guardian signature',
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      SignaturePadField(
+                        label: fhcT(
                           context,
                           'member.kca.guardianSignature',
                           fallback: 'Parent/Guardian signature',
                         ),
+                        onChanged: (bytes) => _guardianSignaturePng = bytes,
                       ),
-                    ),
-                    TextFormField(
-                      controller: _c('letter_guardian_phone'),
-                      decoration: InputDecoration(
-                        labelText: fhcT(
-                          context,
-                          'member.kca.guardianPhone',
-                          fallback: 'Parent/Guardian phone',
+                      TextFormField(
+                        controller: _c('letter_guardian_phone'),
+                        decoration: InputDecoration(
+                          labelText: fhcT(
+                            context,
+                            'member.kca.guardianPhone',
+                            fallback: 'Parent/Guardian phone',
+                          ),
                         ),
+                        keyboardType: TextInputType.phone,
                       ),
-                      keyboardType: TextInputType.phone,
+                    ],
+                    const SizedBox(height: 12),
+                    FilledButton(
+                      onPressed: _letterAccepting ? null : () => _acceptAdmissionLetter(),
+                      child: Text(
+                        _letterAccepting
+                            ? fhcT(context, 'common.submitting', fallback: 'Submitting…')
+                            : fhcT(
+                                context,
+                                'member.kca.submitAcceptance',
+                                fallback: 'Submit acceptance',
+                              ),
+                      ),
                     ),
                   ],
-                  const SizedBox(height: 12),
-                  FilledButton(
-                    onPressed: _letterAccepting ? null : () => _acceptAdmissionLetter(),
-                    child: Text(
-                      _letterAccepting
-                          ? fhcT(context, 'common.submitting', fallback: 'Submitting…')
-                          : fhcT(
-                              context,
-                              'member.kca.submitAcceptance',
-                              fallback: 'Submit acceptance',
-                            ),
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
         ],
