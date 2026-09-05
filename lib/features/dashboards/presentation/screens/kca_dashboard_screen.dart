@@ -106,7 +106,7 @@ class _KcaDashboardScreenState extends State<KcaDashboardScreen> {
                                     fallback: 'Modules',
                                   ),
                                   value:
-                                      '${dash.modulesWithProgress} / ${dash.modulesTotal}',
+                                      '${dash.lessonsCompleted} / ${dash.lessonsTotal}',
                                   onTap:
                                       () => fhcPush(
                                         context,
@@ -297,6 +297,9 @@ class _KcaDash {
     required this.enrolled,
     required this.modulesTotal,
     required this.modulesWithProgress,
+    required this.curriculumPercent,
+    required this.lessonsCompleted,
+    required this.lessonsTotal,
     required this.assignmentsOpen,
     required this.attendanceRecorded,
     required this.mentorName,
@@ -331,6 +334,9 @@ class _KcaDash {
       enrolled: json['enrolled'] == true,
       modulesTotal: _asInt(json['modules_total']),
       modulesWithProgress: _asInt(json['modules_with_progress']),
+      curriculumPercent: _asInt(json['curriculum_percent']),
+      lessonsCompleted: _asInt(json['lessons_completed']),
+      lessonsTotal: _asInt(json['lessons_total']),
       assignmentsOpen: _asInt(json['assignments_open']),
       attendanceRecorded: _asInt(json['attendance_recorded']),
       mentorName: mentorName,
@@ -349,6 +355,9 @@ class _KcaDash {
   final bool enrolled;
   final int modulesTotal;
   final int modulesWithProgress;
+  final int curriculumPercent;
+  final int lessonsCompleted;
+  final int lessonsTotal;
   final int assignmentsOpen;
   final int attendanceRecorded;
   final String mentorName;
@@ -412,9 +421,11 @@ class _ProgressCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final total = dash.modulesTotal;
-    final progress = dash.modulesWithProgress;
-    final pct = total == 0 ? 0.0 : progress / total;
+    final lessonsTotal = dash.lessonsTotal;
+    final lessonsDone = dash.lessonsCompleted;
+    final pct = dash.curriculumPercent > 0
+        ? dash.curriculumPercent / 100
+        : (lessonsTotal == 0 ? 0.0 : lessonsDone / lessonsTotal);
 
     return FhcSurfaceCard(
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
@@ -451,7 +462,7 @@ class _ProgressCard extends StatelessWidget {
           ClipRRect(
             borderRadius: BorderRadius.circular(8),
             child: LinearProgressIndicator(
-              value: pct,
+              value: pct.clamp(0, 1),
               minHeight: 8,
               backgroundColor: FhcColors.border,
               valueColor: const AlwaysStoppedAnimation(FhcColors.green),
@@ -461,9 +472,9 @@ class _ProgressCard extends StatelessWidget {
           Text(
             fhcT(
               context,
-              'member.kcaModulesWithActivity',
-              args: {'progress': '$progress', 'total': '$total'},
-              fallback: '$progress / $total modules with activity',
+              'member.kcaLessonsCompleted',
+              args: {'progress': '$lessonsDone', 'total': '$lessonsTotal'},
+              fallback: '$lessonsDone / $lessonsTotal lessons completed',
             ),
             style: const TextStyle(fontSize: 11, color: FhcColors.muted),
           ),
