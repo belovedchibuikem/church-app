@@ -168,6 +168,10 @@ class _FamilyHouseConnectAppState extends State<FamilyHouseConnectApp> {
             resolvedServices.hideUnboundPrayer
                 ? const FhcFeatureUnavailablePage(feature: 'Prayer')
                 : child;
+        Widget testimonySurface(Widget child) =>
+            resolvedServices.hideUnboundTestimony
+                ? const FhcFeatureUnavailablePage(feature: 'Testimony')
+                : child;
         Widget messagingSurface(Widget child) =>
             resolvedServices.hideUnboundMessaging
                 ? const FhcFeatureUnavailablePage(feature: 'Messaging')
@@ -387,10 +391,12 @@ class _FamilyHouseConnectAppState extends State<FamilyHouseConnectApp> {
             'church.attendance.manage',
             const RecordAttendanceScreen(),
           ),
-          '/testimony/new' => PermissionGuard(
-            gateway: authorizationGateway,
-            permission: 'testimony.create',
-            child: const TestimonySubmissionScreen(),
+          '/testimony/new' => testimonySurface(
+            PermissionGuard(
+              gateway: authorizationGateway,
+              permission: 'testimony.create',
+              child: const TestimonyNewScreen(),
+            ),
           ),
           '/events' => const EventsScreen(),
           '/events/detail' => EventDetailScreen(eventId: routeArgs.entityId),

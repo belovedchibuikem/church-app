@@ -151,6 +151,11 @@ abstract interface class NeedRepository {
   Future<AppResult<JsonObject>> create(JsonObject request);
 }
 
+abstract interface class TestimonyRepository {
+  Future<AppResult<List<JsonObject>>> listOwn();
+  Future<AppResult<JsonObject>> create(JsonObject request);
+}
+
 abstract interface class PaymentRepository {
   Future<AppResult<List<JsonObject>>> listIntents();
   Future<AppResult<JsonObject>> getIntent(String id);

@@ -66,6 +66,8 @@ void main() {
     expect(find.text('KCA'), findsOneWidget);
     expect(find.text('MEDIA'), findsOneWidget);
     expect(find.text('BIBLE'), findsOneWidget);
+    expect(find.text('GIVE'), findsNothing);
+    expect(find.text('Give'), findsWidgets);
     expect(find.bySemanticsLabel('Home'), findsOneWidget);
   });
 

@@ -10,9 +10,14 @@ import '../../../../shared/widgets/fhc_components.dart';
 import '../../../foundation/presentation/fhc_nav.dart';
 
 class PrayerScreen extends StatefulWidget {
-  const PrayerScreen({super.key, this.prayerRepository});
+  const PrayerScreen({
+    super.key,
+    this.prayerRepository,
+    this.testimonyRepository,
+  });
 
   final PrayerRepository? prayerRepository;
+  final TestimonyRepository? testimonyRepository;
 
   @override
   State<PrayerScreen> createState() => _PrayerScreenState();
@@ -20,25 +25,38 @@ class PrayerScreen extends StatefulWidget {
 
 class _PrayerScreenState extends State<PrayerScreen> {
   int _tab = 1;
-  FhcAsyncValue<List<_PrayerItem>> _state = const FhcAsyncValue.loading();
+  bool _started = false;
+  FhcAsyncValue<List<_CareItem>> _prayerState = const FhcAsyncValue.loading();
+  FhcAsyncValue<List<_CareItem>> _testimonyState =
+      const FhcAsyncValue.loading();
 
-  PrayerRepository? get _repo =>
+  PrayerRepository? get _prayerRepo =>
       widget.prayerRepository ??
       AppServicesScope.maybeOf(context)?.prayerRepository;
+
+  TestimonyRepository? get _testimonyRepo =>
+      widget.testimonyRepository ??
+      AppServicesScope.maybeOf(context)?.testimonyRepository;
+
+  bool get _showingTestimonies => _tab == 2;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_state is FhcAsyncLoading) {
-      _load();
-    }
+    if (_started) return;
+    _started = true;
+    _load();
   }
 
   Future<void> _load() async {
-    final repo = _repo;
+    await Future.wait([_loadPrayers(), _loadTestimonies()]);
+  }
+
+  Future<void> _loadPrayers() async {
+    final repo = _prayerRepo;
     if (repo == null) {
       setState(() {
-        _state = FhcAsyncValue.unavailable(
+        _prayerState = FhcAsyncValue.unavailable(
           message: fhcT(
             context,
             'member.prayer.apiUnavailable',
@@ -51,7 +69,7 @@ class _PrayerScreenState extends State<PrayerScreen> {
       return;
     }
 
-    setState(() => _state = const FhcAsyncValue.loading());
+    setState(() => _prayerState = const FhcAsyncValue.loading());
     final result = await repo.listOwn();
     if (!mounted) return;
 
@@ -59,7 +77,7 @@ class _PrayerScreenState extends State<PrayerScreen> {
       case AppSuccess(:final value):
         if (value.isEmpty) {
           setState(() {
-            _state = FhcAsyncValue.empty(
+            _prayerState = FhcAsyncValue.empty(
               message: fhcT(
                 context,
                 'member.prayer.noneYet',
@@ -70,12 +88,58 @@ class _PrayerScreenState extends State<PrayerScreen> {
           return;
         }
         setState(() {
-          _state = FhcAsyncValue.data([
-            for (final item in value) _PrayerItem.fromJson(item, context),
+          _prayerState = FhcAsyncValue.data([
+            for (final item in value) _CareItem.prayer(item, context),
           ]);
         });
       case AppError(:final failure):
-        setState(() => _state = FhcAsyncValue.error(failure));
+        setState(() => _prayerState = FhcAsyncValue.error(failure));
+    }
+  }
+
+  Future<void> _loadTestimonies() async {
+    final repo = _testimonyRepo;
+    if (repo == null) {
+      setState(() {
+        _testimonyState = FhcAsyncValue.unavailable(
+          message: fhcT(
+            context,
+            'member.testimony.apiUnavailable',
+            fallback:
+                'Testimonies are waiting on the testimony service. '
+                'No fixture list is shown.',
+          ),
+        );
+      });
+      return;
+    }
+
+    setState(() => _testimonyState = const FhcAsyncValue.loading());
+    final result = await repo.listOwn();
+    if (!mounted) return;
+
+    switch (result) {
+      case AppSuccess(:final value):
+        if (value.isEmpty) {
+          setState(() {
+            _testimonyState = FhcAsyncValue.empty(
+              message: fhcT(
+                context,
+                'member.testimony.noneYet',
+                fallback:
+                    'When God answers a prayer, share the testimony here.',
+              ),
+            );
+          });
+          return;
+        }
+        setState(() {
+          _testimonyState = FhcAsyncValue.data([
+            for (final item in value) _CareItem.testimony(item, context),
+          ]);
+        });
+      case AppError(:final failure):
+        setState(() => _testimonyState = FhcAsyncValue.error(failure));
     }
   }
 
@@ -105,8 +169,7 @@ class _PrayerScreenState extends State<PrayerScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Container(
               width: double.infinity,
-              height: 160,
-              padding: const EdgeInsets.fromLTRB(16, 17, 16, 14),
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
               decoration: BoxDecoration(
                 color: FhcColors.greenDark,
                 borderRadius: BorderRadius.circular(FhcRadius.card),
@@ -127,13 +190,13 @@ class _PrayerScreenState extends State<PrayerScreen> {
                       color: Colors.white,
                     ),
                   ),
-                  const SizedBox(height: 9),
+                  const SizedBox(height: 8),
                   Text(
                     fhcT(
                       context,
                       'member.prayer.bannerCopy',
                       fallback:
-                          'Share your request and\nour team will pray with you.',
+                          'Share your request and our team will pray with you. Come back with a testimony when God answers.',
                     ),
                     style: const TextStyle(
                       fontSize: 11,
@@ -141,31 +204,25 @@ class _PrayerScreenState extends State<PrayerScreen> {
                       color: Colors.white,
                     ),
                   ),
-                  const Spacer(),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 40,
-                    child: FilledButton(
-                      onPressed: () => fhcPush(context, FhcRoutes.prayerNew),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: Colors.white,
-                        foregroundColor: FhcColors.greenDark,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(FhcRadius.sm),
-                        ),
-                      ),
-                      child: Text(
-                        fhcT(
-                          context,
-                          'member.prayer.newRequest',
-                          fallback: 'New Prayer Request',
-                        ),
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
+                  const SizedBox(height: 12),
+                  _HeroActionButton(
+                    label: fhcT(
+                      context,
+                      'member.prayer.newRequest',
+                      fallback: 'New Prayer Request',
                     ),
+                    filled: true,
+                    onPressed: () => fhcPush(context, FhcRoutes.prayerNew),
+                  ),
+                  const SizedBox(height: 8),
+                  _HeroActionButton(
+                    label: fhcT(
+                      context,
+                      'member.testimony.share',
+                      fallback: 'Share Testimony',
+                    ),
+                    filled: false,
+                    onPressed: () => fhcPush(context, FhcRoutes.testimonyNew),
                   ),
                 ],
               ),
@@ -192,57 +249,88 @@ class _PrayerScreenState extends State<PrayerScreen> {
                   onTap: () => setState(() => _tab = 1),
                 ),
               ),
+              Expanded(
+                child: _PrayerTab(
+                  label: fhcT(
+                    context,
+                    'member.testimony.tab',
+                    fallback: 'Testimonies',
+                  ),
+                  active: _tab == 2,
+                  onTap: () => setState(() => _tab = 2),
+                ),
+              ),
             ],
           ),
           Expanded(
-            child: FhcAsyncBody<List<_PrayerItem>>(
-              value: _state,
-              onRetry: _load,
-              emptyTitle: fhcT(
-                context,
-                'member.prayer.emptyTitle',
-                fallback: 'No prayer requests',
-              ),
-              emptyMessage: fhcT(
-                context,
-                'member.prayer.emptyCopy',
-                fallback: 'Share a request and others can pray with you.',
-              ),
-              unavailableTitle: fhcT(
-                context,
-                'member.prayer.unavailableTitle',
-                fallback: 'Prayer unavailable',
-              ),
-              builder: (context, items) {
-                final visible = _tab == 1
-                    ? items.where((item) => item.isOwn).toList()
-                    : items;
-                if (visible.isEmpty) {
-                  return FhcEmptyState(
-                    title: fhcT(
+            child: _showingTestimonies
+                ? FhcAsyncBody<List<_CareItem>>(
+                    value: _testimonyState,
+                    onRetry: _loadTestimonies,
+                    emptyTitle: fhcT(
                       context,
-                      'member.prayer.tabEmptyTitle',
-                      fallback: 'Nothing in this tab',
+                      'member.testimony.emptyTitle',
+                      fallback: 'No testimonies yet',
                     ),
-                    message: fhcT(
+                    emptyMessage: fhcT(
                       context,
-                      'member.prayer.tabEmptyCopy',
-                      fallback: 'Try the other tab or create a new request.',
+                      'member.testimony.emptyCopy',
+                      fallback:
+                          'Share how God answered prayer so others can be encouraged.',
                     ),
-                  );
-                }
-                return RefreshIndicator(
-                  onRefresh: _load,
-                  child: ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                    itemCount: visible.length,
-                    separatorBuilder: (_, __) => const Divider(height: 1),
-                    itemBuilder:
-                        (context, index) => _PrayerRow(item: visible[index]),
+                    unavailableTitle: fhcT(
+                      context,
+                      'member.testimony.unavailableTitle',
+                      fallback: 'Testimonies unavailable',
+                    ),
+                    builder: (context, items) => _CareList(
+                      items: items,
+                      onRefresh: _loadTestimonies,
+                    ),
+                  )
+                : FhcAsyncBody<List<_CareItem>>(
+                    value: _prayerState,
+                    onRetry: _loadPrayers,
+                    emptyTitle: fhcT(
+                      context,
+                      'member.prayer.emptyTitle',
+                      fallback: 'No prayer requests',
+                    ),
+                    emptyMessage: fhcT(
+                      context,
+                      'member.prayer.emptyCopy',
+                      fallback: 'Share a request and others can pray with you.',
+                    ),
+                    unavailableTitle: fhcT(
+                      context,
+                      'member.prayer.unavailableTitle',
+                      fallback: 'Prayer unavailable',
+                    ),
+                    builder: (context, items) {
+                      final visible = _tab == 1
+                          ? items.where((item) => item.isOwn).toList()
+                          : items;
+                      if (visible.isEmpty) {
+                        return FhcEmptyState(
+                          title: fhcT(
+                            context,
+                            'member.prayer.tabEmptyTitle',
+                            fallback: 'Nothing in this tab',
+                          ),
+                          message: fhcT(
+                            context,
+                            'member.prayer.tabEmptyCopy',
+                            fallback:
+                                'Try the other tab or create a new request.',
+                          ),
+                        );
+                      }
+                      return _CareList(
+                        items: visible,
+                        onRefresh: _loadPrayers,
+                      );
+                    },
                   ),
-                );
-              },
-            ),
           ),
           const FhcBottomNavigation(selected: 3),
         ],
@@ -251,8 +339,8 @@ class _PrayerScreenState extends State<PrayerScreen> {
   }
 }
 
-class _PrayerItem {
-  const _PrayerItem({
+class _CareItem {
+  const _CareItem({
     required this.id,
     required this.title,
     required this.date,
@@ -261,18 +349,13 @@ class _PrayerItem {
     required this.icon,
   });
 
-  factory _PrayerItem.fromJson(JsonObject json, BuildContext context) {
-    final dateRaw = '${json['created_at'] ?? json['submitted_at'] ?? ''}';
-    final parsed = DateTime.tryParse(dateRaw);
+  factory _CareItem.prayer(JsonObject json, BuildContext context) {
     final praying = json['praying_count'] ?? json['supporters'] ?? '';
-    return _PrayerItem(
+    return _CareItem(
       id: '${json['id'] ?? json['ulid'] ?? ''}',
       title:
           '${json['subject'] ?? json['title'] ?? json['request'] ?? json['body'] ?? fhcT(context, 'member.prayer', fallback: 'Prayer')}',
-      date:
-          parsed == null
-              ? (dateRaw.isEmpty ? '—' : dateRaw)
-              : '${parsed.year}-${parsed.month.toString().padLeft(2, '0')}-${parsed.day.toString().padLeft(2, '0')}',
+      date: _formatDate(json['created_at'] ?? json['submitted_at']),
       meta: praying.toString().isEmpty
           ? '${json['status'] ?? fhcT(context, 'member.prayer.shared', fallback: 'Shared')}'
           : fhcT(
@@ -286,12 +369,108 @@ class _PrayerItem {
     );
   }
 
+  factory _CareItem.testimony(JsonObject json, BuildContext context) {
+    return _CareItem(
+      id: '${json['id'] ?? json['ulid'] ?? ''}',
+      title:
+          '${json['title'] ?? json['subject'] ?? fhcT(context, 'member.testimony', fallback: 'Testimony')}',
+      date: _formatDate(json['submitted_at'] ?? json['created_at']),
+      meta: '${json['status'] ?? fhcT(context, 'common.pending', fallback: 'pending')}',
+      isOwn: true,
+      icon: Icons.auto_awesome,
+    );
+  }
+
+  static String _formatDate(Object? raw) {
+    final dateRaw = '$raw';
+    final parsed = DateTime.tryParse(dateRaw);
+    if (parsed == null) {
+      return dateRaw.isEmpty || dateRaw == 'null' ? '—' : dateRaw;
+    }
+    return '${parsed.year}-${parsed.month.toString().padLeft(2, '0')}-${parsed.day.toString().padLeft(2, '0')}';
+  }
+
   final String id;
   final String title;
   final String date;
   final String meta;
   final bool isOwn;
   final IconData icon;
+}
+
+class _HeroActionButton extends StatelessWidget {
+  const _HeroActionButton({
+    required this.label,
+    required this.filled,
+    required this.onPressed,
+  });
+
+  final String label;
+  final bool filled;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      height: 40,
+      child: filled
+          ? FilledButton(
+              onPressed: onPressed,
+              style: FilledButton.styleFrom(
+                backgroundColor: Colors.white,
+                foregroundColor: FhcColors.greenDark,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(FhcRadius.sm),
+                ),
+              ),
+              child: Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            )
+          : OutlinedButton(
+              onPressed: onPressed,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.white,
+                side: const BorderSide(color: Colors.white),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(FhcRadius.sm),
+                ),
+              ),
+              child: Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+    );
+  }
+}
+
+class _CareList extends StatelessWidget {
+  const _CareList({required this.items, required this.onRefresh});
+
+  final List<_CareItem> items;
+  final Future<void> Function() onRefresh;
+
+  @override
+  Widget build(BuildContext context) {
+    return RefreshIndicator(
+      onRefresh: onRefresh,
+      child: ListView.separated(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+        itemCount: items.length,
+        separatorBuilder: (_, __) => const Divider(height: 1),
+        itemBuilder: (context, index) => _CareRow(item: items[index]),
+      ),
+    );
+  }
 }
 
 class _PrayerTab extends StatelessWidget {
@@ -324,6 +503,8 @@ class _PrayerTab extends StatelessWidget {
           ),
           child: Text(
             label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(
               fontSize: 11,
               color: active ? FhcColors.green : FhcColors.ink,
@@ -336,9 +517,9 @@ class _PrayerTab extends StatelessWidget {
   }
 }
 
-class _PrayerRow extends StatelessWidget {
-  const _PrayerRow({required this.item});
-  final _PrayerItem item;
+class _CareRow extends StatelessWidget {
+  const _CareRow({required this.item});
+  final _CareItem item;
 
   @override
   Widget build(BuildContext context) {

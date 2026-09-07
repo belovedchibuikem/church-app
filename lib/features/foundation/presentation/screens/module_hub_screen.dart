@@ -66,15 +66,6 @@ class _ModuleHubScreenState extends State<ModuleHubScreen> {
       route: FhcRoutes.churchHome,
     ),
     _ModuleSpec(
-      icon: Icons.volunteer_activism_outlined,
-      titleKey: 'auth.moduleGive',
-      titleFallback: 'GIVE',
-      subtitleKey: 'auth.moduleGiveCopy',
-      subtitleFallback: 'Tithe, Donate, Support',
-      color: FhcColors.gold,
-      route: FhcRoutes.give,
-    ),
-    _ModuleSpec(
       icon: Icons.menu_book_outlined,
       titleKey: 'nav.bible',
       titleFallback: 'BIBLE',

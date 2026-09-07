@@ -13,4 +13,5 @@ export 'screens/need_request_screen.dart';
 export 'screens/need_status_screen.dart';
 export 'screens/prayer_new_screen.dart';
 export 'screens/prayer_screen.dart';
+export 'screens/testimony_new_screen.dart';
 export 'screens/sermons_library_screen.dart';

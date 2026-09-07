@@ -13,6 +13,7 @@ import '../../features/community/data/event_repository.dart';
 import '../../features/community/data/need_repository.dart';
 import '../../features/community/data/payment_repository.dart';
 import '../../features/community/data/prayer_repository.dart';
+import '../../features/community/data/testimony_repository.dart';
 import '../../features/content/data/content_repository.dart';
 import '../../features/foundation/data/auth_repository.dart';
 import '../../features/kca/data/kca_repository.dart';
@@ -65,6 +66,7 @@ final class AppServices {
     this.eventRepository,
     this.contentRepository,
     this.prayerRepository,
+    this.testimonyRepository,
     this.needRepository,
     this.paymentRepository,
     this.messageRepository,
@@ -110,6 +112,7 @@ final class AppServices {
   final EventRepository? eventRepository;
   final ContentRepository? contentRepository;
   final PrayerRepository? prayerRepository;
+  final TestimonyRepository? testimonyRepository;
   final NeedRepository? needRepository;
   final PaymentRepository? paymentRepository;
   final MessageRepository? messageRepository;
@@ -121,6 +124,7 @@ final class AppServices {
 
   bool get paymentsBound => paymentRepository != null;
   bool get prayerBound => prayerRepository != null;
+  bool get testimonyBound => testimonyRepository != null;
   bool get needsBound => needRepository != null;
   bool get messagingBound => messageRepository != null;
   bool get notificationsBound => notificationRepository != null;
@@ -135,6 +139,8 @@ final class AppServices {
       !paymentsBound && !showUnboundFixtures;
 
   bool get hideUnboundPrayer => !prayerBound && !showUnboundFixtures;
+
+  bool get hideUnboundTestimony => !testimonyBound && !showUnboundFixtures;
 
   bool get hideUnboundNeeds => !needsBound && !showUnboundFixtures;
 
@@ -164,6 +170,7 @@ final class AppServices {
     EventRepository? eventRepository,
     ContentRepository? contentRepository,
     PrayerRepository? prayerRepository,
+    TestimonyRepository? testimonyRepository,
     NeedRepository? needRepository,
     PaymentRepository? paymentRepository,
     MessageRepository? messageRepository,
@@ -386,6 +393,9 @@ final class AppServices {
       prayerRepository:
           prayerRepository ??
           withTransport((t) => HttpPrayerRepository(transport: t)),
+      testimonyRepository:
+          testimonyRepository ??
+          withTransport((t) => HttpTestimonyRepository(transport: t)),
       needRepository:
           needRepository ??
           withTransport((t) => HttpNeedRepository(transport: t)),
